@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,6 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// error-pattern:can't find crate for `std`
+#![crate_name = "b"]
+#![crate_type = "rlib"]
 
-extern crate std = "std#bogus";
+extern crate a;
+
+static FOO: uint = 3;
+
+pub fn token() -> &'static uint { &FOO }
+pub fn a_token() -> &'static uint { a::token() }

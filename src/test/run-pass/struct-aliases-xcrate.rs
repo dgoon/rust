@@ -8,8 +8,24 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_id="crateresolve2#0.1"]
+// aux-build:xcrate_struct_aliases.rs
+extern crate xcrate_struct_aliases;
 
-#![crate_type = "lib"]
+use xcrate_struct_aliases::{S, S2};
 
-pub fn f() -> int { 10 }
+fn main() {
+    let s = S2 {
+        x: 1,
+        y: 2,
+    };
+    match s {
+        S2 {
+            x: x,
+            y: y
+        } => {
+            assert_eq!(x, 1);
+            assert_eq!(y, 2);
+        }
+    }
+}
+

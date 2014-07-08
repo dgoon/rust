@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// no-prefer-dynamic
+extern crate bar = "#a"; //~ ERROR: invalid character `#` in crate name: `#a`
 
-#![crate_id = "url#0.11.0"]
-#![crate_type = "dylib"]
+fn main() {}
+

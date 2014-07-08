@@ -68,6 +68,15 @@ $(foreach host,$(CFG_HOST),						    \
 # $(4) is the crate name
 define RUST_TARGET_STAGE_N
 
+# NOTE: after a stage0 snap this should be just EXTRA_FILENAME, not with a stage
+# or target bound
+EXTRA_FILENAME_$(1)_$(2) = -C extra-filename=-$$(CFG_FILENAME_EXTRA)
+ifeq ($(1),0)
+ifeq ($$(CFG_BUILD),$(2))
+EXTRA_FILENAME_$(1)_$(2) =
+endif
+endif
+
 $$(TLIB$(1)_T_$(2)_H_$(3))/stamp.$(4): CFG_COMPILER_HOST_TRIPLE = $(2)
 $$(TLIB$(1)_T_$(2)_H_$(3))/stamp.$(4):				    \
 		$$(CRATEFILE_$(4))				    \
@@ -85,7 +94,9 @@ $$(TLIB$(1)_T_$(2)_H_$(3))/stamp.$(4):				    \
 		-L "$$(LLVM_LIBDIR_$(2))" \
 		-L "$$(dir $$(LLVM_STDCPP_LOCATION_$(2)))" \
 		$$(RUSTFLAGS_$(4)) \
-		--out-dir $$(@D) $$<
+		--out-dir $$(@D) \
+		$$(EXTRA_FILENAME_$(1)_$(2)) \
+		$$<
 	@touch $$@
 	$$(call LIST_ALL_OLD_GLOB_MATCHES,\
 	    $$(dir $$@)$$(call CFG_LIB_GLOB_$(2),$(4)))

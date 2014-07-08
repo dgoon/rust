@@ -91,7 +91,6 @@ You should see some output that looks something like this:
 
 ```{ignore}
 rustc 0.11.0-pre (443a1cd 2014-06-08 14:56:52 -0700)
-host: x86_64-unknown-linux-gnu
 ```
 
 If you did, Rust has been installed successfully! Congrats!
@@ -737,10 +736,10 @@ let x = (let y = 5i); // found `let` in ident position
 The compiler is telling us here that it was expecting to see the beginning of
 an expression, and a `let` can only begin a statement, not an expression.
 
-However, re-assigning to a mutable binding is an expression:
+However, assigning to a variable binding is an expression:
 
 ```{rust}
-let mut x = 0i;
+let x;
 let y = x = 5i;
 ```
 
@@ -895,13 +894,14 @@ fn add_one(x: int) -> int {
 We would get an error:
 
 ```{ignore,notrust}
-note: consider removing this semicolon:
-     x + 1;
-          ^
 error: not all control paths return a value
 fn add_one(x: int) -> int {
      x + 1;
 }
+
+note: consider removing this semicolon:
+     x + 1;
+          ^
 ```
 
 Remember our earlier discussions about semicolons and `()`? Our function claims

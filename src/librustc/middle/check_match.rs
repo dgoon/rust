@@ -411,14 +411,7 @@ fn is_useful(cx: &MatchCheckCtxt, matrix @ &Matrix(ref rows): &Matrix,
         return NotUseful;
     }
     let real_pat = match rows.iter().find(|r| r.get(0).id != 0) {
-        Some(r) => {
-            match r.get(0).node {
-                // An arm of the form `ref x @ sub_pat` has type
-                // `sub_pat`, not `&sub_pat` as `x` itself does.
-                PatIdent(BindByRef(_), _, Some(sub)) => sub,
-                _ => *r.get(0)
-            }
-        }
+        Some(r) => raw_pat(*r.get(0)),
         None if v.len() == 0 => return NotUseful,
         None => v[0]
     };
@@ -563,6 +556,7 @@ pub fn constructor_arity(cx: &MatchCheckCtxt, ctor: &Constructor, ty: ty::t) -> 
         ty::ty_rptr(_, ty::mt { ty: ty, .. }) => match ty::get(ty).sty {
             ty::ty_vec(_, None) => match *ctor {
                 Slice(length) => length,
+                ConstantValue(_) => 0u,
                 _ => unreachable!()
             },
             ty::ty_str => 0u,
@@ -677,8 +671,17 @@ pub fn specialize(cx: &MatchCheckCtxt, r: &[Gc<Pat>],
                 } else {
                     None
                 },
-                DefStruct(struct_id) => Some(struct_id),
-                _ => None
+                _ => {
+                    // Assume this is a struct.
+                    match ty::ty_to_def_id(node_id_to_type(cx.tcx, pat_id)) {
+                        None => {
+                            cx.tcx.sess.span_bug(pat_span,
+                                                 "struct pattern wasn't of a \
+                                                  type with a def ID?!")
+                        }
+                        Some(def_id) => Some(def_id),
+                    }
+                }
             };
             class_id.map(|variant_id| {
                 let struct_fields = ty::lookup_struct_fields(cx.tcx, variant_id);

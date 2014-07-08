@@ -8,15 +8,26 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_type = "lib"]
+struct S {
+    x: int,
+    y: int,
+}
 
-pub enum maybe<T> { just(T), nothing }
+type S2 = S;
 
-impl <T:Clone> Index<uint,T> for maybe<T> {
-    fn index(&self, _idx: &uint) -> T {
-        match self {
-            &just(ref t) => (*t).clone(),
-            &nothing => { fail!(); }
+fn main() {
+    let s = S2 {
+        x: 1,
+        y: 2,
+    };
+    match s {
+        S2 {
+            x: x,
+            y: y
+        } => {
+            assert_eq!(x, 1);
+            assert_eq!(y, 2);
         }
     }
 }
+
