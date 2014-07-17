@@ -979,7 +979,7 @@ let mut b = Foo { x: 5, y: box 10 };
 b.x = 10;
 ~~~~
 
-If an object doesn't contain any non-Send types, it consists of a single
+If an object doesn't contain any non-`Send` types, it consists of a single
 ownership tree and is itself given the `Send` trait which allows it to be sent
 between tasks. Custom destructors can only be implemented directly on types
 that are `Send`, but non-`Send` types can still *contain* types with custom
@@ -2427,7 +2427,7 @@ as in this version of `print_all` that copies elements.
 fn print_all<T: Printable + Clone>(printable_things: Vec<T>) {
     let mut i = 0;
     while i < printable_things.len() {
-        let copy_of_thing = printable_things.get(i).clone();
+        let copy_of_thing = printable_things[i].clone();
         copy_of_thing.print();
         i += 1;
     }

@@ -35,7 +35,6 @@ use std::hash::Hash;
 use std::hash;
 use std::io::MemWriter;
 use std::mem;
-use std::str;
 use std::collections::HashMap;
 use syntax::abi;
 use syntax::ast::*;
@@ -44,6 +43,7 @@ use syntax::ast_map::{PathElem, PathElems};
 use syntax::ast_map;
 use syntax::ast_util::*;
 use syntax::ast_util;
+use syntax::ast_util::PostExpansionMethod;
 use syntax::attr;
 use syntax::attr::AttrMetaMethods;
 use syntax::diagnostic::SpanHandler;
@@ -619,7 +619,7 @@ fn encode_visibility(ebml_w: &mut Encoder, visibility: Visibility) {
         Public => 'y',
         Inherited => 'i',
     };
-    ebml_w.wr_str(str::from_char(ch).as_slice());
+    ebml_w.wr_str(ch.to_string().as_slice());
     ebml_w.end_tag();
 }
 
@@ -799,7 +799,7 @@ fn encode_info_for_method(ecx: &EncodeContext,
         } else {
             encode_symbol(ecx, ebml_w, m.def_id.node);
         }
-        encode_method_argument_names(ebml_w, method_fn_decl(&*ast_method));
+        encode_method_argument_names(ebml_w, &*ast_method.pe_fn_decl());
     }
 
     ebml_w.end_tag();
@@ -1241,7 +1241,7 @@ fn encode_info_for_item(ecx: &EncodeContext,
                     encode_method_sort(ebml_w, 'p');
                     encode_inlined_item(ecx, ebml_w,
                                         IIMethodRef(def_id, true, &*m));
-                    encode_method_argument_names(ebml_w, method_fn_decl(m));
+                    encode_method_argument_names(ebml_w, m.pe_fn_decl());
                 }
             }
 
@@ -1922,5 +1922,5 @@ pub fn encoded_ty(tcx: &ty::ctxt, t: ty::t) -> String {
         tcx: tcx,
         abbrevs: &RefCell::new(HashMap::new())
     }, t);
-    str::from_utf8_owned(Vec::from_slice(wr.get_ref())).unwrap().to_string()
+    String::from_utf8(wr.unwrap()).unwrap()
 }
