@@ -1622,6 +1622,12 @@ impl<'a> Resolver<'a> {
         if is_exported {
             self.external_exports.insert(def.def_id());
         }
+
+        let kind = match def {
+            DefStruct(..) | DefTy(..) => ImplModuleKind,
+            _ => NormalModuleKind
+        };
+
         match def {
           DefMod(def_id) | DefForeignMod(def_id) | DefStruct(def_id) |
           DefTy(def_id) => {
@@ -1640,7 +1646,7 @@ impl<'a> Resolver<'a> {
 
                 child_name_bindings.define_module(parent_link,
                                                   Some(def_id),
-                                                  NormalModuleKind,
+                                                  kind,
                                                   true,
                                                   is_public,
                                                   DUMMY_SP);
@@ -3707,7 +3713,7 @@ impl<'a> Resolver<'a> {
 
                                 match ty_m.explicit_self.node {
                                     SelfExplicit(ref typ, _) => {
-                                        this.resolve_type(*typ)
+                                        this.resolve_type(&**typ)
                                     }
                                     _ => {}
                                 }
@@ -4044,7 +4050,7 @@ impl<'a> Resolver<'a> {
                                                 rib_kind);
 
         match method.pe_explicit_self().node {
-            SelfExplicit(ref typ, _) => self.resolve_type(*typ),
+            SelfExplicit(ref typ, _) => self.resolve_type(&**typ),
             _ => {}
         }
 
