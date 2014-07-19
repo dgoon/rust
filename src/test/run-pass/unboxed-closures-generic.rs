@@ -8,12 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[main]
-fn main1() {
+#![feature(unboxed_closures)]
+
+use std::ops::FnMut;
+
+fn call_it<F:FnMut<(int,int),int>>(y: int, mut f: F) -> int {
+    f.call_mut((2, y))
 }
 
-mod foo {
-    #[main]
-    fn main2() { //~ ERROR multiple functions with a #[main] attribute
-    }
+pub fn main() {
+    let f = |&mut: x: int, y: int| -> int { x + y };
+    let z = call_it(3, f);
+    println!("{}", z);
+    assert_eq!(z, 5);
 }
+
