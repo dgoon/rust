@@ -8,19 +8,27 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// macro f should not be able to inject a reference to 'n'.
-//
-// Ignored because `for` loops are not hygienic yet; they will require special
-// handling since they introduce a new pattern binding position.
+struct A<'a> {
+    func: &'a fn() -> Option<int>
+}
 
-// ignore-test
-
-#![feature(macro_rules)]
-
-macro_rules! f(() => (n))
-
-fn main() -> (){
-    for n in range(0i, 1) {
-        println!("{}", f!()); //~ ERROR unresolved name `n`
+impl<'a> A<'a> {
+    fn call(&self) -> Option<int> {
+        (*self.func)()
     }
+}
+
+fn foo() -> Option<int> {
+    None
+}
+
+fn create() -> A<'static> {
+    A {
+        func: &foo, //~ ERROR borrowed value does not live long enough
+    }
+}
+
+fn main() {
+    let a = create();
+    a.call();
 }
