@@ -8,13 +8,26 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ascii::AsciiExt;
+enum Enum<'a> {
+    A(&'a int),
+    B(bool),
+}
 
-static NAME: &'static str = "hello world";
-
-fn main() {
-    match NAME.to_ascii_lower().as_slice() {
-        "foo" => {}
-        _ => {}
+fn foo() -> int {
+    let mut n = 42;
+    let mut x = A(&mut n);
+    match x {
+        A(_) if { x = B(false); false } => 1,
+        //~^ ERROR cannot assign in a pattern guard
+        A(_) if { let y = &mut x; *y = B(false); false } => 1,
+        //~^ ERROR cannot mutably borrow in a pattern guard
+        //~^^ ERROR cannot assign in a pattern guard
+        A(p) => *p,
+        B(_) => 2,
     }
 }
+
+fn main() {
+    foo();
+}
+
