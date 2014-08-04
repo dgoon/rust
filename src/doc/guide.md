@@ -1626,10 +1626,6 @@ Check out the generated `Cargo.toml`:
 name = "guessing_game"
 version = "0.1.0"
 authors = ["Your Name <you@example.com>"]
-
-[[bin]]
-
-name = "guessing_game"
 ```
 
 Cargo gets this information from your environment. If it's not correct, go ahead
@@ -2569,9 +2565,9 @@ It gives an error:
 
 ```{notrust,ignore}
    Compiling modules v0.1.0 (file:/home/you/projects/modules)
-src/modules.rs:2:5: 2:23 error: function `print_hello` is private
-src/modules.rs:2     hello::print_hello();
-                     ^~~~~~~~~~~~~~~~~~
+src/main.rs:2:5: 2:23 error: function `print_hello` is private
+src/main.rs:2     hello::print_hello();
+                  ^~~~~~~~~~~~~~~~~~
 ```
 
 To make it public, we use the `pub` keyword:
