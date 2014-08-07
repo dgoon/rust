@@ -1732,8 +1732,8 @@ impl<'a> State<'a> {
         /* Pat isn't normalized, but the beauty of it
          is that it doesn't matter */
         match pat.node {
-            ast::PatWild => try!(word(&mut self.s, "_")),
-            ast::PatWildMulti => try!(word(&mut self.s, "..")),
+            ast::PatWild(ast::PatWildSingle) => try!(word(&mut self.s, "_")),
+            ast::PatWild(ast::PatWildMulti) => try!(word(&mut self.s, "..")),
             ast::PatIdent(binding_mode, ref path1, sub) => {
                 match binding_mode {
                     ast::BindByRef(mutbl) => {
@@ -1822,7 +1822,7 @@ impl<'a> State<'a> {
                 for p in slice.iter() {
                     if !before.is_empty() { try!(self.word_space(",")); }
                     match **p {
-                        ast::Pat { node: ast::PatWildMulti, .. } => {
+                        ast::Pat { node: ast::PatWild(ast::PatWildMulti), .. } => {
                             // this case is handled by print_pat
                         }
                         _ => try!(word(&mut self.s, "..")),
@@ -2082,8 +2082,24 @@ impl<'a> State<'a> {
     }
 
     pub fn print_lifetime(&mut self,
-                          lifetime: &ast::Lifetime) -> IoResult<()> {
+                          lifetime: &ast::Lifetime)
+                          -> IoResult<()>
+    {
         self.print_name(lifetime.name)
+    }
+
+    pub fn print_lifetime_def(&mut self,
+                              lifetime: &ast::LifetimeDef)
+                              -> IoResult<()>
+    {
+        try!(self.print_lifetime(&lifetime.lifetime));
+        let mut sep = ":";
+        for v in lifetime.bounds.iter() {
+            try!(word(&mut self.s, sep));
+            try!(self.print_lifetime(v));
+            sep = "+";
+        }
+        Ok(())
     }
 
     pub fn print_generics(&mut self,
@@ -2102,7 +2118,7 @@ impl<'a> State<'a> {
                 |s, &idx| {
                     if idx < generics.lifetimes.len() {
                         let lifetime = generics.lifetimes.get(idx);
-                        s.print_lifetime(lifetime)
+                        s.print_lifetime_def(lifetime)
                     } else {
                         let idx = idx - generics.lifetimes.len();
                         let param = generics.ty_params.get(idx);

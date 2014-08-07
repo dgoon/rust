@@ -73,6 +73,11 @@ pub trait AstBuilder {
     fn trait_ref(&self, path: ast::Path) -> ast::TraitRef;
     fn typarambound(&self, path: ast::Path) -> ast::TyParamBound;
     fn lifetime(&self, span: Span, ident: ast::Name) -> ast::Lifetime;
+    fn lifetime_def(&self,
+                    span: Span,
+                    name: ast::Name,
+                    bounds: Vec<ast::Lifetime>)
+                    -> ast::LifetimeDef;
 
     // statements
     fn stmt_expr(&self, expr: Gc<ast::Expr>) -> Gc<ast::Stmt>;
@@ -456,6 +461,17 @@ impl<'a> AstBuilder for ExtCtxt<'a> {
         ast::Lifetime { id: ast::DUMMY_NODE_ID, span: span, name: name }
     }
 
+    fn lifetime_def(&self,
+                    span: Span,
+                    name: ast::Name,
+                    bounds: Vec<ast::Lifetime>)
+                    -> ast::LifetimeDef {
+        ast::LifetimeDef {
+            lifetime: self.lifetime(span, name),
+            bounds: bounds
+        }
+    }
+
     fn stmt_expr(&self, expr: Gc<ast::Expr>) -> Gc<ast::Stmt> {
         box(GC) respan(expr.span, ast::StmtSemi(expr, ast::DUMMY_NODE_ID))
     }
@@ -763,7 +779,7 @@ impl<'a> AstBuilder for ExtCtxt<'a> {
         box(GC) ast::Pat { id: ast::DUMMY_NODE_ID, node: pat, span: span }
     }
     fn pat_wild(&self, span: Span) -> Gc<ast::Pat> {
-        self.pat(span, ast::PatWild)
+        self.pat(span, ast::PatWild(ast::PatWildSingle))
     }
     fn pat_lit(&self, span: Span, expr: Gc<ast::Expr>) -> Gc<ast::Pat> {
         self.pat(span, ast::PatLit(expr))
