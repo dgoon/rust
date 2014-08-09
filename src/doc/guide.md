@@ -1432,6 +1432,86 @@ building our guessing game, but we need to know how to do one last thing first:
 get input from the keyboard. You can't have a guessing game without the ability
 to guess!
 
+# Strings
+
+Strings are an important concept for any programmer to master. Rust's string
+handling system is a bit different than in other languages, due to its systems
+focus. Any time you have a data structure of variable size, things can get
+tricky, and strings are a re-sizable data structure. That said, Rust's strings
+also work differently than in some other systems languages, such as C.
+
+Let's dig into the details. A **string** is a sequence of unicode scalar values
+encoded as a stream of UTF-8 bytes. All strings are guaranteed to be
+validly-encoded UTF-8 sequences. Additionally, strings are not null-terminated
+and can contain null bytes.
+
+Rust has two main types of strings: `&str` and `String`.
+
+The first kind is a `&str`. This is pronounced a 'string slice.' String literals
+are of the type `&str`:
+
+```{rust}
+let string = "Hello there.";
+```
+
+This string is statically allocated, meaning that it's saved inside our
+compiled program, and exists for the entire duration it runs. The `string`
+binding is a reference to this statically allocated string. String slices
+have a fixed size, and cannot be mutated.
+
+A `String`, on the other hand, is an in-memory string.  This string is
+growable, and is also guaranteed to be UTF-8.
+
+```{rust}
+let mut s = "Hello".to_string();
+println!("{}", s);
+
+s.push_str(", world.");
+println!("{}", s);
+```
+
+You can coerce a `String` into a `&str` with the `as_slice()` method:
+
+```{rust}
+fn takes_slice(slice: &str) {
+    println!("Got: {}", slice);
+}
+
+fn main() {
+    let s = "Hello".to_string();
+    takes_slice(s.as_slice());
+}
+```
+
+To compare a String to a constant string, prefer `as_slice()`...
+
+```{rust}
+fn compare(string: String) {
+    if string.as_slice() == "Hello" {
+        println!("yes");
+    }
+}
+```
+
+... over `to_string()`:
+
+```{rust}
+fn compare(string: String) {
+    if string == "Hello".to_string() {
+        println!("yes");
+    }
+}
+```
+
+Converting a `String` to a `&str` is cheap, but converting the `&str` to a
+`String` involves allocating memory. No reason to do that unless you have to!
+
+That's the basics of strings in Rust! They're probably a bit more complicated
+than you are used to, if you come from a scripting language, but when the
+low-level details matter, they really matter. Just remember that `String`s
+allocate memory and control their data, while `&str`s are a reference to
+another string, and you'll be all set.
+
 # Standard Input
 
 Getting input from the keyboard is pretty easy, but uses some things
@@ -3613,6 +3693,94 @@ out [the section on `Rc<T>` and `Arc<T>` in the pointers
 guide](http://doc.rust-lang.org/guide-pointers.html#rc-and-arc).
 
 # Patterns
+
+# Method Syntax
+
+Functions are great, but if you want to call a bunch of them on some data, it
+can be awkward. Consider this code:
+
+```{rust,ignore}
+baz(bar(foo(x)));
+```
+
+We would read this left-to right, and so we see 'baz bar foo.' But this isn't the
+order that the functions would get called in, that's inside-out: 'foo bar baz.'
+Wouldn't it be nice if we could do this instead?
+
+```{rust,ignore}
+x.foo().bar().baz();
+```
+
+Luckily, as you may have guessed with the leading question, you can! Rust provides
+the ability to use this **method call syntax** via the `impl` keyword.
+
+Here's how it works:
+
+```
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+impl Circle {
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * (self.radius * self.radius)
+    }
+}
+
+fn main() {
+    let c = Circle { x: 0.0, y: 0.0, radius: 2.0 };
+    println!("{}", c.area());
+}
+```
+
+This will print `12.566371`.
+
+We've made a struct that represents a circle. We then write an `impl` block,
+and inside it, define a method, `area`. Methods take a  special first
+parameter, `&self`. There are three variants: `self`, `&self`, and `&mut self`.
+You can think of this first parameter as being the `x` in `x.foo()`. The three
+variants correspond to the three kinds of thing `x` could be: `self` if it's
+just a value on the stack, `&self` if it's a reference, and `&mut self` if it's
+a mutable reference. We should default to using `&self`, as it's the most
+common.
+
+Finally, as you may remember, the value of the area of a circle is `π*r²`.
+Because we took the `&self` parameter to `area`, we can use it just like any
+other parameter. Because we know it's a `Circle`, we can access the `radius`
+just like we would with any other struct. An import of π and some
+multiplications later, and we have our area.
+
+You can also define methods that do not take a `self` parameter. Here's a
+pattern that's very common in Rust code:
+
+```
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+impl Circle {
+    fn new(x: f64, y: f64, radius: f64) -> Circle {
+        Circle {
+            x: x,
+            y: y,
+            radius: radius,
+        }
+    }
+}
+
+fn main() {
+    let c = Circle::new(0.0, 0.0, 2.0);
+}
+```
+
+This **static method** builds a new `Circle` for us. Note that static methods
+are called with the `Struct::method()` syntax, rather than the `ref.method()`
+syntax.
+
 
 # Closures
 
