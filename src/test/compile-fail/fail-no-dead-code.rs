@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,14 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Tests that even when a type parameter doesn't implement a required
-// super-builtin-kind of a trait, if the type parameter is never used,
-// the type can implement the trait anyway.
+#![deny(dead_code)]
+#![allow(unreachable_code)]
 
-trait Foo : Send { }
+fn foo() { //~ ERROR code is never used
 
-struct X<T>(());
+    // none of these should have any dead_code exposed to the user
+    fail!();
 
-impl <T> Foo for X<T> { }
+    fail!("foo");
 
-pub fn main() { }
+    fail!("bar {}", "baz")
+}
+
+
+fn main() {}
