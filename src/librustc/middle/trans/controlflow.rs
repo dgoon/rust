@@ -69,12 +69,8 @@ pub fn trans_stmt<'a>(cx: &'a Block<'a>,
                         debuginfo::create_local_var_metadata(bcx, &**local);
                     }
                 }
-                ast::DeclItem(ref i) => {
-                    match fcx.handle_items {
-                        TranslateItems => trans_item(cx.fcx.ccx, &**i),
-                        IgnoreItems => {}
-                    }
-                }
+                // Inner items are visited by `trans_item`/`trans_meth`.
+                ast::DeclItem(_) => {},
             }
         }
         ast::StmtMac(..) => cx.tcx().sess.bug("unexpanded macro")
@@ -462,13 +458,22 @@ pub fn trans_ret<'a>(bcx: &'a Block<'a>,
     let _icx = push_ctxt("trans_ret");
     let fcx = bcx.fcx;
     let mut bcx = bcx;
-    let dest = match bcx.fcx.llretptr.get() {
-        None => expr::Ignore,
-        Some(retptr) => expr::SaveIn(retptr),
+    let dest = match (fcx.llretslotptr.get(), e) {
+        (Some(_), Some(e)) => {
+            let ret_ty = expr_ty(bcx, &*e);
+            expr::SaveIn(fcx.get_ret_slot(bcx, ret_ty, "ret_slot"))
+        }
+        _ => expr::Ignore,
     };
     match e {
         Some(x) => {
             bcx = expr::trans_into(bcx, &*x, dest);
+            match dest {
+                expr::SaveIn(slot) if fcx.needs_ret_allocas => {
+                    Store(bcx, slot, fcx.llretslotptr.get().unwrap());
+                }
+                _ => {}
+            }
         }
         _ => {}
     }

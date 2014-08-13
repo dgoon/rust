@@ -394,8 +394,7 @@ pub fn trans_expr_fn<'a>(
                   ty::ty_fn_abi(fty),
                   true,
                   NotUnboxedClosure,
-                  |bcx| load_environment(bcx, cdata_ty, &freevars, store),
-                  bcx.fcx.handle_items);
+                  |bcx| load_environment(bcx, cdata_ty, &freevars, store));
     fill_fn_pair(bcx, dest_addr, llfn, llbox);
     bcx
 }
@@ -487,8 +486,7 @@ pub fn trans_unboxed_closure<'a>(
                   ty::ty_fn_abi(function_type),
                   true,
                   IsUnboxedClosure,
-                  |bcx| load_unboxed_closure_environment(bcx, freevars_ptr),
-                  bcx.fcx.handle_items);
+                  |bcx| load_unboxed_closure_environment(bcx, freevars_ptr));
 
     // Don't hoist this to the top of the function. It's perfectly legitimate
     // to have a zero-size unboxed closure (in which case dest will be
@@ -574,16 +572,17 @@ pub fn get_wrapper_for_bare_fn(ccx: &CrateContext,
 
     let arena = TypedArena::new();
     let empty_param_substs = param_substs::empty();
-    let fcx = new_fn_ctxt(ccx, llfn, -1, true, f.sig.output,
-                          &empty_param_substs, None, &arena, TranslateItems);
+    let fcx = new_fn_ctxt(ccx, llfn, ast::DUMMY_NODE_ID, true, f.sig.output,
+                          &empty_param_substs, None, &arena);
     let bcx = init_function(&fcx, true, f.sig.output);
 
     let args = create_datums_for_fn_args(&fcx,
                                          ty::ty_fn_args(closure_ty)
                                             .as_slice());
     let mut llargs = Vec::new();
-    match fcx.llretptr.get() {
+    match fcx.llretslotptr.get() {
         Some(llretptr) => {
+            assert!(!fcx.needs_ret_allocas);
             llargs.push(llretptr);
         }
         None => {}
@@ -591,7 +590,7 @@ pub fn get_wrapper_for_bare_fn(ccx: &CrateContext,
     llargs.extend(args.iter().map(|arg| arg.val));
 
     let retval = Call(bcx, fn_ptr, llargs.as_slice(), None);
-    if type_is_zero_size(ccx, f.sig.output) || fcx.llretptr.get().is_some() {
+    if type_is_zero_size(ccx, f.sig.output) || fcx.llretslotptr.get().is_some() {
         RetVoid(bcx);
     } else {
         Ret(bcx, retval);
