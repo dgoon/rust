@@ -568,6 +568,7 @@ impl LintPass for UnusedAttribute {
             // FIXME: #14406 these are processed in trans, which happens after the
             // lint pass
             "cold",
+            "export_name",
             "inline",
             "link",
             "link_name",
@@ -578,6 +579,7 @@ impl LintPass for UnusedAttribute {
             "packed",
             "static_assert",
             "thread_local",
+            "no_debug",
 
             // not used anywhere (!?) but apparently we want to keep them around
             "comment",
@@ -801,15 +803,19 @@ fn method_context(cx: &Context, m: &ast::Method) -> MethodContext {
         node: m.id
     };
 
-    match cx.tcx.methods.borrow().find_copy(&did) {
+    match cx.tcx.impl_or_trait_items.borrow().find_copy(&did) {
         None => cx.sess().span_bug(m.span, "missing method descriptor?!"),
         Some(md) => {
-            match md.container {
-                ty::TraitContainer(..) => TraitDefaultImpl,
-                ty::ImplContainer(cid) => {
-                    match ty::impl_trait_ref(cx.tcx, cid) {
-                        Some(..) => TraitImpl,
-                        None => PlainImpl
+            match md {
+                ty::MethodTraitItem(md) => {
+                    match md.container {
+                        ty::TraitContainer(..) => TraitDefaultImpl,
+                        ty::ImplContainer(cid) => {
+                            match ty::impl_trait_ref(cx.tcx, cid) {
+                                Some(..) => TraitImpl,
+                                None => PlainImpl
+                            }
+                        }
                     }
                 }
             }
@@ -1470,7 +1476,15 @@ impl LintPass for Stability {
                                 trait_id: trait_id,
                                 method_num: index,
                                 ..
-                            }) => ty::trait_method(cx.tcx, trait_id, index).def_id
+                            }) => {
+                                match ty::trait_item(cx.tcx,
+                                                     trait_id,
+                                                     index) {
+                                    ty::MethodTraitItem(method) => {
+                                        method.def_id
+                                    }
+                                }
+                            }
                         }
                     }
                     None => return

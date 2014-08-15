@@ -9,8 +9,10 @@
 // except according to those terms.
 
 use abi;
-use ast::{P, StaticRegionTyParamBound, OtherRegionTyParamBound};
-use ast::{TraitTyParamBound, UnboxedFnTyParamBound, Required, Provided};
+use ast::{FnMutUnboxedClosureKind, FnOnceUnboxedClosureKind};
+use ast::{FnUnboxedClosureKind, MethodImplItem, P, OtherRegionTyParamBound};
+use ast::{StaticRegionTyParamBound, TraitTyParamBound, UnboxedClosureKind};
+use ast::{UnboxedFnTyParamBound, RequiredMethod, ProvidedMethod};
 use ast;
 use ast_util;
 use owned_slice::OwnedSlice;
@@ -228,7 +230,7 @@ pub fn method_to_string(p: &ast::Method) -> String {
 }
 
 pub fn fn_block_to_string(p: &ast::FnDecl) -> String {
-    $to_string(|s| s.print_fn_block_args(p, false))
+    $to_string(|s| s.print_fn_block_args(p, None))
 }
 
 pub fn path_to_string(p: &ast::Path) -> String {
@@ -582,7 +584,11 @@ impl<'a> State<'a> {
             ast::TyBareFn(f) => {
                 let generics = ast::Generics {
                     lifetimes: f.lifetimes.clone(),
-                    ty_params: OwnedSlice::empty()
+                    ty_params: OwnedSlice::empty(),
+                    where_clause: ast::WhereClause {
+                        id: ast::DUMMY_NODE_ID,
+                        predicates: Vec::new(),
+                    },
                 };
                 try!(self.print_ty_fn(Some(f.abi),
                                       None,
@@ -594,12 +600,16 @@ impl<'a> State<'a> {
                                       &None,
                                       Some(&generics),
                                       None,
-                                      false));
+                                      None));
             }
             ast::TyClosure(f, ref region) => {
                 let generics = ast::Generics {
                     lifetimes: f.lifetimes.clone(),
-                    ty_params: OwnedSlice::empty()
+                    ty_params: OwnedSlice::empty(),
+                    where_clause: ast::WhereClause {
+                        id: ast::DUMMY_NODE_ID,
+                        predicates: Vec::new(),
+                    },
                 };
                 try!(self.print_ty_fn(None,
                                       Some('&'),
@@ -611,12 +621,16 @@ impl<'a> State<'a> {
                                       &f.bounds,
                                       Some(&generics),
                                       None,
-                                      false));
+                                      None));
             }
             ast::TyProc(ref f) => {
                 let generics = ast::Generics {
                     lifetimes: f.lifetimes.clone(),
-                    ty_params: OwnedSlice::empty()
+                    ty_params: OwnedSlice::empty(),
+                    where_clause: ast::WhereClause {
+                        id: ast::DUMMY_NODE_ID,
+                        predicates: Vec::new(),
+                    },
                 };
                 try!(self.print_ty_fn(None,
                                       Some('~'),
@@ -628,7 +642,7 @@ impl<'a> State<'a> {
                                       &f.bounds,
                                       Some(&generics),
                                       None,
-                                      false));
+                                      None));
             }
             ast::TyUnboxedFn(f) => {
                 try!(self.print_ty_fn(None,
@@ -641,7 +655,7 @@ impl<'a> State<'a> {
                                       &None,
                                       None,
                                       None,
-                                      true));
+                                      Some(f.kind)));
             }
             ast::TyPath(ref path, ref bounds, _) => {
                 try!(self.print_bounded_path(path, bounds));
@@ -763,6 +777,7 @@ impl<'a> State<'a> {
                 try!(space(&mut self.s));
                 try!(self.word_space("="));
                 try!(self.print_type(&**ty));
+                try!(self.print_where_clause(params));
                 try!(word(&mut self.s, ";"));
                 try!(self.end()); // end the outer ibox
             }
@@ -785,7 +800,10 @@ impl<'a> State<'a> {
                                        item.span));
             }
 
-            ast::ItemImpl(ref generics, ref opt_trait, ref ty, ref methods) => {
+            ast::ItemImpl(ref generics,
+                          ref opt_trait,
+                          ref ty,
+                          ref impl_items) => {
                 try!(self.head(visibility_qualified(item.vis,
                                                     "impl").as_slice()));
                 if generics.is_parameterized() {
@@ -803,12 +821,17 @@ impl<'a> State<'a> {
                 }
 
                 try!(self.print_type(&**ty));
+                try!(self.print_where_clause(generics));
 
                 try!(space(&mut self.s));
                 try!(self.bopen());
                 try!(self.print_inner_attributes(item.attrs.as_slice()));
-                for meth in methods.iter() {
-                    try!(self.print_method(&**meth));
+                for impl_item in impl_items.iter() {
+                    match *impl_item {
+                        ast::MethodImplItem(meth) => {
+                            try!(self.print_method(&*meth));
+                        }
+                    }
                 }
                 try!(self.bclose(item.span));
             }
@@ -836,6 +859,7 @@ impl<'a> State<'a> {
                         try!(self.print_path(&trait_.path, false));
                     }
                 }
+                try!(self.print_where_clause(generics));
                 try!(word(&mut self.s, " "));
                 try!(self.bopen());
                 for meth in methods.iter() {
@@ -871,6 +895,7 @@ impl<'a> State<'a> {
         try!(self.head(visibility_qualified(visibility, "enum").as_slice()));
         try!(self.print_ident(ident));
         try!(self.print_generics(generics));
+        try!(self.print_where_clause(generics));
         try!(space(&mut self.s));
         self.print_variants(enum_definition.variants.as_slice(), span)
     }
@@ -1054,15 +1079,21 @@ impl<'a> State<'a> {
                               &None,
                               Some(&m.generics),
                               Some(m.explicit_self.node),
-                              false));
+                              None));
         word(&mut self.s, ";")
     }
 
     pub fn print_trait_method(&mut self,
-                              m: &ast::TraitMethod) -> IoResult<()> {
+                              m: &ast::TraitItem) -> IoResult<()> {
         match *m {
-            Required(ref ty_m) => self.print_ty_method(ty_m),
-            Provided(ref m) => self.print_method(&**m)
+            RequiredMethod(ref ty_m) => self.print_ty_method(ty_m),
+            ProvidedMethod(ref m) => self.print_method(&**m)
+        }
+    }
+
+    pub fn print_impl_item(&mut self, ii: &ast::ImplItem) -> IoResult<()> {
+        match *ii {
+            MethodImplItem(ref m) => self.print_method(&**m),
         }
     }
 
@@ -1481,7 +1512,7 @@ impl<'a> State<'a> {
                 // we are inside.
                 //
                 // if !decl.inputs.is_empty() {
-                try!(self.print_fn_block_args(&**decl, false));
+                try!(self.print_fn_block_args(&**decl, None));
                 try!(space(&mut self.s));
                 // }
 
@@ -1505,7 +1536,7 @@ impl<'a> State<'a> {
                 // empty box to satisfy the close.
                 try!(self.ibox(0));
             }
-            ast::ExprUnboxedFn(capture_clause, ref decl, ref body) => {
+            ast::ExprUnboxedFn(capture_clause, kind, ref decl, ref body) => {
                 try!(self.print_capture_clause(capture_clause));
 
                 // in do/for blocks we don't want to show an empty
@@ -1513,7 +1544,7 @@ impl<'a> State<'a> {
                 // we are inside.
                 //
                 // if !decl.inputs.is_empty() {
-                try!(self.print_fn_block_args(&**decl, true));
+                try!(self.print_fn_block_args(&**decl, Some(kind)));
                 try!(space(&mut self.s));
                 // }
 
@@ -1995,7 +2026,8 @@ impl<'a> State<'a> {
         try!(self.nbsp());
         try!(self.print_ident(name));
         try!(self.print_generics(generics));
-        self.print_fn_args_and_ret(decl, opt_explicit_self)
+        try!(self.print_fn_args_and_ret(decl, opt_explicit_self))
+        self.print_where_clause(generics)
     }
 
     pub fn print_fn_args(&mut self, decl: &ast::FnDecl,
@@ -2052,13 +2084,17 @@ impl<'a> State<'a> {
         }
     }
 
-    pub fn print_fn_block_args(&mut self,
-                               decl: &ast::FnDecl,
-                               is_unboxed: bool)
-                               -> IoResult<()> {
+    pub fn print_fn_block_args(
+            &mut self,
+            decl: &ast::FnDecl,
+            unboxed_closure_kind: Option<UnboxedClosureKind>)
+            -> IoResult<()> {
         try!(word(&mut self.s, "|"));
-        if is_unboxed {
-            try!(self.word_space("&mut:"));
+        match unboxed_closure_kind {
+            None => {}
+            Some(FnUnboxedClosureKind) => try!(self.word_space("&:")),
+            Some(FnMutUnboxedClosureKind) => try!(self.word_space("&mut:")),
+            Some(FnOnceUnboxedClosureKind) => try!(self.word_space(":")),
         }
         try!(self.print_fn_args(decl, None));
         try!(word(&mut self.s, "|"));
@@ -2148,7 +2184,7 @@ impl<'a> State<'a> {
                                          &None,
                                          None,
                                          None,
-                                         true)
+                                         Some(unboxed_function_type.kind))
                     }
                     OtherRegionTyParamBound(_) => Ok(())
                 })
@@ -2182,52 +2218,81 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn print_generics(&mut self,
-                          generics: &ast::Generics) -> IoResult<()> {
-        let total = generics.lifetimes.len() + generics.ty_params.len();
-        if total > 0 {
-            try!(word(&mut self.s, "<"));
+    fn print_type_parameters(&mut self,
+                             lifetimes: &[ast::LifetimeDef],
+                             ty_params: &[ast::TyParam])
+                             -> IoResult<()> {
+        let total = lifetimes.len() + ty_params.len();
+        let mut ints = Vec::new();
+        for i in range(0u, total) {
+            ints.push(i);
+        }
 
-            let mut ints = Vec::new();
-            for i in range(0u, total) {
-                ints.push(i);
-            }
-
-            try!(self.commasep(
-                Inconsistent, ints.as_slice(),
-                |s, &idx| {
-                    if idx < generics.lifetimes.len() {
-                        let lifetime = generics.lifetimes.get(idx);
-                        s.print_lifetime_def(lifetime)
-                    } else {
-                        let idx = idx - generics.lifetimes.len();
-                        let param = generics.ty_params.get(idx);
-                        match param.unbound {
-                            Some(TraitTyParamBound(ref tref)) => {
-                                try!(s.print_trait_ref(tref));
-                                try!(s.word_space("?"));
-                            }
-                            _ => {}
-                        }
-                        try!(s.print_ident(param.ident));
-                        try!(s.print_bounds(&None,
-                                            &param.bounds,
-                                            false,
-                                            false));
-                        match param.default {
-                            Some(ref default) => {
-                                try!(space(&mut s.s));
-                                try!(s.word_space("="));
-                                s.print_type(&**default)
-                            }
-                            _ => Ok(())
-                        }
+        self.commasep(Inconsistent, ints.as_slice(), |s, &idx| {
+            if idx < lifetimes.len() {
+                let lifetime = &lifetimes[idx];
+                s.print_lifetime_def(lifetime)
+            } else {
+                let idx = idx - lifetimes.len();
+                let param = &ty_params[idx];
+                match param.unbound {
+                    Some(TraitTyParamBound(ref tref)) => {
+                        try!(s.print_trait_ref(tref));
+                        try!(s.word_space("?"));
                     }
-                }));
+                    _ => {}
+                }
+                try!(s.print_ident(param.ident));
+                try!(s.print_bounds(&None,
+                                    &param.bounds,
+                                    false,
+                                    false));
+                match param.default {
+                    Some(ref default) => {
+                        try!(space(&mut s.s));
+                        try!(s.word_space("="));
+                        s.print_type(&**default)
+                    }
+                    _ => Ok(())
+                }
+            }
+        })
+    }
+
+    pub fn print_generics(&mut self, generics: &ast::Generics)
+                          -> IoResult<()> {
+        if generics.lifetimes.len() + generics.ty_params.len() > 0 {
+            try!(word(&mut self.s, "<"));
+            try!(self.print_type_parameters(generics.lifetimes.as_slice(),
+                                            generics.ty_params.as_slice()));
             word(&mut self.s, ">")
         } else {
             Ok(())
         }
+    }
+
+    pub fn print_where_clause(&mut self, generics: &ast::Generics)
+                              -> IoResult<()> {
+        if generics.where_clause.predicates.len() == 0 {
+            return Ok(())
+        }
+
+        try!(space(&mut self.s));
+        try!(self.word_space("where"));
+
+        for (i, predicate) in generics.where_clause
+                                      .predicates
+                                      .iter()
+                                      .enumerate() {
+            if i != 0 {
+                try!(self.word_space(","));
+            }
+
+            try!(self.print_ident(predicate.ident));
+            try!(self.print_bounds(&None, &predicate.bounds, false, false));
+        }
+
+        Ok(())
     }
 
     pub fn print_meta_item(&mut self, item: &ast::MetaItem) -> IoResult<()> {
@@ -2256,13 +2321,17 @@ impl<'a> State<'a> {
     pub fn print_view_path(&mut self, vp: &ast::ViewPath) -> IoResult<()> {
         match vp.node {
             ast::ViewPathSimple(ident, ref path, _) => {
+                try!(self.print_path(path, false));
+
                 // FIXME(#6993) can't compare identifiers directly here
-                if path.segments.last().unwrap().identifier.name != ident.name {
-                    try!(self.print_ident(ident));
+                if path.segments.last().unwrap().identifier.name !=
+                        ident.name {
                     try!(space(&mut self.s));
-                    try!(self.word_space("="));
+                    try!(self.word_space("as"));
+                    try!(self.print_ident(ident));
                 }
-                self.print_path(path, false)
+
+                Ok(())
             }
 
             ast::ViewPathGlob(ref path, _) => {
@@ -2366,7 +2435,8 @@ impl<'a> State<'a> {
                        opt_bounds: &Option<OwnedSlice<ast::TyParamBound>>,
                        generics: Option<&ast::Generics>,
                        opt_explicit_self: Option<ast::ExplicitSelf_>,
-                       is_unboxed: bool)
+                       opt_unboxed_closure_kind:
+                        Option<ast::UnboxedClosureKind>)
                        -> IoResult<()> {
         try!(self.ibox(indent_unit));
 
@@ -2383,7 +2453,7 @@ impl<'a> State<'a> {
             try!(self.print_fn_style(fn_style));
             try!(self.print_opt_abi_and_extern_if_nondefault(opt_abi));
             try!(self.print_onceness(onceness));
-            if !is_unboxed {
+            if opt_unboxed_closure_kind.is_none() {
                 try!(word(&mut self.s, "fn"));
             }
         }
@@ -2399,20 +2469,30 @@ impl<'a> State<'a> {
         match generics { Some(g) => try!(self.print_generics(g)), _ => () }
         try!(zerobreak(&mut self.s));
 
-        if is_unboxed || opt_sigil == Some('&') {
+        if opt_unboxed_closure_kind.is_some() || opt_sigil == Some('&') {
             try!(word(&mut self.s, "|"));
         } else {
             try!(self.popen());
         }
 
-        if is_unboxed {
-            try!(word(&mut self.s, "&mut"));
-            try!(self.word_space(":"));
+        match opt_unboxed_closure_kind {
+            Some(ast::FnUnboxedClosureKind) => {
+                try!(word(&mut self.s, "&"));
+                try!(self.word_space(":"));
+            }
+            Some(ast::FnMutUnboxedClosureKind) => {
+                try!(word(&mut self.s, "&mut"));
+                try!(self.word_space(":"));
+            }
+            Some(ast::FnOnceUnboxedClosureKind) => {
+                try!(self.word_space(":"));
+            }
+            None => {}
         }
 
         try!(self.print_fn_args(decl, opt_explicit_self));
 
-        if is_unboxed || opt_sigil == Some('&') {
+        if opt_unboxed_closure_kind.is_some() || opt_sigil == Some('&') {
             try!(word(&mut self.s, "|"));
         } else {
             if decl.variadic {
@@ -2440,6 +2520,11 @@ impl<'a> State<'a> {
                 }
                 try!(self.end());
             }
+        }
+
+        match generics {
+            Some(generics) => try!(self.print_where_clause(generics)),
+            None => {}
         }
 
         self.end()
