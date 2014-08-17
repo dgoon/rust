@@ -226,7 +226,7 @@ pub use funcs::bsd43::{shutdown};
 #[cfg(windows)] pub use consts::os::extra::{FILE_FLAG_BACKUP_SEMANTICS, INVALID_HANDLE_VALUE};
 #[cfg(windows)] pub use consts::os::extra::{MOVEFILE_REPLACE_EXISTING};
 #[cfg(windows)] pub use consts::os::extra::{GENERIC_READ, GENERIC_WRITE};
-#[cfg(windows)] pub use consts::os::extra::{VOLUME_NAME_DOS, FILE_ATTRIBUTE_NORMAL};
+#[cfg(windows)] pub use consts::os::extra::{VOLUME_NAME_DOS};
 #[cfg(windows)] pub use consts::os::extra::{PIPE_ACCESS_DUPLEX, FILE_FLAG_FIRST_PIPE_INSTANCE};
 #[cfg(windows)] pub use consts::os::extra::{FILE_FLAG_OVERLAPPED, PIPE_TYPE_BYTE};
 #[cfg(windows)] pub use consts::os::extra::{PIPE_READMODE_BYTE, PIPE_WAIT};
@@ -255,10 +255,10 @@ pub use funcs::bsd43::{shutdown};
 #[cfg(windows)] pub use funcs::extra::kernel32::{UnmapViewOfFile, CloseHandle};
 #[cfg(windows)] pub use funcs::extra::kernel32::{WaitForSingleObject, GetSystemTimeAsFileTime};
 #[cfg(windows)] pub use funcs::extra::kernel32::{QueryPerformanceCounter};
-#[cfg(windows)] pub use funcs::extra::kernel32::{WaitForSingleObject, QueryPerformanceFrequency};
+#[cfg(windows)] pub use funcs::extra::kernel32::{QueryPerformanceFrequency};
 #[cfg(windows)] pub use funcs::extra::kernel32::{GetExitCodeProcess, TerminateProcess};
 #[cfg(windows)] pub use funcs::extra::kernel32::{ReadFile, WriteFile, SetFilePointerEx};
-#[cfg(windows)] pub use funcs::extra::kernel32::{FlushFileBuffers, SetEndOfFile, CreateFileW};
+#[cfg(windows)] pub use funcs::extra::kernel32::{SetEndOfFile, CreateFileW};
 #[cfg(windows)] pub use funcs::extra::kernel32::{CreateDirectoryW, FindFirstFileW};
 #[cfg(windows)] pub use funcs::extra::kernel32::{FindNextFileW, FindClose, DeleteFileW};
 #[cfg(windows)] pub use funcs::extra::kernel32::{CreateHardLinkW, CreateEventW};
@@ -1456,13 +1456,24 @@ pub mod types {
                     pub Data4: [BYTE, ..8],
                 }
 
+                // NOTE(pcwalton, stage0): Remove after snapshot (typeck bug
+                // workaround).
+                #[cfg(stage0)]
                 pub struct WSAPROTOCOLCHAIN {
                     pub ChainLen: c_int,
                     pub ChainEntries: [DWORD, ..MAX_PROTOCOL_CHAIN],
                 }
+                #[cfg(not(stage0))]
+                pub struct WSAPROTOCOLCHAIN {
+                    pub ChainLen: c_int,
+                    pub ChainEntries: [DWORD, ..MAX_PROTOCOL_CHAIN as uint],
+                }
 
                 pub type LPWSAPROTOCOLCHAIN = *mut WSAPROTOCOLCHAIN;
 
+                // NOTE(pcwalton, stage0): Remove after snapshot (typeck bug
+                // workaround).
+                #[cfg(stage0)]
                 pub struct WSAPROTOCOL_INFO {
                     pub dwServiceFlags1: DWORD,
                     pub dwServiceFlags2: DWORD,
@@ -1484,6 +1495,29 @@ pub mod types {
                     pub dwMessageSize: DWORD,
                     pub dwProviderReserved: DWORD,
                     pub szProtocol: [u8, ..WSAPROTOCOL_LEN+1],
+                }
+                #[cfg(not(stage0))]
+                pub struct WSAPROTOCOL_INFO {
+                    pub dwServiceFlags1: DWORD,
+                    pub dwServiceFlags2: DWORD,
+                    pub dwServiceFlags3: DWORD,
+                    pub dwServiceFlags4: DWORD,
+                    pub dwProviderFlags: DWORD,
+                    pub ProviderId: GUID,
+                    pub dwCatalogEntryId: DWORD,
+                    pub ProtocolChain: WSAPROTOCOLCHAIN,
+                    pub iVersion: c_int,
+                    pub iAddressFamily: c_int,
+                    pub iMaxSockAddr: c_int,
+                    pub iMinSockAddr: c_int,
+                    pub iSocketType: c_int,
+                    pub iProtocol: c_int,
+                    pub iProtocolMaxOffset: c_int,
+                    pub iNetworkByteOrder: c_int,
+                    pub iSecurityScheme: c_int,
+                    pub dwMessageSize: DWORD,
+                    pub dwProviderReserved: DWORD,
+                    pub szProtocol: [u8, ..(WSAPROTOCOL_LEN as uint) + 1u],
                 }
 
                 pub type LPWSAPROTOCOL_INFO = *mut WSAPROTOCOL_INFO;

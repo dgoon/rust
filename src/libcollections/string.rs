@@ -20,9 +20,8 @@ use core::mem;
 use core::ptr;
 // FIXME: ICE's abound if you import the `Slice` type while importing `Slice` trait
 use RawSlice = core::raw::Slice;
-use core::slice::Slice;
 
-use {Collection, Mutable, MutableSeq};
+use {Mutable, MutableSeq};
 use hash;
 use str;
 use str::{CharRange, StrAllocating, MaybeOwned, Owned};
@@ -503,7 +502,7 @@ impl String {
                 data: self.vec.as_ptr().offset(cur_len as int),
                 len: 4,
             };
-            let used = ch.encode_utf8(mem::transmute(slice));
+            let used = ch.encode_utf8(mem::transmute(slice)).unwrap_or(0);
             self.vec.set_len(cur_len + used);
         }
     }

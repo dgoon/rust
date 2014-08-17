@@ -69,15 +69,17 @@ is the same as `&[u8]`.
 
 #![doc(primitive = "str")]
 
-use core::prelude::*;
-
 use core::default::Default;
 use core::fmt;
 use core::cmp;
 use core::iter::AdditiveIterator;
 use core::mem;
+use core::prelude::{Char, Clone, Collection, Eq, Equiv, ImmutableSlice};
+use core::prelude::{Iterator, MutableSlice, None, Option, Ord, Ordering};
+use core::prelude::{PartialEq, PartialOrd, Result, Slice, Some, Tuple2};
+use core::prelude::{range};
 
-use {Collection, Deque, MutableSeq};
+use {Deque, MutableSeq};
 use hash;
 use ringbuf::RingBuf;
 use string::String;
@@ -1680,7 +1682,7 @@ mod tests {
     fn test_chars_decoding() {
         let mut bytes = [0u8, ..4];
         for c in range(0u32, 0x110000).filter_map(|c| ::core::char::from_u32(c)) {
-            let len = c.encode_utf8(bytes);
+            let len = c.encode_utf8(bytes).unwrap_or(0);
             let s = ::core::str::from_utf8(bytes.slice_to(len)).unwrap();
             if Some(c) != s.chars().next() {
                 fail!("character {:x}={} does not decode correctly", c as u32, c);
@@ -1692,7 +1694,7 @@ mod tests {
     fn test_chars_rev_decoding() {
         let mut bytes = [0u8, ..4];
         for c in range(0u32, 0x110000).filter_map(|c| ::core::char::from_u32(c)) {
-            let len = c.encode_utf8(bytes);
+            let len = c.encode_utf8(bytes).unwrap_or(0);
             let s = ::core::str::from_utf8(bytes.slice_to(len)).unwrap();
             if Some(c) != s.chars().rev().next() {
                 fail!("character {:x}={} does not decode correctly", c as u32, c);
