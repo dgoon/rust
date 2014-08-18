@@ -8,19 +8,26 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-stage1
+#![feature(overloaded_calls)]
 
-#![feature(phase)]
+use std::{fmt, ops};
 
-extern crate regex;
-#[phase(plugin)] extern crate regex_macros;
+struct Shower<T> {
+    x: T
+}
 
-// Tests to make sure that `regex!` will produce a compile error when given
-// an invalid regular expression.
-// More exhaustive failure tests for the parser are done with the traditional
-// unit testing infrastructure, since both dynamic and native regexes use the
-// same parser.
+impl<T: fmt::Show> ops::Fn<(), ()> for Shower<T> {
+    fn call(&self, _args: ()) {
+//~^ ERROR `call` has an incompatible type for trait: expected "rust-call" fn but found "Rust" fn
+        println!("{}", self.x);
+    }
+}
 
-fn main() {
-    let _ = regex!("("); //~ ERROR Regex syntax error
+fn make_shower<T>(x: T) -> Shower<T> {
+    Shower { x: x }
+}
+
+pub fn main() {
+    let show3 = make_shower(3i);
+    show3();
 }

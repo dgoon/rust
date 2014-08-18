@@ -8,19 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-stage1
-
-#![feature(phase)]
-
-extern crate regex;
-#[phase(plugin)] extern crate regex_macros;
-
-// Tests to make sure that `regex!` will produce a compile error when given
-// an invalid regular expression.
-// More exhaustive failure tests for the parser are done with the traditional
-// unit testing infrastructure, since both dynamic and native regexes use the
-// same parser.
+extern {
+    static externalValue: int;
+}
 
 fn main() {
-    let _ = regex!("("); //~ ERROR Regex syntax error
+    let boolValue = match 42 {
+        externalValue => true,
+        //~^ ERROR extern statics cannot be referenced in patterns
+        _ => false
+    };
 }
+
