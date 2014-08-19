@@ -517,7 +517,7 @@ note: in expansion of format_args!
 <std macros>:1:1: 3:2 note: in expansion of println!
 src/hello_world.rs:4:5: 4:42 note: expansion site
 error: aborting due to previous error
-Could not execute process `rustc src/hello_world.rs --crate-type bin --out-dir /home/you/projects/hello_world/target -L /home/you/projects/hello_world/target -L /home/you/projects/hello_world/target/deps` (status=101)
+Could not compile `hello_world`.
 ```
 
 Rust will not let us use a value that has not been initialized. So why let us
@@ -532,7 +532,7 @@ in the middle of a string." We add a comma, and then `x`, to indicate that we
 want `x` to be the value we're interpolating. The comma is used to separate
 arguments we pass to functions and macros, if you're passing more than one.
 
-When you just use the double curly braces, Rust will attempt to display the
+When you just use the curly braces, Rust will attempt to display the
 value in a meaningful way by checking out its type. If you want to specify the
 format in a more detailed manner, there are a [wide number of options
 available](/std/fmt/index.html). For now, we'll just stick to the default:
@@ -1888,8 +1888,16 @@ fn main() {
 
 The first thing we changed was to `use std::rand`, as the docs
 explained.  We then added in a `let` expression to create a variable binding
-named `secret_number`, and we printed out its result. Let's try to compile
-this using `cargo build`:
+named `secret_number`, and we printed out its result.
+
+Also, you may wonder why we are using `%` on the result of `rand::random()`.
+This operator is called 'modulo', and it returns the remainder of a division.
+By taking the modulo of the result of `rand::random()`, we're limiting the
+values to be between 0 and 99. Then, we add one to the result, making it from 1
+to 100. Using modulo can give you a very, very small bias in the result, but
+for this example, it is not important.
+
+Let's try to compile this using `cargo build`:
 
 ```{notrust,no_run}
 $ cargo build
@@ -3669,10 +3677,9 @@ manually free this allocation! If we write
 ```
 
 then Rust will automatically free `x` at the end of the block. This isn't
-because Rust has a garbage collector -- it doesn't. Instead, Rust uses static
-analysis to determine the *lifetime* of `x`, and then generates code to free it
-once it's sure the `x` won't be used again. This Rust code will do the same
-thing as the following C code:
+because Rust has a garbage collector -- it doesn't. Instead, when `x` goes out
+of scope, Rust `free`s `x`. This Rust code will do the same thing as the
+following C code:
 
 ```{c,ignore}
 {

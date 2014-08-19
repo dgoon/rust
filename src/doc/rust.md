@@ -169,6 +169,10 @@ sequence (`/**`), are interpreted as a special syntax for `doc`
 `#[doc="..."]` around the body of the comment (this includes the comment
 characters themselves, ie `/// Foo` turns into `#[doc="/// Foo"]`).
 
+`//!` comments apply to the parent of the comment, rather than the item that
+follows. `//!` comments are usually used to display information on the crate
+index page.
+
 Non-doc comments are interpreted as a form of whitespace.
 
 ## Whitespace
@@ -1801,7 +1805,7 @@ module through the rules above. It essentially allows public access into the
 re-exported item. For example, this program is valid:
 
 ~~~~
-pub use api = self::implementation;
+pub use self::implementation as api;
 
 mod implementation {
     pub fn f() {}
