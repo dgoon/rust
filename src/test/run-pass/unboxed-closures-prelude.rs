@@ -7,27 +7,13 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-#![feature(globs, unsafe_destructor, macro_rules)]
 
-extern crate core;
-extern crate test;
-extern crate libc;
+// Tests that the reexports of `FnOnce` et al from the prelude work.
 
-mod any;
-mod atomic;
-mod cell;
-mod char;
-mod cmp;
-mod finally;
-mod fmt;
-mod iter;
-mod mem;
-mod num;
-mod ops;
-mod option;
-mod ptr;
-mod raw;
-mod result;
-mod slice;
-mod str;
-mod tuple;
+#![feature(unboxed_closures, unboxed_closure_sugar)]
+
+fn main() {
+    let task: Box<|: int| -> int> = box |: x| x;
+    task.call_once((0i, ));
+}
+

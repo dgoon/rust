@@ -7,27 +7,24 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-#![feature(globs, unsafe_destructor, macro_rules)]
 
-extern crate core;
-extern crate test;
-extern crate libc;
+#[packed]
+#[deriving(PartialEq, Show)]
+struct Foo {
+    a: i8,
+    b: i16,
+    c: i8
+}
 
-mod any;
-mod atomic;
-mod cell;
-mod char;
-mod cmp;
-mod finally;
-mod fmt;
-mod iter;
-mod mem;
-mod num;
-mod ops;
-mod option;
-mod ptr;
-mod raw;
-mod result;
-mod slice;
-mod str;
-mod tuple;
+#[link(name = "test", kind = "static")]
+extern {
+    fn foo(f: Foo) -> Foo;
+}
+
+fn main() {
+    unsafe {
+        let a = Foo { a: 1, b: 2, c: 3 };
+        let b = foo(a);
+        assert_eq!(a, b);
+    }
+}
