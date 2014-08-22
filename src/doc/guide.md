@@ -1073,8 +1073,8 @@ destructuring `let`.
 ## Enums
 
 Finally, Rust has a "sum type", an **enum**. Enums are an incredibly useful
-feature of Rust, and are used throughout the standard library. Enums look
-like this:
+feature of Rust, and are used throughout the standard library. This is an enum
+that is provided by the Rust standard library:
 
 ```{rust}
 enum Ordering {
@@ -1084,9 +1084,8 @@ enum Ordering {
 }
 ```
 
-This is an enum that is provided by the Rust standard library. An `Ordering`
-can only be _one_ of `Less`, `Equal`, or `Greater` at any given time. Here's
-an example:
+An `Ordering` can only be _one_ of `Less`, `Equal`, or `Greater` at any given
+time. Here's an example:
 
 ```{rust}
 fn cmp(a: int, b: int) -> Ordering {
@@ -2897,9 +2896,11 @@ pub fn print_hello() {
 }
 ```
 
-When we include a module like this, we don't need to make the `mod` declaration,
-it's just understood. This helps prevent 'rightward drift': when you end up
-indenting so many times that your code is hard to read.
+When we include a module like this, we don't need to make the `mod` declaration
+in `hello.rs`, because it's already been declared in `lib.rs`. `hello.rs` just
+contains the body of the module which is defined (by the `pub mod hello`) in
+`lib.rs`.  This helps prevent 'rightward drift': when you end up indenting so
+many times that your code is hard to read.
 
 Finally, make a new directory, `src/goodbye`, and make a new file in it,
 `src/goodbye/mod.rs`:
