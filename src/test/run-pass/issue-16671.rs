@@ -1,4 +1,4 @@
-// Copyright 2013-2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,14 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:linkage-visibility.rs
-// ignore-android: FIXME(#10379)
-// ignore-windows: std::dynamic_lib does not work on Windows well
+#![forbid(warnings)]
 
-extern crate foo = "linkage-visibility";
+// Pretty printing tests complain about `use std::predule::*`
+#![allow(unused_imports)]
+
+// A var moved into a proc, that has a mutable loan path should
+// not trigger a misleading unused_mut warning.
 
 pub fn main() {
-    foo::test();
-    foo::foo2::<int>();
-    foo::foo();
+    let mut stdin = std::io::stdin();
+    spawn(proc() {
+        let _ = stdin.lines();
+    });
 }
