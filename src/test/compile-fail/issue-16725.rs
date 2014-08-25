@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,4 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-type bptr = &lifetime/int; //~ ERROR expected `;`, found `/`
+// aux-build:issue-16725.rs
+
+extern crate foo = "issue-16725";
+
+fn main() {
+    unsafe { foo::bar(); }
+    //~^ ERROR: function `bar` is private
+}
+
