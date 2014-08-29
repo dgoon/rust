@@ -8,23 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct MyStruct {
-    x: int,
-    y: int,
-}
+#![crate_name = "rustdoc_test"]
 
-impl MyStruct {
-    fn next(&mut self) -> Option<int> {
-        Some(self.x)
+// In: Foo
+pub use private::Foo;
+
+mod private {
+    pub struct Foo;
+    impl Foo {
+        // In: test_method
+        pub fn test_method() {}
+        // Out: priv_method
+        fn priv_method() {}
     }
-}
 
-pub fn main() {
-    let mut bogus = MyStruct {
-        x: 1,
-        y: 2,
-    };
-    for x in bogus { //~ ERROR has type `MyStruct` which does not implement the `Iterator` trait
-        drop(x);
+    pub trait PrivateTrait {
+        // Out: priv_method
+        fn trait_method() {}
     }
 }
