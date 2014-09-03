@@ -1,4 +1,5 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+
+// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,33 +9,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate debug;
+// Previously failed formating invalid utf8.
+// cc #16877
 
-trait T {
-    fn print(&self);
-}
+// error-pattern:failed at 'hello�'
 
-struct S {
-    s: int,
-}
-
-impl T for S {
-    fn print(&self) {
-        println!("{:?}", self);
+struct Foo;
+impl std::fmt::Show for Foo {
+    fn fmt(&self, fmtr:&mut std::fmt::Formatter) -> std::fmt::Result {
+        // Purge invalid utf8: 0xff
+        fmtr.write(&[104, 101, 108, 108, 111, 0xff])
     }
 }
-
-fn print_t(t: &T) {
-    t.print();
-}
-
-fn print_s(s: &S) {
-    s.print();
-}
-
-pub fn main() {
-    let s: Box<S> = box S { s: 5 };
-    print_s(&*s);
-    let t: Box<T> = s as Box<T>;
-    print_t(&*t);
+fn main() {
+    fail!("{}", Foo)
 }
