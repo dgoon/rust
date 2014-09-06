@@ -20,7 +20,7 @@ use std::string::String;
 
 use std::collections::{HashSet, HashMap};
 use testing;
-use rustc::back::link;
+use rustc::back::write;
 use rustc::driver::config;
 use rustc::driver::driver;
 use rustc::driver::session;
@@ -120,7 +120,7 @@ fn runtest(test: &str, cratename: &str, libs: HashSet<Path>, externs: core::Exte
         maybe_sysroot: Some(os::self_exe_path().unwrap().dir_path()),
         addl_lib_search_paths: RefCell::new(libs),
         crate_types: vec!(config::CrateTypeExecutable),
-        output_types: vec!(link::OutputTypeExe),
+        output_types: vec!(write::OutputTypeExe),
         no_trans: no_run,
         externs: externs,
         cg: config::CodegenOptions {
@@ -170,7 +170,7 @@ fn runtest(test: &str, cratename: &str, libs: HashSet<Path>, externs: core::Exte
                                       None,
                                       span_diagnostic_handler);
 
-    let outdir = TempDir::new("rustdoctest").expect("rustdoc needs a tempdir");
+    let outdir = TempDir::new("rustdoctest").ok().expect("rustdoc needs a tempdir");
     let out = Some(outdir.path().clone());
     let cfg = config::build_configuration(&sess);
     let libdir = sess.target_filesearch().get_lib_path();
