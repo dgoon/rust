@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,19 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait A {}
+extern crate libc;
 
-struct Struct {
-    r: A+'static
+#[link(name="foo")]
+extern {
+    fn should_return_one() -> libc::c_int;
 }
 
-fn new_struct(r: A+'static) -> Struct {
-    //~^ ERROR variable `r` has dynamically sized type
-    Struct { r: r } //~ ERROR trying to initialise a dynamically sized struct
-    //~^ ERROR E0161
-    //~^^ ERROR E0161
-}
+fn main() {
+    let result = unsafe {
+        should_return_one()
+    };
 
-trait Curve {}
-enum E {X(Curve+'static)}
-fn main() {}
+    if result != 1 {
+        std::os::set_exit_status(255);
+    }
+}

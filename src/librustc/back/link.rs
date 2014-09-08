@@ -28,7 +28,6 @@ use util::ppaux;
 use util::sha2::{Digest, Sha256};
 
 use std::char;
-use std::collections::HashSet;
 use std::io::{fs, TempDir, Command};
 use std::io;
 use std::mem;
@@ -570,10 +569,7 @@ fn link_binary_output(sess: &Session,
 fn archive_search_paths(sess: &Session) -> Vec<Path> {
     let mut rustpath = filesearch::rust_path();
     rustpath.push(sess.target_filesearch().get_lib_path());
-    // FIXME: Addl lib search paths are an unordered HashSet?
-    // Shouldn't this search be done in some order?
-    let addl_lib_paths: HashSet<Path> = sess.opts.addl_lib_search_paths.borrow().clone();
-    let mut search: Vec<Path> = addl_lib_paths.move_iter().collect();
+    let mut search: Vec<Path> = sess.opts.addl_lib_search_paths.borrow().clone();
     search.push_all(rustpath.as_slice());
     return search;
 }
@@ -1019,6 +1015,12 @@ fn link_args(cmd: &mut Command,
 
         // Mark all dynamic libraries and executables as compatible with ASLR
         cmd.arg("-Wl,--dynamicbase");
+
+        // Mark all dynamic libraries and executables as compatible with the larger 4GiB address
+        // space available to x86 Windows binaries on x86_64.
+        if sess.targ_cfg.arch == abi::X86 {
+            cmd.arg("-Wl,--large-address-aware");
+        }
     }
 
     if sess.targ_cfg.os == abi::OsAndroid {
