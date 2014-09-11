@@ -8,15 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub fn main() {
-    assert!(Some(box() ()).is_some());
+#![feature(tuple_indexing)]
 
-    let xs: Box<[()]> = box [];
-    assert!(Some(xs).is_some());
+struct Point { x: int, y: int }
+struct Empty;
 
-    struct Foo;
-    assert!(Some(box Foo).is_some());
-
-    let ys: Box<[Foo]> = box [];
-    assert!(Some(ys).is_some());
+fn main() {
+    let origin = Point { x: 0, y: 0 };
+    origin.0;
+    //~^ ERROR attempted tuple index `0` on type `Point`, but the type was not
+    Empty.0;
+    //~^ ERROR attempted tuple index `0` on type `Empty`, but the type was not
 }

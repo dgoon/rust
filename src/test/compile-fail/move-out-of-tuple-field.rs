@@ -8,15 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub fn main() {
-    assert!(Some(box() ()).is_some());
+#![feature(tuple_indexing)]
 
-    let xs: Box<[()]> = box [];
-    assert!(Some(xs).is_some());
+struct Foo(Box<int>);
 
-    struct Foo;
-    assert!(Some(box Foo).is_some());
+fn main() {
+    let x = (box 1i,);
+    let y = x.0;
+    let z = x.0; //~ ERROR use of moved value: `x.0`
 
-    let ys: Box<[Foo]> = box [];
-    assert!(Some(ys).is_some());
+    let x = Foo(box 1i);
+    let y = x.0;
+    let z = x.0; //~ ERROR use of moved value: `x.0`
 }

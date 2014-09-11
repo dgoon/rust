@@ -8,15 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub fn main() {
-    assert!(Some(box() ()).is_some());
+#![feature(tuple_indexing)]
 
-    let xs: Box<[()]> = box [];
-    assert!(Some(xs).is_some());
+struct Foo<'a>(&'a [int]);
 
-    struct Foo;
-    assert!(Some(box Foo).is_some());
+fn main() {
+    let x: &[int] = &[1i, 2, 3];
+    let y = (x,);
+    assert_eq!(y.0, x);
 
-    let ys: Box<[Foo]> = box [];
-    assert!(Some(ys).is_some());
+    let x: &[int] = &[1i, 2, 3];
+    let y = Foo(x);
+    assert_eq!(y.0, x);
 }

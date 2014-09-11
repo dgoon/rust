@@ -8,15 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub fn main() {
-    assert!(Some(box() ()).is_some());
+#![feature(tuple_indexing)]
 
-    let xs: Box<[()]> = box [];
-    assert!(Some(xs).is_some());
+struct Point(int, int);
 
-    struct Foo;
-    assert!(Some(box Foo).is_some());
-
-    let ys: Box<[Foo]> = box [];
-    assert!(Some(ys).is_some());
+fn main() {
+    let origin = Point(0, 0);
+    origin.0;
+    origin.1;
+    origin.2;
+    //~^ ERROR attempted out-of-bounds tuple index `2` on type `Point`
+    let tuple = (0i, 0i);
+    tuple.0;
+    tuple.1;
+    tuple.2;
+    //~^ ERROR attempted out-of-bounds tuple index `2` on type `(int,int)`
 }

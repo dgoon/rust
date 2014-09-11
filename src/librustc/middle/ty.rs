@@ -1002,7 +1002,8 @@ pub enum type_err {
     terr_float_mismatch(expected_found<ast::FloatTy>),
     terr_traits(expected_found<ast::DefId>),
     terr_builtin_bounds(expected_found<BuiltinBounds>),
-    terr_variadic_mismatch(expected_found<bool>)
+    terr_variadic_mismatch(expected_found<bool>),
+    terr_cyclic_ty,
 }
 
 /// Bounds suitable for a named type parameter like `A` in `fn foo<A>`
@@ -3599,6 +3600,7 @@ pub fn expr_kind(tcx: &ctxt, expr: &ast::Expr) -> ExprKind {
 
         ast::ExprUnary(ast::UnDeref, _) |
         ast::ExprField(..) |
+        ast::ExprTupField(..) |
         ast::ExprIndex(..) => {
             LvalueExpr
         }
@@ -3790,6 +3792,7 @@ pub fn type_err_to_str(cx: &ctxt, err: &type_err) -> String {
     }
 
     match *err {
+        terr_cyclic_ty => "cyclic type of infinite size".to_string(),
         terr_mismatch => "types differ".to_string(),
         terr_fn_style_mismatch(values) => {
             format!("expected {} fn, found {} fn",
@@ -4527,6 +4530,11 @@ pub fn lookup_struct_fields(cx: &ctxt, did: ast::DefId) -> Vec<field_ty> {
     }
 }
 
+pub fn is_tuple_struct(cx: &ctxt, did: ast::DefId) -> bool {
+    let fields = lookup_struct_fields(cx, did);
+    !fields.is_empty() && fields.iter().all(|f| f.name == token::special_names::unnamed_field)
+}
+
 pub fn lookup_struct_field(cx: &ctxt,
                            parent: ast::DefId,
                            field_id: ast::DefId)
@@ -4548,6 +4556,21 @@ pub fn struct_fields(cx: &ctxt, did: ast::DefId, substs: &Substs)
             ident: ast::Ident::new(f.name),
             mt: mt {
                 ty: lookup_field_type(cx, did, f.id, substs),
+                mutbl: MutImmutable
+            }
+        }
+    }).collect()
+}
+
+// Returns a list of fields corresponding to the tuple's items. trans uses
+// this.
+pub fn tup_fields(v: &[t]) -> Vec<field> {
+    v.iter().enumerate().map(|(i, &f)| {
+       field {
+            // FIXME #6993: change type of field to Name and get rid of new()
+            ident: ast::Ident::new(token::intern(i.to_string().as_slice())),
+            mt: mt {
+                ty: f,
                 mutbl: MutImmutable
             }
         }

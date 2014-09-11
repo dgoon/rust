@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub fn main() {
-    assert!(Some(box() ()).is_some());
+use std::gc::GC;
 
-    let xs: Box<[()]> = box [];
-    assert!(Some(xs).is_some());
-
-    struct Foo;
-    assert!(Some(box Foo).is_some());
-
-    let ys: Box<[Foo]> = box [];
-    assert!(Some(ys).is_some());
+fn main() {
+    let f;
+    let g;
+    g = f;
+    f = box(GC) g; //~ ERROR cyclic type of infinite size
 }
