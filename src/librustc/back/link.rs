@@ -28,6 +28,7 @@ use util::ppaux;
 use util::sha2::{Digest, Sha256};
 
 use std::char;
+use std::io::fs::PathExtensions;
 use std::io::{fs, TempDir, Command};
 use std::io;
 use std::mem;
@@ -1017,7 +1018,8 @@ fn link_args(cmd: &mut Command,
         cmd.arg("-Wl,--nxcompat");
 
         // Mark all dynamic libraries and executables as compatible with ASLR
-        cmd.arg("-Wl,--dynamicbase");
+        // FIXME #17098: ASLR breaks gdb
+        // cmd.arg("-Wl,--dynamicbase");
 
         // Mark all dynamic libraries and executables as compatible with the larger 4GiB address
         // space available to x86 Windows binaries on x86_64.
