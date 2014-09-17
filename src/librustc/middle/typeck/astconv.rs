@@ -197,7 +197,7 @@ fn ast_path_substs<'tcx, AC: AstConv<'tcx>, RS: RegionScope>(
         }
 
         match anon_regions {
-            Ok(v) => v.move_iter().collect(),
+            Ok(v) => v.into_iter().collect(),
             Err(()) => Vec::from_fn(expected_num_region_params,
                                     |_| ty::ReStatic) // hokey
         }
@@ -235,7 +235,7 @@ fn ast_path_substs<'tcx, AC: AstConv<'tcx>, RS: RegionScope>(
     }
 
     if supplied_ty_param_count > required_ty_param_count
-        && !this.tcx().sess.features.default_type_params.get() {
+        && !this.tcx().sess.features.borrow().default_type_params {
         span_err!(this.tcx().sess, path.span, E0108,
             "default type parameters are experimental and possibly buggy");
         span_note!(this.tcx().sess, path.span,
@@ -1012,7 +1012,7 @@ fn ty_of_method_or_bare_fn<'tcx, AC: AstConv<'tcx>>(
     };
     let input_tys = input_tys.iter().map(|a| ty_of_arg(this, &rb, a, None));
     let self_and_input_tys: Vec<_> =
-        self_ty.move_iter().chain(input_tys).collect();
+        self_ty.into_iter().chain(input_tys).collect();
 
     // Second, if there was exactly one lifetime (either a substitution or a
     // reference) in the arguments, then any anonymous regions in the output

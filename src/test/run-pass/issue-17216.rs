@@ -8,31 +8,25 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::mem;
+#![feature(unsafe_destructor)]
 
-static mut DROP_COUNT: uint = 0;
+struct Leak<'a> {
+    dropped: &'a mut bool
+}
 
-struct Fragment;
-
-impl Drop for Fragment {
+#[unsafe_destructor]
+impl<'a> Drop for Leak<'a> {
     fn drop(&mut self) {
-        unsafe {
-            DROP_COUNT += 1;
-        }
+        *self.dropped = true;
     }
 }
 
 fn main() {
+    let mut dropped = false;
     {
-        let mut fragments = vec![Fragment, Fragment, Fragment];
-        let _new_fragments: Vec<Fragment> = mem::replace(&mut fragments, vec![])
-            .into_iter()
-            .skip_while(|_fragment| {
-                true
-            }).collect();
+        let leak = Leak { dropped: &mut dropped };
+        for ((), leaked) in Some(((),leak)).move_iter() {}
     }
-    unsafe {
-        assert_eq!(DROP_COUNT, 3);
-    }
-}
 
+    assert!(dropped);
+}
