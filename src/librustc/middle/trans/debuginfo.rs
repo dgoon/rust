@@ -738,12 +738,6 @@ pub fn finalize(cx: &CrateContext) {
             cx.sess().targ_cfg.os == abi::OsiOS {
             "Dwarf Version".with_c_str(
                 |s| llvm::LLVMRustAddModuleFlag(cx.llmod(), s, 2));
-        } else if cx.sess().targ_cfg.os == abi::OsLinux {
-            // FIXME(#13611) this is a kludge fix because the Linux bots have
-            //               gdb 7.4 which doesn't understand dwarf4, we should
-            //               do something more graceful here.
-            "Dwarf Version".with_c_str(
-                |s| llvm::LLVMRustAddModuleFlag(cx.llmod(), s, 3));
         }
 
         // Prevent bitcode readers from deleting the debug info.
@@ -1152,6 +1146,11 @@ pub fn create_function_debug_context(cx: &CrateContext,
                      method.pe_body(),
                      method.span,
                      true)
+                }
+                ast::TypeImplItem(ref typedef) => {
+                    cx.sess().span_bug(typedef.span,
+                                       "create_function_debug_context() \
+                                        called on associated type?!")
                 }
             }
         }
