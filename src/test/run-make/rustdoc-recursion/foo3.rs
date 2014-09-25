@@ -8,22 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(phase)]
-#![deny(dead_code)]
-#![allow(unreachable_code)]
+#![feature(globs)]
 
-#[phase(link, plugin)] extern crate core;
+pub mod longhands {
+    pub use super::*;
 
+    pub use super::common_types::computed::compute_CSSColor as to_computed_value;
 
-fn foo() { //~ ERROR function is never used
-
-    // none of these should have any dead_code exposed to the user
-    fail!();
-
-    fail!("foo");
-
-    fail!("bar {}", "baz")
+    pub fn computed_as_specified() {}
 }
 
-
-fn main() {}
+pub mod common_types {
+    pub mod computed {
+        pub use super::super::longhands::computed_as_specified as compute_CSSColor;
+    }
+}

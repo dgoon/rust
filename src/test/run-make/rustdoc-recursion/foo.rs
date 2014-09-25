@@ -8,22 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(phase)]
-#![deny(dead_code)]
-#![allow(unreachable_code)]
+#![crate_type = "lib"]
+#![feature(globs)]
 
-#[phase(link, plugin)] extern crate core;
+mod m {
+    pub use self::a::Foo;
 
+    mod a {
+        pub struct Foo;
+    }
 
-fn foo() { //~ ERROR function is never used
-
-    // none of these should have any dead_code exposed to the user
-    fail!();
-
-    fail!("foo");
-
-    fail!("bar {}", "baz")
+    mod b {
+        pub use super::*;
+    }
 }
 
-
-fn main() {}
