@@ -315,14 +315,11 @@ pub fn cfg_matches(diagnostic: &SpanHandler, cfgs: &[P<MetaItem>], cfg: &ast::Me
         ast::MetaList(ref pred, ref mis) if pred.get() == "all" =>
             mis.iter().all(|mi| cfg_matches(diagnostic, cfgs, &**mi)),
         ast::MetaList(ref pred, ref mis) if pred.get() == "not" => {
-            // NOTE: turn on after snapshot
-            /*
             if mis.len() != 1 {
                 diagnostic.span_warn(cfg.span, "the use of multiple cfgs in the same `not` \
                                                 statement is deprecated. Change `not(a, b)` to \
                                                 `not(all(a, b))`.");
             }
-            */
             !mis.iter().all(|mi| cfg_matches(diagnostic, cfgs, &**mi))
         }
         ast::MetaList(ref pred, _) => {
@@ -508,7 +505,7 @@ fn int_type_of_word(s: &str) -> Option<IntType> {
     }
 }
 
-#[deriving(PartialEq, Show)]
+#[deriving(PartialEq, Show, Encodable, Decodable)]
 pub enum ReprAttr {
     ReprAny,
     ReprInt(Span, IntType),
@@ -527,7 +524,7 @@ impl ReprAttr {
     }
 }
 
-#[deriving(Eq, Hash, PartialEq, Show)]
+#[deriving(Eq, Hash, PartialEq, Show, Encodable, Decodable)]
 pub enum IntType {
     SignedInt(ast::IntTy),
     UnsignedInt(ast::UintTy)

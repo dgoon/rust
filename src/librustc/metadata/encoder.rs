@@ -332,6 +332,7 @@ fn encode_enum_variant_info(ecx: &EncodeContext,
         encode_parent_item(rbml_w, local_def(id));
         encode_visibility(rbml_w, variant.node.vis);
         encode_attributes(rbml_w, variant.node.attrs.as_slice());
+        encode_repr_attrs(rbml_w, ecx, variant.node.attrs.as_slice());
 
         let stab = stability::lookup(ecx.tcx, ast_util::local_def(variant.node.id));
         encode_stability(rbml_w, stab);
@@ -537,7 +538,7 @@ fn encode_reexports(ecx: &EncodeContext,
                     id: NodeId,
                     path: PathElems) {
     debug!("(encoding info for module) encoding reexports for {}", id);
-    match ecx.reexports2.borrow().find(&id) {
+    match ecx.reexports2.find(&id) {
         Some(ref exports) => {
             debug!("(encoding info for module) found reexports for {}", id);
             for exp in exports.iter() {
@@ -760,7 +761,7 @@ fn encode_info_for_struct_ctor(ecx: &EncodeContext,
 
     rbml_w.start_tag(tag_items_data_item);
     encode_def_id(rbml_w, local_def(ctor_id));
-    encode_family(rbml_w, 'f');
+    encode_family(rbml_w, 'o');
     encode_bounds_and_type(rbml_w, ecx,
                            &lookup_item_type(ecx.tcx, local_def(ctor_id)));
     encode_name(rbml_w, name.name);
@@ -945,6 +946,19 @@ fn encode_method_argument_names(rbml_w: &mut Encoder,
         }
         rbml_w.end_tag();
     }
+    rbml_w.end_tag();
+}
+
+fn encode_repr_attrs(rbml_w: &mut Encoder,
+                     ecx: &EncodeContext,
+                     attrs: &[Attribute]) {
+    let mut repr_attrs = Vec::new();
+    for attr in attrs.iter() {
+        repr_attrs.extend(attr::find_repr_attrs(ecx.tcx.sess.diagnostic(),
+                                                attr).into_iter());
+    }
+    rbml_w.start_tag(tag_items_data_item_repr);
+    repr_attrs.encode(rbml_w);
     rbml_w.end_tag();
 }
 
@@ -1137,6 +1151,7 @@ fn encode_info_for_item(ecx: &EncodeContext,
         encode_bounds_and_type(rbml_w, ecx, &lookup_item_type(tcx, def_id));
         encode_name(rbml_w, item.ident.name);
         encode_attributes(rbml_w, item.attrs.as_slice());
+        encode_repr_attrs(rbml_w, ecx, item.attrs.as_slice());
         for v in (*enum_definition).variants.iter() {
             encode_variant_id(rbml_w, local_def(v.node.id));
         }
@@ -1183,6 +1198,7 @@ fn encode_info_for_item(ecx: &EncodeContext,
         encode_path(rbml_w, path.clone());
         encode_stability(rbml_w, stab);
         encode_visibility(rbml_w, vis);
+        encode_repr_attrs(rbml_w, ecx, item.attrs.as_slice());
 
         /* Encode def_ids for each field and method
          for methods, write all the stuff get_trait_method
