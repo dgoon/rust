@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,17 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_name="boot"]
-#![crate_type="dylib"]
+// aux-build:issue-17662.rs
 
-extern crate rustuv;
-extern crate green;
+extern crate "issue-17662" as i;
 
-#[no_mangle] // this needs to get called from C
-pub extern "C" fn foo(argc: int, argv: *const *const u8) -> int {
-    green::start(argc, argv, rustuv::event_loop, proc() {
-        spawn(proc() {
-            println!("hello");
-        });
-    })
+struct Bar<'a>;
+
+impl<'a> i::Foo<'a, uint> for Bar<'a> {
+    fn foo(&self) -> uint { 5u }
+}
+
+pub fn main() {
+    assert_eq!(i::foo(&Bar), 5);
 }
