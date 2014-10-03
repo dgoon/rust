@@ -24,7 +24,6 @@ use core::num;
 use core::ops;
 use core::ptr;
 use core::raw::Slice as RawSlice;
-use core::slice::Slice as SliceSlice;
 use core::uint;
 
 use {Mutable, MutableSeq};
@@ -439,7 +438,7 @@ impl<T:Clone> Clone for Vec<T> {
 
         // self.len <= other.len due to the truncate above, so the
         // slice here is always in-bounds.
-        let slice = other[self.len()..];
+        let slice = other.slice_from(self.len());
         self.push_all(slice);
     }
 }
@@ -461,37 +460,6 @@ impl<T> Index<uint,T> for Vec<T> {
     }
 }*/
 
-// Annoying helper function because there are two Slice::as_slice functions in
-// scope.
-#[cfg(not(stage0))]
-#[inline]
-fn slice_to_slice<'a, T, U: Slice<T>>(this: &'a U) -> &'a [T] {
-    this.as_slice()
-}
-
-
-#[cfg(not(stage0))]
-impl<T> ops::Slice<uint, [T]> for Vec<T> {
-    #[inline]
-    fn as_slice<'a>(&'a self) -> &'a [T] {
-        slice_to_slice(self)
-    }
-
-    #[inline]
-    fn slice_from<'a>(&'a self, start: &uint) -> &'a [T] {
-        slice_to_slice(self).slice_from(start)
-    }
-
-    #[inline]
-    fn slice_to<'a>(&'a self, end: &uint) -> &'a [T] {
-        slice_to_slice(self).slice_to(end)
-    }
-    #[inline]
-    fn slice<'a>(&'a self, start: &uint, end: &uint) -> &'a [T] {
-        slice_to_slice(self).slice(start, end)
-    }
-}
-#[cfg(stage0)]
 impl<T> ops::Slice<uint, [T]> for Vec<T> {
     #[inline]
     fn as_slice_<'a>(&'a self) -> &'a [T] {
@@ -513,28 +481,6 @@ impl<T> ops::Slice<uint, [T]> for Vec<T> {
     }
 }
 
-#[cfg(not(stage0))]
-impl<T> ops::SliceMut<uint, [T]> for Vec<T> {
-    #[inline]
-    fn as_mut_slice<'a>(&'a mut self) -> &'a mut [T] {
-        self.as_mut_slice()
-    }
-
-    #[inline]
-    fn slice_from_mut<'a>(&'a mut self, start: &uint) -> &'a mut [T] {
-        self.as_mut_slice().slice_from_mut(start)
-    }
-
-    #[inline]
-    fn slice_to_mut<'a>(&'a mut self, end: &uint) -> &'a mut [T] {
-        self.as_mut_slice().slice_to_mut(end)
-    }
-    #[inline]
-    fn slice_mut<'a>(&'a mut self, start: &uint, end: &uint) -> &'a mut [T] {
-        self.as_mut_slice().slice_mut(start, end)
-    }
-}
-#[cfg(stage0)]
 impl<T> ops::SliceMut<uint, [T]> for Vec<T> {
     #[inline]
     fn as_mut_slice_<'a>(&'a mut self) -> &'a mut [T] {
@@ -845,11 +791,16 @@ impl<T> Vec<T> {
     #[inline]
     pub fn into_iter(self) -> MoveItems<T> {
         unsafe {
-            let iter = mem::transmute(self.as_slice().iter());
             let ptr = self.ptr;
             let cap = self.cap;
+            let begin = self.ptr as *const T;
+            let end = if mem::size_of::<T>() == 0 {
+                (ptr as uint + self.len()) as *const T
+            } else {
+                ptr.offset(self.len() as int) as *const T
+            };
             mem::forget(self);
-            MoveItems { allocation: ptr, cap: cap, iter: iter }
+            MoveItems { allocation: ptr, cap: cap, ptr: begin, end: end }
         }
     }
 
@@ -982,11 +933,11 @@ impl<T> Vec<T> {
     ///
     /// ```
     /// let vec = vec![1i, 2, 3, 4];
-    /// assert!(vec[0..2] == [1, 2]);
+    /// assert!(vec.slice(0, 2) == [1, 2]);
     /// ```
     #[inline]
     pub fn slice<'a>(&'a self, start: uint, end: uint) -> &'a [T] {
-        self[start..end]
+        self.as_slice().slice(start, end)
     }
 
     /// Returns a slice containing all but the first element of the vector.
@@ -1003,7 +954,7 @@ impl<T> Vec<T> {
     /// ```
     #[inline]
     pub fn tail<'a>(&'a self) -> &'a [T] {
-        self[].tail()
+        self.as_slice().tail()
     }
 
     /// Returns all but the first `n' elements of a vector.
@@ -1022,7 +973,7 @@ impl<T> Vec<T> {
     #[inline]
     #[deprecated = "use slice_from"]
     pub fn tailn<'a>(&'a self, n: uint) -> &'a [T] {
-        self[n..]
+        self.as_slice().slice_from(n)
     }
 
     /// Returns a reference to the last element of a vector, or `None` if it is
@@ -1036,7 +987,7 @@ impl<T> Vec<T> {
     /// ```
     #[inline]
     pub fn last<'a>(&'a self) -> Option<&'a T> {
-        self[].last()
+        self.as_slice().last()
     }
 
     /// Deprecated: use `last_mut`.
@@ -1230,10 +1181,10 @@ impl<T> Vec<T> {
     }
 
     /// Deprecated: use `slice_mut`.
-    #[deprecated = "use slice_from"]
+    #[deprecated = "use slice_mut"]
     pub fn mut_slice<'a>(&'a mut self, start: uint, end: uint)
                          -> &'a mut [T] {
-        self[mut start..end]
+        self.slice_mut(start, end)
     }
 
     /// Returns a mutable slice of `self` between `start` and `end`.
@@ -1247,18 +1198,18 @@ impl<T> Vec<T> {
     ///
     /// ```
     /// let mut vec = vec![1i, 2, 3, 4];
-    /// assert!(vec[mut 0..2] == [1, 2]);
+    /// assert!(vec.slice_mut(0, 2) == [1, 2]);
     /// ```
     #[inline]
     pub fn slice_mut<'a>(&'a mut self, start: uint, end: uint)
                          -> &'a mut [T] {
-        self[mut start..end]
+        self.as_mut_slice().slice_mut(start, end)
     }
 
     /// Deprecated: use "slice_from_mut".
     #[deprecated = "use slice_from_mut"]
     pub fn mut_slice_from<'a>(&'a mut self, start: uint) -> &'a mut [T] {
-        self[mut start..]
+        self.slice_from_mut(start)
     }
 
     /// Returns a mutable slice of `self` from `start` to the end of the `Vec`.
@@ -1271,17 +1222,17 @@ impl<T> Vec<T> {
     ///
     /// ```
     /// let mut vec = vec![1i, 2, 3, 4];
-    /// assert!(vec[mut 2..] == [3, 4]);
+    /// assert!(vec.slice_from_mut(2) == [3, 4]);
     /// ```
     #[inline]
     pub fn slice_from_mut<'a>(&'a mut self, start: uint) -> &'a mut [T] {
-        self[mut start..]
+        self.as_mut_slice().slice_from_mut(start)
     }
 
     /// Deprecated: use `slice_to_mut`.
     #[deprecated = "use slice_to_mut"]
     pub fn mut_slice_to<'a>(&'a mut self, end: uint) -> &'a mut [T] {
-        self[mut ..end]
+        self.slice_to_mut(end)
     }
 
     /// Returns a mutable slice of `self` from the start of the `Vec` to `end`.
@@ -1294,11 +1245,11 @@ impl<T> Vec<T> {
     ///
     /// ```
     /// let mut vec = vec![1i, 2, 3, 4];
-    /// assert!(vec[mut ..2] == [1, 2]);
+    /// assert!(vec.slice_to_mut(2) == [1, 2]);
     /// ```
     #[inline]
     pub fn slice_to_mut<'a>(&'a mut self, end: uint) -> &'a mut [T] {
-        self[mut ..end]
+        self.as_mut_slice().slice_to_mut(end)
     }
 
     /// Deprecated: use `split_at_mut`.
@@ -1343,7 +1294,7 @@ impl<T> Vec<T> {
     /// ```
     #[inline]
     pub fn split_at_mut<'a>(&'a mut self, mid: uint) -> (&'a mut [T], &'a mut [T]) {
-        self[mut].split_at_mut(mid)
+        self.as_mut_slice().split_at_mut(mid)
     }
 
     /// Reverses the order of elements in a vector, in place.
@@ -1357,7 +1308,7 @@ impl<T> Vec<T> {
     /// ```
     #[inline]
     pub fn reverse(&mut self) {
-        self[mut].reverse()
+        self.as_mut_slice().reverse()
     }
 
     /// Returns a slice of `self` from `start` to the end of the vec.
@@ -1370,11 +1321,11 @@ impl<T> Vec<T> {
     ///
     /// ```
     /// let vec = vec![1i, 2, 3];
-    /// assert!(vec[1..] == [2, 3]);
+    /// assert!(vec.slice_from(1) == [2, 3]);
     /// ```
     #[inline]
     pub fn slice_from<'a>(&'a self, start: uint) -> &'a [T] {
-        self[start..]
+        self.as_slice().slice_from(start)
     }
 
     /// Returns a slice of self from the start of the vec to `end`.
@@ -1387,11 +1338,11 @@ impl<T> Vec<T> {
     ///
     /// ```
     /// let vec = vec![1i, 2, 3, 4];
-    /// assert!(vec[..2] == [1, 2]);
+    /// assert!(vec.slice_to(2) == [1, 2]);
     /// ```
     #[inline]
     pub fn slice_to<'a>(&'a self, end: uint) -> &'a [T] {
-        self[..end]
+        self.as_slice().slice_to(end)
     }
 
     /// Returns a slice containing all but the last element of the vector.
@@ -1408,7 +1359,7 @@ impl<T> Vec<T> {
     /// ```
     #[inline]
     pub fn init<'a>(&'a self) -> &'a [T] {
-        self[0..self.len() - 1]
+        self.slice(0, self.len() - 1)
     }
 
 
@@ -1773,7 +1724,8 @@ impl<T> MutableSeq<T> for Vec<T> {
 pub struct MoveItems<T> {
     allocation: *mut T, // the block of memory allocated for the vector
     cap: uint, // the capacity of the vector
-    iter: Items<'static, T>
+    ptr: *const T,
+    end: *const T
 }
 
 impl<T> MoveItems<T> {
@@ -1782,7 +1734,7 @@ impl<T> MoveItems<T> {
     pub fn unwrap(mut self) -> Vec<T> {
         unsafe {
             for _x in self { }
-            let MoveItems { allocation, cap, iter: _iter } = self;
+            let MoveItems { allocation, cap, ptr: _ptr, end: _end } = self;
             mem::forget(self);
             Vec { ptr: allocation, cap: cap, len: 0 }
         }
@@ -1793,17 +1745,33 @@ impl<T> Iterator<T> for MoveItems<T> {
     #[inline]
     fn next<'a>(&'a mut self) -> Option<T> {
         unsafe {
-            // Unsafely transmute from Items<'static, T> to Items<'a,
-            // T> because otherwise the type checker requires that T
-            // be bounded by 'static.
-            let iter: &mut Items<'a, T> = mem::transmute(&mut self.iter);
-            iter.next().map(|x| ptr::read(x))
+            if self.ptr == self.end {
+                None
+            } else {
+                if mem::size_of::<T>() == 0 {
+                    // purposefully don't use 'ptr.offset' because for
+                    // vectors with 0-size elements this would return the
+                    // same pointer.
+                    self.ptr = mem::transmute(self.ptr as uint + 1);
+
+                    // Use a non-null pointer value
+                    Some(ptr::read(mem::transmute(1u)))
+                } else {
+                    let old = self.ptr;
+                    self.ptr = self.ptr.offset(1);
+
+                    Some(ptr::read(old))
+                }
+            }
         }
     }
 
     #[inline]
     fn size_hint(&self) -> (uint, Option<uint>) {
-        self.iter.size_hint()
+        let diff = (self.end as uint) - (self.ptr as uint);
+        let size = mem::size_of::<T>();
+        let exact = diff / (if size == 0 {1} else {size});
+        (exact, Some(exact))
     }
 }
 
@@ -1811,11 +1779,21 @@ impl<T> DoubleEndedIterator<T> for MoveItems<T> {
     #[inline]
     fn next_back<'a>(&'a mut self) -> Option<T> {
         unsafe {
-            // Unsafely transmute from Items<'static, T> to Items<'a,
-            // T> because otherwise the type checker requires that T
-            // be bounded by 'static.
-            let iter: &mut Items<'a, T> = mem::transmute(&mut self.iter);
-            iter.next_back().map(|x| ptr::read(x))
+            if self.end == self.ptr {
+                None
+            } else {
+                if mem::size_of::<T>() == 0 {
+                    // See above for why 'ptr.offset' isn't used
+                    self.end = mem::transmute(self.end as uint - 1);
+
+                    // Use a non-null pointer value
+                    Some(ptr::read(mem::transmute(1u)))
+                } else {
+                    self.end = self.end.offset(-1);
+
+                    Some(ptr::read(mem::transmute(self.end)))
+                }
+            }
         }
     }
 }
@@ -2266,18 +2244,12 @@ mod tests {
         let mut values = Vec::from_slice([1u8,2,3,4,5]);
         {
             let (left, right) = values.split_at_mut(2);
-            {
-                let left: &[_] = left;
-                assert!(left[0..left.len()] == [1, 2]);
-            }
+            assert!(left.slice(0, left.len()) == [1, 2]);
             for p in left.iter_mut() {
                 *p += 1;
             }
 
-            {
-                let right: &[_] = right;
-                assert!(right[0..right.len()] == [3, 4, 5]);
-            }
+            assert!(right.slice(0, right.len()) == [3, 4, 5]);
             for p in right.iter_mut() {
                 *p += 2;
             }
@@ -2531,6 +2503,36 @@ mod tests {
         #[deriving(PartialEq, Show)]
         struct ZeroSized;
         assert_eq!(v.map_in_place(|_| ZeroSized).as_slice(), [ZeroSized, ZeroSized].as_slice());
+    }
+
+    #[test]
+    fn test_move_items() {
+        let mut vec = vec!(1i, 2, 3);
+        let mut vec2 : Vec<int> = vec!();
+        for i in vec.into_iter() {
+            vec2.push(i);
+        }
+        assert!(vec2 == vec!(1i, 2, 3));
+    }
+
+    #[test]
+    fn test_move_items_reverse() {
+        let mut vec = vec!(1i, 2, 3);
+        let mut vec2 : Vec<int> = vec!();
+        for i in vec.into_iter().rev() {
+            vec2.push(i);
+        }
+        assert!(vec2 == vec!(3i, 2, 1));
+    }
+
+    #[test]
+    fn test_move_items_zero_sized() {
+        let mut vec = vec!((), (), ());
+        let mut vec2 : Vec<()> = vec!();
+        for i in vec.into_iter() {
+            vec2.push(i);
+        }
+        assert!(vec2 == vec!((), (), ()));
     }
 
     #[bench]

@@ -1824,6 +1824,11 @@ impl<'a> Resolver<'a> {
                 child_name_bindings.define_value(def, DUMMY_SP, is_exported);
             }
           }
+          DefFn(ctor_id, _, true) => {
+            child_name_bindings.define_value(
+                csearch::get_tuple_struct_definition_if_ctor(&self.session.cstore, ctor_id)
+                    .map_or(def, |_| DefStruct(ctor_id)), DUMMY_SP, is_public);
+          }
           DefFn(..) | DefStaticMethod(..) | DefStatic(..) => {
             debug!("(building reduced graph for external \
                     crate) building value (fn/static) {}", final_ident);
@@ -4014,7 +4019,7 @@ impl<'a> Resolver<'a> {
         for (i, rib) in ribs.iter().enumerate().rev() {
             match rib.bindings.find_copy(&name) {
                 Some(def_like) => {
-                    return self.upvarify(ribs[i + 1..], def_like, span);
+                    return self.upvarify(ribs.slice_from(i + 1), def_like, span);
                 }
                 None => {
                     // Continue.

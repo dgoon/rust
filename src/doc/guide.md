@@ -195,9 +195,11 @@ The second point is the `println!()` part. This is calling a Rust **macro**,
 which is how metaprogramming is done in Rust. If it were a function instead, it
 would look like this: `println()`. For our purposes, we don't need to worry
 about this difference. Just know that sometimes, you'll see a `!`, and that
-means that you're calling a macro instead of a normal function. One last thing
-to mention: Rust's macros are significantly different than C macros, if you've
-used those. Don't be scared of using macros. We'll get to the details
+means that you're calling a macro instead of a normal function. Rust implements
+`println!` as a macro rather than a function for good reasons, but that's a
+very advanced topic. You'll learn more when we talk about macros later. One
+last thing to mention: Rust's macros are significantly different than C macros,
+if you've used those. Don't be scared of using macros. We'll get to the details
 eventually, you'll just have to trust us for now.
 
 Next, `"Hello, world!"` is a **string**. Strings are a surprisingly complicated
@@ -659,14 +661,12 @@ error: mismatched types: expected `int` but found `()` (expected int but found (
 ```
 
 We expected an integer, but we got `()`. `()` is pronounced 'unit', and is a
-special type in Rust's type system. `()` is different than `null` in other
-languages, because `()` is distinct from other types. For example, in C, `null`
-is a valid value for a variable of type `int`. In Rust, `()` is _not_ a valid
-value for a variable of type `int`. It's only a valid value for variables of
-the type `()`, which aren't very useful. Remember how we said statements don't
-return a value? Well, that's the purpose of unit in this case. The semicolon
-turns any expression into a statement by throwing away its value and returning
-unit instead.
+special type in Rust's type system. In Rust, `()` is _not_ a valid value for a
+variable of type `int`. It's only a valid value for variables of the type `()`,
+which aren't very useful. Remember how we said statements don't return a value?
+Well, that's the purpose of unit in this case. The semicolon turns any
+expression into a statement by throwing away its value and returning unit
+instead.
 
 There's one more time in which you won't see a semicolon at the end of a line
 of Rust code. For that, we'll need our next concept: functions.
@@ -1680,11 +1680,11 @@ just `int`s.
 
 Rust provides a method on these `IoResult<T>`s called `ok()`, which does the
 same thing as our `match` statement, but assuming that we have a valid value.
-If we don't, it will terminate our program. In this case, if we can't get
-input, our program doesn't work, so we're okay with that. In most cases, we
-would want to handle the error case explicitly. The result of `ok()` has a
-method, `expect()`, which allows us to give an error message if this crash
-happens.
+We then call `expect()` on the result, which will terminate our program if we
+don't have a valid value. In this case, if we can't get input, our program
+doesn't work, so we're okay with that. In most cases, we would want to handle
+the error case explicitly. `expect()` allows us to give an error message if
+this crash happens.
 
 We will cover the exact details of how all of this works later in the Guide.
 For now, this gives you enough of a basic understanding to work with.
@@ -1843,9 +1843,9 @@ that page, but the best part is the search bar. Right up at the top, there's
 a box that you can enter in a search term. The search is pretty primitive
 right now, but is getting better all the time. If you type 'random' in that
 box, the page will update to [this
-one](http://doc.rust-lang.org/std/index.html?search=random). The very first
+one](std/index.html?search=random). The very first
 result is a link to
-[std::rand::random](http://doc.rust-lang.org/std/rand/fn.random.html). If we
+[std::rand::random](std/rand/fn.random.html). If we
 click on that result, we'll be taken to its documentation page.
 
 This page shows us a few things: the type signature of the function, some
@@ -2030,7 +2030,7 @@ fn main() {
     match cmp(input, secret_number) {
         Less    => println!("Too small!"),
         Greater => println!("Too big!"),
-        Equal   => { println!("You win!"); },
+        Equal   => println!("You win!"),
     }
 }
 
@@ -2727,7 +2727,8 @@ mod hello {
 }
 ```
 
-This will work:
+Usage of the `pub` keyword is sometimes called 'exporting', because
+we're making the function available for other modules. This will work:
 
 ```{notrust,ignore}
 $ cargo run
@@ -3291,8 +3292,7 @@ use super::times_four;
 
 Because we've made a nested module, we can import functions from the parent
 module by using `super`. Sub-modules are allowed to 'see' private functions in
-the parent. We sometimes call this usage of `use` a 're-export,' because we're
-exporting the name again, somewhere else.
+the parent.
 
 We've now covered the basics of testing. Rust's tools are primitive, but they
 work well in the simple cases. There are some Rustaceans working on building
@@ -3723,7 +3723,7 @@ If you use `Rc<T>` or `Arc<T>`, you have to be careful about introducing
 cycles. If you have two `Rc<T>`s that point to each other, the reference counts
 will never drop to zero, and you'll have a memory leak. To learn more, check
 out [the section on `Rc<T>` and `Arc<T>` in the pointers
-guide](http://doc.rust-lang.org/guide-pointers.html#rc-and-arc).
+guide](guide-pointers.html#rc-and-arc).
 
 # Patterns
 
@@ -5336,6 +5336,6 @@ you will have a firm grasp of basic Rust development. There's a whole lot more
 out there, we've just covered the surface. There's tons of topics that you can
 dig deeper into, and we've built specialized guides for many of them. To learn
 more, dig into the [full documentation
-index](http://doc.rust-lang.org/index.html).
+index](index.html).
 
 Happy hacking!
