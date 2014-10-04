@@ -8,19 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:roman_numerals.rs
-// ignore-stage1
+#![feature(unboxed_closures)]
 
-#![feature(phase)]
+// Test that an unboxed closure that mutates a free variable will
+// cause borrow conflicts.
 
-#[phase(plugin)]
-extern crate roman_numerals;
-
-pub fn main() {
-    assert_eq!(rn!(MMXV), 2015);
-    assert_eq!(rn!(MCMXCIX), 1999);
-    assert_eq!(rn!(XXV), 25);
-    assert_eq!(rn!(MDCLXVI), 1666);
-    assert_eq!(rn!(MMMDCCCLXXXVIII), 3888);
-    assert_eq!(rn!(MMXIV), 2014);
+fn main() {
+    let mut x = 0u;
+    let f = |:| x += 1;
+    let _y = x; //~ ERROR cannot use `x` because it was mutably borrowed
 }

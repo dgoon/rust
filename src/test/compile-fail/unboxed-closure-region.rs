@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,4 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-const i: int = 42; //~ ERROR expected item, found `const`
+#![feature(unboxed_closures)]
+
+// Test that an unboxed closure that captures a free variable by
+// reference cannot escape the region of that variable.
+fn main() {
+    let _f = {
+        let x = 0u;
+        |:| x //~ ERROR cannot infer an appropriate lifetime due to conflicting requirements
+    };
+}

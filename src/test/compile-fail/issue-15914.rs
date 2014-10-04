@@ -8,19 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:roman_numerals.rs
-// ignore-stage1
-
-#![feature(phase)]
-
-#[phase(plugin)]
-extern crate roman_numerals;
-
-pub fn main() {
-    assert_eq!(rn!(MMXV), 2015);
-    assert_eq!(rn!(MCMXCIX), 1999);
-    assert_eq!(rn!(XXV), 25);
-    assert_eq!(rn!(MDCLXVI), 1666);
-    assert_eq!(rn!(MMMDCCCLXXXVIII), 3888);
-    assert_eq!(rn!(MMXIV), 2014);
+fn main() {
+    let ref
+        (); //~ ERROR expected identifier, found `(`
 }

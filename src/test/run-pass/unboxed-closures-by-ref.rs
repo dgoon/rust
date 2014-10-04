@@ -8,19 +8,28 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:roman_numerals.rs
-// ignore-stage1
+#![feature(overloaded_calls, unboxed_closures)]
 
-#![feature(phase)]
+// Test by-ref capture of environment in unboxed closure types
 
-#[phase(plugin)]
-extern crate roman_numerals;
+fn call_fn<F: Fn()>(f: F) {
+    f()
+}
 
-pub fn main() {
-    assert_eq!(rn!(MMXV), 2015);
-    assert_eq!(rn!(MCMXCIX), 1999);
-    assert_eq!(rn!(XXV), 25);
-    assert_eq!(rn!(MDCLXVI), 1666);
-    assert_eq!(rn!(MMMDCCCLXXXVIII), 3888);
-    assert_eq!(rn!(MMXIV), 2014);
+fn call_fn_mut<F: FnMut()>(mut f: F) {
+    f()
+}
+
+fn call_fn_once<F: FnOnce()>(f: F) {
+    f()
+}
+
+fn main() {
+    let mut x = 0u;
+    let y = 2u;
+
+    call_fn(|&:| x += y);
+    call_fn_mut(|&mut:| x += y);
+    call_fn_once(|:| x += y);
+    assert_eq!(x, y * 3);
 }
