@@ -8,11 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![feature(unboxed_closures)]
+
+// Test generating type visitor glue for unboxed closures
+
+extern crate debug;
+
 fn main() {
-  let x = [1,2];
-  let y = match x {
-    [] => None,
-//~^ ERROR expected `[<generic integer #0>, ..2]`, found a fixed array pattern of size 0
-    [a,_] => Some(a)
-  };
+    let expected = "fn(); fn(uint, uint) -> uint; fn() -> !";
+    let result = format!("{:?}; {:?}; {:?}",
+                         |:| {},
+                         |&: x: uint, y: uint| { x + y },
+                         |&mut:| -> ! { fail!() });
+    assert_eq!(expected, result.as_slice());
 }

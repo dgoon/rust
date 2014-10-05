@@ -8,11 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn main() {
-  let x = [1,2];
-  let y = match x {
-    [] => None,
-//~^ ERROR expected `[<generic integer #0>, ..2]`, found a fixed array pattern of size 0
-    [a,_] => Some(a)
-  };
+#![feature(asm)]
+#![crate_type="lib"]
+
+pub fn exit(n: uint) {
+    unsafe {
+        // Pretend this asm is an exit() syscall.
+        asm!("" :: "r"(n) :: "volatile");
+        // Can't actually reach this point, but rustc doesn't know that.
+    }
 }

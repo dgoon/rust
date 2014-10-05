@@ -5004,9 +5004,14 @@ pub fn check_enum_variants(ccx: &CrateCtxt,
             };
 
             // Check for duplicate discriminant values
-            if disr_vals.contains(&current_disr_val) {
-                span_err!(ccx.tcx.sess, v.span, E0081,
-                    "discriminant value already exists");
+            match disr_vals.iter().position(|&x| x == current_disr_val) {
+                Some(i) => {
+                    span_err!(ccx.tcx.sess, v.span, E0081,
+                        "discriminant value `{}` already exists", disr_vals[i]);
+                    span_note!(ccx.tcx.sess, ccx.tcx().map.span(variants[i].id.node),
+                        "conflicting discriminant here")
+                }
+                None => {}
             }
             // Check for unrepresentable discriminant values
             match hint {
@@ -5586,6 +5591,7 @@ pub fn check_intrinsic_type(ccx: &CrateCtxt, it: &ast::ForeignItem) {
     } else {
         match name.get() {
             "abort" => (0, Vec::new(), ty::mk_bot()),
+            "unreachable" => (0, Vec::new(), ty::mk_bot()),
             "breakpoint" => (0, Vec::new(), ty::mk_nil()),
             "size_of" |
             "pref_align_of" | "min_align_of" => (1u, Vec::new(), ty::mk_uint()),

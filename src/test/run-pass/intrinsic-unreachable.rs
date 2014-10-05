@@ -8,11 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::intrinsics;
+
+// See also src/test/run-make/intrinsic-unreachable.
+
+unsafe fn f(x: uint) -> uint {
+    match x {
+        17 => 23,
+        _ => intrinsics::unreachable(),
+    }
+}
+
 fn main() {
-  let x = [1,2];
-  let y = match x {
-    [] => None,
-//~^ ERROR expected `[<generic integer #0>, ..2]`, found a fixed array pattern of size 0
-    [a,_] => Some(a)
-  };
+    assert_eq!(unsafe { f(17) }, 23);
 }

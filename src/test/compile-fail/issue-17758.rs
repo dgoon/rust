@@ -8,11 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn main() {
-  let x = [1,2];
-  let y = match x {
-    [] => None,
-//~^ ERROR expected `[<generic integer #0>, ..2]`, found a fixed array pattern of size 0
-    [a,_] => Some(a)
-  };
+// Test that regionck suggestions in a provided method of a trait
+// don't ICE
+
+trait Foo<'a> {
+    fn foo(&'a self);
+    fn bar(&self) {
+        self.foo();
+        //~^ ERROR mismatched types: expected `&'a Self`, found `&Self` (lifetime mismatch)
+    }
 }
+
+fn main() {}
