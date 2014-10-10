@@ -32,7 +32,7 @@ use driver::config::{NoDebugInfo, FullDebugInfo};
 use driver::driver::{CrateAnalysis, CrateTranslation, ModuleTranslation};
 use driver::session::Session;
 use lint;
-use llvm::{BasicBlockRef, ModuleRef, ValueRef, Vector, get_param};
+use llvm::{BasicBlockRef, ValueRef, Vector, get_param};
 use llvm;
 use metadata::{csearch, encoder, loader};
 use middle::astencode;
@@ -89,7 +89,7 @@ use std::rc::Rc;
 use std::{i8, i16, i32, i64};
 use syntax::abi::{X86, X86_64, Arm, Mips, Mipsel, Rust, RustCall};
 use syntax::abi::{RustIntrinsic, Abi, OsWindows};
-use syntax::ast_util::{local_def, is_local};
+use syntax::ast_util::local_def;
 use syntax::attr::AttrMetaMethods;
 use syntax::attr;
 use syntax::codemap::Span;
@@ -204,7 +204,7 @@ pub fn decl_fn(ccx: &CrateContext, name: &str, cc: llvm::CallConv,
     // Function addresses in Rust are never significant, allowing functions to be merged.
     llvm::SetUnnamedAddr(llfn, true);
 
-    if ccx.is_split_stack_supported() {
+    if ccx.is_split_stack_supported() && !ccx.sess().opts.cg.no_stack_check {
         set_split_stack(llfn);
     }
 
@@ -245,7 +245,7 @@ fn get_extern_rust_fn(ccx: &CrateContext, fn_ty: ty::t, name: &str, did: ast::De
     let f = decl_rust_fn(ccx, fn_ty, name);
 
     csearch::get_item_attrs(&ccx.sess().cstore, did, |attrs| {
-        set_llvm_fn_attrs(attrs.as_slice(), f)
+        set_llvm_fn_attrs(ccx, attrs.as_slice(), f)
     });
 
     ccx.externs().borrow_mut().insert(name.to_string(), f);
@@ -317,17 +317,31 @@ pub fn decl_internal_rust_fn(ccx: &CrateContext, fn_ty: ty::t, name: &str) -> Va
     llfn
 }
 
-pub fn get_extern_const(externs: &mut ExternMap, llmod: ModuleRef,
-                        name: &str, ty: Type) -> ValueRef {
-    match externs.find_equiv(&name) {
+pub fn get_extern_const(ccx: &CrateContext, did: ast::DefId,
+                        t: ty::t) -> ValueRef {
+    let name = csearch::get_symbol(&ccx.sess().cstore, did);
+    let ty = type_of(ccx, t);
+    match ccx.externs().borrow_mut().find(&name) {
         Some(n) => return *n,
         None => ()
     }
     unsafe {
         let c = name.with_c_str(|buf| {
-            llvm::LLVMAddGlobal(llmod, ty.to_ref(), buf)
+            llvm::LLVMAddGlobal(ccx.llmod(), ty.to_ref(), buf)
         });
-        externs.insert(name.to_string(), c);
+        // Thread-local statics in some other crate need to *always* be linked
+        // against in a thread-local fashion, so we need to be sure to apply the
+        // thread-local attribute locally if it was present remotely. If we
+        // don't do this then linker errors can be generated where the linker
+        // complains that one object files has a thread local version of the
+        // symbol and another one doesn't.
+        ty::each_attr(ccx.tcx(), did, |attr| {
+            if attr.check_name("thread_local") {
+                llvm::set_thread_local(c, true);
+            }
+            true
+        });
+        ccx.externs().borrow_mut().insert(name.to_string(), c);
         return c;
     }
 }
@@ -436,7 +450,7 @@ pub fn set_inline_hint(f: ValueRef) {
     llvm::SetFunctionAttribute(f, llvm::InlineHintAttribute)
 }
 
-pub fn set_llvm_fn_attrs(attrs: &[ast::Attribute], llfn: ValueRef) {
+pub fn set_llvm_fn_attrs(ccx: &CrateContext, attrs: &[ast::Attribute], llfn: ValueRef) {
     use syntax::attr::*;
     // Set the inline hint if there is one
     match find_inline_attr(attrs) {
@@ -446,16 +460,24 @@ pub fn set_llvm_fn_attrs(attrs: &[ast::Attribute], llfn: ValueRef) {
         InlineNone   => { /* fallthrough */ }
     }
 
-    // Add the no-split-stack attribute if requested
-    if contains_name(attrs, "no_split_stack") {
-        unset_split_stack(llfn);
-    }
-
-    if contains_name(attrs, "cold") {
-        unsafe {
-            llvm::LLVMAddFunctionAttribute(llfn,
-                                           llvm::FunctionIndex as c_uint,
-                                           llvm::ColdAttribute as uint64_t)
+    for attr in attrs.iter() {
+        let mut used = true;
+        match attr.name().get() {
+            "no_stack_check" => unset_split_stack(llfn),
+            "no_split_stack" => {
+                unset_split_stack(llfn);
+                ccx.sess().span_warn(attr.span,
+                                     "no_split_stack is a deprecated synonym for no_stack_check");
+            }
+            "cold" => unsafe {
+                llvm::LLVMAddFunctionAttribute(llfn,
+                                               llvm::FunctionIndex as c_uint,
+                                               llvm::ColdAttribute as uint64_t)
+            },
+            _ => used = false,
+        }
+        if used {
+            attr::mark_used(attr);
         }
     }
 }
@@ -935,11 +957,7 @@ pub fn trans_external_path(ccx: &CrateContext, did: ast::DefId, t: ty::t) -> Val
             get_extern_rust_fn(ccx, t, name.as_slice(), did)
         }
         _ => {
-            let llty = type_of(ccx, t);
-            get_extern_const(&mut *ccx.externs().borrow_mut(),
-                             ccx.llmod(),
-                             name.as_slice(),
-                             llty)
+            get_extern_const(ccx, did, t)
         }
     }
 }
@@ -2228,21 +2246,19 @@ pub fn trans_item(ccx: &CrateContext, item: &ast::Item) {
       ast::ItemEnum(ref enum_definition, _) => {
         enum_variant_size_lint(ccx, enum_definition, item.span, item.id);
       }
+      ast::ItemConst(_, ref expr) => {
+          // Recurse on the expression to catch items in blocks
+          let mut v = TransItemVisitor{ ccx: ccx };
+          v.visit_expr(&**expr);
+      }
       ast::ItemStatic(_, m, ref expr) => {
           // Recurse on the expression to catch items in blocks
           let mut v = TransItemVisitor{ ccx: ccx };
           v.visit_expr(&**expr);
 
-          let trans_everywhere = attr::requests_inline(item.attrs.as_slice());
-          for (ref ccx, is_origin) in ccx.maybe_iter(!from_external && trans_everywhere) {
-              consts::trans_const(ccx, m, item.id);
-
-              let g = get_item_val(ccx, item.id);
-              update_linkage(ccx,
-                             g,
-                             Some(item.id),
-                             if is_origin { OriginalTranslation } else { InlinedCopy });
-          }
+          consts::trans_static(ccx, m, item.id);
+          let g = get_item_val(ccx, item.id);
+          update_linkage(ccx, g, Some(item.id), OriginalTranslation);
 
           // Do static_assert checking. It can't really be done much earlier
           // because we need to get the value of the bool out of LLVM
@@ -2253,7 +2269,7 @@ pub fn trans_item(ccx: &CrateContext, item: &ast::Item) {
                                          static");
               }
 
-              let v = ccx.const_values().borrow().get_copy(&item.id);
+              let v = ccx.static_values().borrow().get_copy(&item.id);
               unsafe {
                   if !(llvm::LLVMConstIntGetZExtValue(v) != 0) {
                       ccx.sess().span_fatal(expr.span, "static assertion failed");
@@ -2667,23 +2683,21 @@ pub fn get_item_val(ccx: &CrateContext, id: ast::NodeId) -> ValueRef {
     let val = match item {
         ast_map::NodeItem(i) => {
             let ty = ty::node_id_to_type(ccx.tcx(), i.id);
-            let sym = exported_name(ccx, id, ty, i.attrs.as_slice());
+            let sym = || exported_name(ccx, id, ty, i.attrs.as_slice());
 
             let v = match i.node {
-                ast::ItemStatic(_, mutbl, ref expr) => {
+                ast::ItemStatic(_, _, ref expr) => {
                     // If this static came from an external crate, then
                     // we need to get the symbol from csearch instead of
                     // using the current crate's name/version
                     // information in the hash of the symbol
+                    let sym = sym();
                     debug!("making {}", sym);
-                    let is_local = !ccx.external_srcs().borrow().contains_key(&id);
 
                     // We need the translated value here, because for enums the
                     // LLVM type is not fully determined by the Rust type.
-                    let (v, inlineable, ty) = consts::const_expr(ccx, &**expr, is_local);
-                    ccx.const_values().borrow_mut().insert(id, v);
-                    let mut inlineable = inlineable;
-
+                    let (v, ty) = consts::const_expr(ccx, &**expr);
+                    ccx.static_values().borrow_mut().insert(id, v);
                     unsafe {
                         // boolean SSA values are i1, but they have to be stored in i8 slots,
                         // otherwise some LLVM optimization passes don't work as expected
@@ -2694,55 +2708,30 @@ pub fn get_item_val(ccx: &CrateContext, id: ast::NodeId) -> ValueRef {
                         };
                         if contains_null(sym.as_slice()) {
                             ccx.sess().fatal(
-                                format!("Illegal null byte in export_name value: `{}`",
-                                        sym).as_slice());
+                                format!("Illegal null byte in export_name \
+                                         value: `{}`", sym).as_slice());
                         }
                         let g = sym.as_slice().with_c_str(|buf| {
                             llvm::LLVMAddGlobal(ccx.llmod(), llty, buf)
                         });
 
-                        // Apply the `unnamed_addr` attribute if
-                        // requested
-                        if !ast_util::static_has_significant_address(
-                                mutbl,
-                                i.attrs.as_slice()) {
-                            llvm::SetUnnamedAddr(g, true);
-
-                            // This is a curious case where we must make
-                            // all of these statics inlineable. If a
-                            // global is not tagged as `#[inline(never)]`,
-                            // then LLVM won't coalesce globals unless they
-                            // have an internal linkage type. This means that
-                            // external crates cannot use this global.
-                            // This is a problem for things like inner
-                            // statics in generic functions, because the
-                            // function will be inlined into another
-                            // crate and then attempt to link to the
-                            // static in the original crate, only to
-                            // find that it's not there. On the other
-                            // side of inlining, the crates knows to
-                            // not declare this static as
-                            // available_externally (because it isn't)
-                            inlineable = true;
-                        }
-
                         if attr::contains_name(i.attrs.as_slice(),
                                                "thread_local") {
                             llvm::set_thread_local(g, true);
                         }
-
-                        if !inlineable {
-                            debug!("{} not inlined", sym);
-                            ccx.non_inlineable_statics().borrow_mut()
-                                                      .insert(id);
-                        }
-
                         ccx.item_symbols().borrow_mut().insert(i.id, sym);
                         g
                     }
                 }
 
+                ast::ItemConst(_, ref expr) => {
+                    let (v, _) = consts::const_expr(ccx, &**expr);
+                    ccx.const_values().borrow_mut().insert(id, v);
+                    v
+                }
+
                 ast::ItemFn(_, _, abi, _, _) => {
+                    let sym = sym();
                     let llfn = if abi == Rust {
                         register_fn(ccx, i.span, sym, i.id, ty)
                     } else {
@@ -2751,7 +2740,7 @@ pub fn get_item_val(ccx: &CrateContext, id: ast::NodeId) -> ValueRef {
                                                                    sym,
                                                                    i.id)
                     };
-                    set_llvm_fn_attrs(i.attrs.as_slice(), llfn);
+                    set_llvm_fn_attrs(ccx, i.attrs.as_slice(), llfn);
                     llfn
                 }
 
@@ -2893,7 +2882,7 @@ fn register_method(ccx: &CrateContext, id: ast::NodeId,
     let sym = exported_name(ccx, id, mty, m.attrs.as_slice());
 
     let llfn = register_fn(ccx, m.span, sym, id, mty);
-    set_llvm_fn_attrs(m.attrs.as_slice(), llfn);
+    set_llvm_fn_attrs(ccx, m.attrs.as_slice(), llfn);
     llfn
 }
 
@@ -2911,7 +2900,6 @@ pub fn crate_ctxt_to_encode_parms<'a, 'tcx>(cx: &'a SharedCrateContext<'tcx>,
         tcx: cx.tcx(),
         reexports2: cx.exp_map2(),
         item_symbols: cx.item_symbols(),
-        non_inlineable_statics: cx.non_inlineable_statics(),
         link_meta: cx.link_meta(),
         cstore: &cx.sess().cstore,
         encode_inlined_item: ie,
