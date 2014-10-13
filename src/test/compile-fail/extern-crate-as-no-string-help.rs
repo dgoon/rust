@@ -8,27 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-test FIXME: #13991
+// Tests that the proper help is displayed in the error message
 
-
-// Test struct inheritance.
-#![feature(struct_inherit)]
-
-virtual struct S1 {
-    f1: int,
-}
-
-virtual struct S6 : S1 {
-    f2: int,
-}
-
-struct S7 : S1 {
-    f1: int, //~ ERROR field `f1` hides field declared in super-struct
-}
-
-struct S8 : S6 {
-    f1: int, //~ ERROR field `f1` hides field declared in super-struct
-}
-
-pub fn main() {
-}
+extern crate foo as bar;
+//~^ ERROR expected `;`, found `as`; perhaps you meant to enclose the crate name `foo` in a string?

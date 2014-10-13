@@ -1328,23 +1328,6 @@ let c = [Cookie, Cookie, Cookie, Cookie];
 The precise memory layout of a structure is not specified. One can specify a
 particular layout using the [`repr` attribute](#ffi-attributes).
 
-By using the `struct_inherit` feature gate, structures may use single
-inheritance. A Structure may only inherit from a single other structure, called
-the _super-struct_. The inheriting structure (sub-struct) acts as if all fields
-in the super-struct were present in the sub-struct. Fields declared in a
-sub-struct must not have the same name as any field in any (transitive)
-super-struct. All fields (both declared and inherited) must be specified in any
-initializers. Inheritance between structures does not give subtyping or
-coercion. The super-struct and sub-struct must be defined in the same crate.
-The super-struct must be declared using the `virtual` keyword. For example:
-
-```{.ignore}
-virtual struct Sup { x: int }
-struct Sub : Sup { y: int }
-let s = Sub {x: 10, y: 11};
-let sx = s.x;
-```
-
 ### Enumerations
 
 An _enumeration_ is a simultaneous definition of a nominal [enumerated
@@ -2066,26 +2049,28 @@ fn macos_only() {
 }
 
 // This function is only included when either foo or bar is defined
-#[cfg(foo)]
-#[cfg(bar)]
+#[cfg(any(foo, bar))]
 fn needs_foo_or_bar() {
   // ...
 }
 
 // This function is only included when compiling for a unixish OS with a 32-bit
 // architecture
-#[cfg(unix, target_word_size = "32")]
+#[cfg(all(unix, target_word_size = "32"))]
 fn on_32bit_unix() {
+  // ...
+}
+
+// This function is only included when foo is not defined
+#[cfg(not(foo))]
+fn needs_not_foo() {
   // ...
 }
 ```
 
 This illustrates some conditional compilation can be achieved using the
-`#[cfg(...)]` attribute. Note that `#[cfg(foo, bar)]` is a condition that needs
-both `foo` and `bar` to be defined while `#[cfg(foo)] #[cfg(bar)]` only needs
-one of `foo` and `bar` to be defined (this resembles in the disjunctive normal
-form). Additionally, one can reverse a condition by enclosing it in a
-`not(...)`, like e. g. `#[cfg(not(target_os = "win32"))]`.
+`#[cfg(...)]` attribute. `any`, `all` and `not` can be used to assemble
+arbitrarily complex configurations through nesting.
 
 The following configurations must be defined by the implementation:
 

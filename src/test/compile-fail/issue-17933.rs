@@ -8,18 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Test struct inheritance.
-#![feature(struct_inherit)]
+pub static X: uint = 1u;
 
-virtual struct S1 {
-    f1: int,
-}
-
-struct S6 : S1 {
-    f2: int,
-}
-
-pub fn main() {
-    let s = S6{f2: 3}; //~ ERROR missing field: `f1`
-    let s = S6{f1: 3}; //~ ERROR missing field: `f2`
+fn main() {
+    match 1u {
+        self::X => { },
+        //~^ ERROR static variables cannot be referenced in a pattern, use a `const` instead
+        _       => { },
+    }
 }
