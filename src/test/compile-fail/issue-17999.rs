@@ -8,10 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[deny(warnings)]
+#![deny(unused_variable)]
 
-const foo: int = 3;
-//~^ ERROR: should have an uppercase name such as
-//~^^ ERROR: constant item is never used
-
-fn main() {}
+fn main() {
+    for _ in range(1i, 101) {
+        let x = (); //~ ERROR: unused variable: `x`
+        match () {
+            a => {} //~ ERROR: unused variable: `a`
+        }
+    }
+}

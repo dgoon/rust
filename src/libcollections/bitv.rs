@@ -33,7 +33,7 @@
 //!     bv.set(0, false);
 //!     bv.set(1, false);
 //!
-//!     for i in range(2, max_prime) {
+//!     for i in iter::range_inclusive(2, (max_prime as f64).sqrt() as uint) {
 //!         // if i is a prime
 //!         if bv[i] {
 //!             // Mark all multiples of i as non-prime (any multiples below i * i
@@ -2659,7 +2659,7 @@ mod tests {
         let mut r = rng();
         let mut bitv = Bitv::with_capacity(BENCH_BITS, false);
         b.iter(|| {
-            for i in range(0u, 100) {
+            for _ in range(0u, 100) {
                 bitv.set((r.next_u32() as uint) % BENCH_BITS, r.gen());
             }
             &bitv
