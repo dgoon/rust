@@ -8,15 +8,25 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(macro_rules)]
+// Test that we correctly infer that `E` must be `()` here.  This is
+// known because there is just one impl that could apply where
+// `Self=()`.
 
-macro_rules! recursive(
-      () => (
-                recursive!() //~ ERROR recursion limit reached while expanding the macro `recursive`
-              )
-      )
-
-fn main() {
-    recursive!()
+pub trait FromError<E> {
+    fn from_error(err: E) -> Self;
 }
 
+impl<E> FromError<E> for E {
+    fn from_error(err: E) -> E {
+        err
+    }
+}
+
+fn test() -> Result<(), ()> {
+    Err(FromError::from_error(()))
+}
+
+fn main() {
+    let result = (|| Err(FromError::from_error(())))();
+    let foo: () = result.unwrap_or(());
+}

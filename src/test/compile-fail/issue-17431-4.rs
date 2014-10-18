@@ -1,4 +1,4 @@
-// Copyright 2012-2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that non-constant exprs do fail as count in fixed length vec type
+struct Foo<T> { foo: Option<Option<Foo<T>>> }
+//~^ ERROR illegal recursive struct type; wrap the inner value in a box to make it representable
 
-fn main() {
-    fn bar(n: int) {
-        let _x: [int, ..n];
-        //~^ ERROR expected constant expr for vector length: non-constant path in constant expr
-    }
-}
+impl<T> Foo<T> { fn bar(&self) {} }
+
+fn main() {}
