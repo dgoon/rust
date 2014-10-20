@@ -8,14 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-stage1
-// ignore-pretty
 
-#![feature(phase)]
 
-#[phase(plugin)]
-extern crate fourcc;
+pub trait AbstractRenderer {}
+
+fn _create_render(_: &()) ->
+    AbstractRenderer
+//~^ ERROR: the trait `core::kinds::Sized` is not implemented
+{
+    match 0u {
+        _ => unimplemented!()
+    }
+}
 
 fn main() {
-    let v = fourcc!("fooλ"); //~ ERROR fourcc! literal character out of range 0-255
 }

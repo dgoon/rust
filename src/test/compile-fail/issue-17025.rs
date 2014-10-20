@@ -13,8 +13,9 @@ enum A {
     C([Box<A>]),
 }
 
-fn c(c:char) -> A {
-    B(c) //~ ERROR cannot move a value of type A: the size of A cannot be statically determined
+fn c(c:char) {
+    B(c);
+    //~^ ERROR cannot move a value of type A: the size of A cannot be statically determined
 }
 
 pub fn main() {}
