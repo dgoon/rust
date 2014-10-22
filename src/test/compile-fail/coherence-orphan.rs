@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,13 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait A { fn foo(&self); }
-trait B { fn foo(&self); }
+// aux-build:coherence-orphan-lib.rs
 
-fn foo<T:A + B>(t: T) {
-    t.foo(); //~ ERROR multiple applicable methods in scope
-    //~^ NOTE candidate #1 derives from the bound `A`
-    //~^^ NOTE candidate #2 derives from the bound `B`
-}
+extern crate "coherence-orphan-lib" as lib;
 
-fn main() {}
+use lib::TheTrait;
+
+struct TheType;
+
+impl TheTrait<uint> for int { } //~ ERROR E0117
+
+impl TheTrait<TheType> for int { }
+
+impl TheTrait<int> for TheType { }
+
+fn main() { }

@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,20 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// Test that we correctly report an ambiguity where two applicable traits
+// are in scope and the method being invoked is a default method not
+// defined directly in the impl.
 
-trait foo {
-    fn foo(&self) -> int;
-}
+trait Foo { fn method(&self) {} }
+trait Bar { fn method(&self) {} }
 
-impl foo for Vec<uint> {
-    fn foo(&self) -> int {1} //~ NOTE candidate #1 is `Vec<uint>.foo::foo`
-}
-
-impl foo for Vec<int> {
-    fn foo(&self) -> int {2} //~ NOTE candidate #2 is `Vec<int>.foo::foo`
-}
+impl Foo for uint {}
+impl Bar for uint {}
 
 fn main() {
-    let x = Vec::new();
-    x.foo(); //~ ERROR multiple applicable methods in scope
+    1u.method(); //~ ERROR E0034
 }
