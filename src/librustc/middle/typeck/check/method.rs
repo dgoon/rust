@@ -543,7 +543,7 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
             ty::trait_items(self.tcx(), trait_def_id);
         let matching_index =
             trait_items.iter()
-                       .position(|item| item.ident().name == self.m_name);
+                       .position(|item| item.name() == self.m_name);
         let matching_index = match matching_index {
             Some(i) => i,
             None => { return; }
@@ -1606,8 +1606,8 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
             MethodStaticUnboxedClosure(_) => {
                 false
             }
-            MethodTypeParam(MethodParam { trait_ref: ref trait_ref, .. }) |
-            MethodTraitObject(MethodObject { trait_ref: ref trait_ref, .. }) => {
+            MethodTypeParam(MethodParam { ref trait_ref, .. }) |
+            MethodTraitObject(MethodObject { ref trait_ref, .. }) => {
                 Some(trait_ref.def_id) == self.tcx().lang_items.drop_trait()
             }
         };
@@ -1700,7 +1700,7 @@ fn trait_method(tcx: &ty::ctxt,
     trait_items
         .iter()
         .enumerate()
-        .find(|&(_, ref item)| item.ident().name == method_name)
+        .find(|&(_, ref item)| item.name() == method_name)
         .and_then(|(idx, item)| item.as_opt_method().map(|m| (idx, m)))
 }
 
@@ -1714,7 +1714,7 @@ fn impl_method(tcx: &ty::ctxt,
     impl_items
         .iter()
         .map(|&did| ty::impl_or_trait_item(tcx, did.def_id()))
-        .find(|m| m.ident().name == method_name)
+        .find(|m| m.name() == method_name)
         .and_then(|item| item.as_opt_method())
 }
 
