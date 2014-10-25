@@ -117,7 +117,7 @@ use util::ppaux;
 use util::ppaux::{UserString, Repr};
 use util::nodemap::{DefIdMap, FnvHashMap, NodeMap};
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, Ref, RefCell};
 use std::collections::HashMap;
 use std::collections::hashmap::{Occupied, Vacant};
 use std::mem::replace;
@@ -1813,6 +1813,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             self.tag()).as_slice());
             }
         }
+    }
+
+    pub fn item_substs<'a>(&'a self) -> Ref<'a, NodeMap<ty::ItemSubsts>> {
+        self.inh.item_substs.borrow()
     }
 
     pub fn opt_node_ty_substs(&self,
@@ -5702,6 +5706,8 @@ pub fn check_intrinsic_type(ccx: &CrateCtxt, it: &ast::ForeignItem) {
                 ty::mk_tup(tcx, vec!(ty::mk_u64(), ty::mk_bool()))),
 
             "return_address" => (0, vec![], ty::mk_imm_ptr(tcx, ty::mk_u8())),
+
+            "assume" => (0, vec![ty::mk_bool()], ty::mk_nil()),
 
             ref other => {
                 span_err!(tcx.sess, it.span, E0093,

@@ -8,14 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-enum MyOption<T> {
-    MySome(T),
-    MyNone,
+use std::intrinsics::assume;
+
+unsafe fn f(x: i32) -> i32 {
+    assume(x == 34);
+    match x {
+        34 => 42,
+        _  => 30
+    }
 }
 
 fn main() {
-    match MySome(42i) {
-        MySome { x: 42i } => (), //~ ERROR `MySome` does not name a struct or a struct variant
-        _ => (),
-    }
+    let x = unsafe { f(34) };
+    assert_eq!(x, 42);
 }
+
