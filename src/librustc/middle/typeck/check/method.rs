@@ -88,7 +88,7 @@ use middle::ty;
 use middle::typeck::astconv::AstConv;
 use middle::typeck::check::{FnCtxt, NoPreference, PreferMutLvalue};
 use middle::typeck::check::{impl_self_ty};
-use middle::typeck::check::vtable2::select_fcx_obligations_where_possible;
+use middle::typeck::check::vtable::select_new_fcx_obligations;
 use middle::typeck::check;
 use middle::typeck::infer;
 use middle::typeck::{MethodCall, MethodCallee};
@@ -223,16 +223,36 @@ pub fn report_error(fcx: &FnCtxt,
 {
     match error {
         NoMatch(static_sources) => {
+            let cx = fcx.tcx();
+            let method_ustring = method_name.user_string(cx);
+
+            // True if the type is a struct and contains a field with
+            // the same name as the not-found method
+            let is_field = match ty::get(rcvr_ty).sty {
+                ty_struct(did, _) =>
+                    ty::lookup_struct_fields(cx, did)
+                        .iter()
+                        .any(|f| f.name.user_string(cx) == method_ustring),
+                _ => false
+            };
+
             fcx.type_error_message(
                 span,
                 |actual| {
                     format!("type `{}` does not implement any \
                              method in scope named `{}`",
                             actual,
-                            method_name.user_string(fcx.tcx()))
+                            method_ustring)
                 },
                 rcvr_ty,
                 None);
+
+            // If the method has the name of a field, give a help note
+            if is_field {
+                cx.sess.span_note(span,
+                    format!("use `(s.{0})(...)` if you meant to call the \
+                            function stored in the `{0}` field", method_ustring).as_slice());
+            }
 
             if static_sources.len() > 0 {
                 fcx.tcx().sess.fileline_note(
@@ -485,7 +505,7 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
                 }
                 ty_enum(did, _) |
                 ty_struct(did, _) |
-                ty_unboxed_closure(did, _) => {
+                ty_unboxed_closure(did, _, _) => {
                     if self.check_traits == CheckTraitsAndInherentMethods {
                         self.push_inherent_impl_candidates_for_type(did);
                     }
@@ -1282,7 +1302,7 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
         // the `Self` trait).
         let callee = self.confirm_candidate(rcvr_ty, &candidate);
 
-        select_fcx_obligations_where_possible(self.fcx);
+        select_new_fcx_obligations(self.fcx);
 
         Some(Ok(callee))
     }
