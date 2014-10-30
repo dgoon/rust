@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,23 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Testing casting of a generic Struct to a Trait with a generic method.
-// This is test for issue 10955.
-#![allow(unused_variable)]
+// Helper definition for test/run-pass/check-static-recursion-foreign.rs.
 
-trait Foo {
-    fn f<A>(a: A) -> A {
-        a
-    }
-}
+#[crate_id = "check_static_recursion_foreign_helper"]
+#[crate_type = "lib"]
 
-struct Bar<T> {
-    x: T,
-}
+extern crate libc;
 
-impl<T> Foo for Bar<T> { }
-
-pub fn main() {
-    let a = Bar { x: 1u };
-    let b = &a as &Foo;
-}
+#[no_mangle]
+pub static test_static: libc::c_int = 0;

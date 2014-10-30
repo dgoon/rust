@@ -8,13 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// Static recursion check shouldn't fail when given a foreign item (#18279)
 
-trait add {
-    fn plus(&self, x: Self) -> Self;
+// aux-build:check_static_recursion_foreign_helper.rs
+extern crate check_static_recursion_foreign_helper;
+extern crate libc;
+
+use libc::c_int;
+
+#[link_name = "check_static_recursion_foreign_helper"]
+extern "C" {
+    #[allow(dead_code)]
+    static test_static: c_int;
 }
 
-fn do_add(x: Box<add+'static>, y: Box<add+'static>) -> Box<add+'static> {
-    x.plus(y) //~ ERROR E0038
-}
+static B: &'static c_int = &test_static;
 
-fn main() {}
+pub fn main() {}
