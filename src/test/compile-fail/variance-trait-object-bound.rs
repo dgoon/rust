@@ -8,18 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::collections::HashMap;
+// Checks that regions which appear in a trait object type are
+// observed by the variance inference algorithm (and hence
+// `TOption` is contavariant w/r/t `'a` and not bivariant).
+//
+// Issue #18262.
 
-pub struct Registry {
-    descriptions: HashMap<&'static str, &'static str>
+use std::mem;
+
+trait T { fn foo(); }
+
+#[rustc_variance]
+struct TOption<'a> { //~ ERROR regions=[[-];[];[]]
+    v: Option<Box<T + 'a>>,
 }
 
-impl Registry {
-    pub fn new(descriptions: &[(&'static str, &'static str)]) -> Registry {
-        Registry { descriptions: descriptions.iter().map(|&tuple| tuple).collect() }
-    }
-
-    pub fn find_description(&self, code: &str) -> Option<&'static str> {
-        self.descriptions.find_equiv(code).map(|desc| *desc)
-    }
-}
+fn main() { }

@@ -8,18 +8,24 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::collections::HashMap;
+// Test method calls with self as an argument (cross-crate)
 
-pub struct Registry {
-    descriptions: HashMap<&'static str, &'static str>
-}
+// aux-build:method_self_arg2.rs
+extern crate method_self_arg2;
+use method_self_arg2::{Foo, Bar};
 
-impl Registry {
-    pub fn new(descriptions: &[(&'static str, &'static str)]) -> Registry {
-        Registry { descriptions: descriptions.iter().map(|&tuple| tuple).collect() }
-    }
+fn main() {
+    let x = Foo;
+    // Test external call.
+    Bar::foo1(&x);
+    Bar::foo2(x);
+    Bar::foo3(box x);
 
-    pub fn find_description(&self, code: &str) -> Option<&'static str> {
-        self.descriptions.find_equiv(code).map(|desc| *desc)
-    }
+    Bar::bar1(&x);
+    Bar::bar2(x);
+    Bar::bar3(box x);
+
+    x.run_trait();
+
+    assert!(method_self_arg2::get_count() == 2u64*2*3*3*5*5*7*7*11*11*13*13*17);
 }
