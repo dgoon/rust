@@ -7,9 +7,32 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#![feature(globs, struct_variant)]
 
-// error-pattern: too big for the current
+pub use Foo::*;
 
-fn main() {
-   let fat : [u8, ..(1<<61)+(1<<31)] = [0, ..(1u64<<61) as uint +(1u64<<31) as uint];
+pub enum Foo {
+    A,
+    B(int),
+    C { a: int },
 }
+
+impl Foo {
+    pub fn foo() {}
+}
+
+pub mod nest {
+    pub use self::Bar::*;
+
+    pub enum Bar {
+        D,
+        E(int),
+        F { a: int },
+    }
+
+    impl Bar {
+        pub fn foo() {}
+    }
+}
+
+

@@ -8,8 +8,27 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// error-pattern: too big for the current
+// aux-build:namespaced_enums.rs
+#![feature(globs, struct_variant)]
 
-fn main() {
-   let fat : [u8, ..(1<<61)+(1<<31)] = [0, ..(1u64<<61) as uint +(1u64<<31) as uint];
+extern crate namespaced_enums;
+
+fn _f(f: namespaced_enums::Foo) {
+    use namespaced_enums::Foo::*;
+
+    match f {
+        A | B(_) | C { .. } => {}
+    }
 }
+
+mod m {
+    pub use namespaced_enums::Foo::*;
+}
+
+fn _f2(f: namespaced_enums::Foo) {
+    match f {
+        m::A | m::B(_) | m::C { .. } => {}
+    }
+}
+
+pub fn main() {}

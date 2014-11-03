@@ -8,8 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// error-pattern: too big for the current
+// aux-build:namespaced_enums.rs
+#![feature(struct_variant, globs)]
 
-fn main() {
-   let fat : [u8, ..(1<<61)+(1<<31)] = [0, ..(1u64<<61) as uint +(1u64<<31) as uint];
+extern crate namespaced_enums;
+
+mod m {
+    pub use namespaced_enums::Foo::*;
 }
+
+pub fn main() {
+    use namespaced_enums::Foo::*;
+
+    foo(); //~ ERROR unresolved name `foo`
+    m::foo(); //~ ERROR unresolved name `m::foo`
+    bar(); //~ ERROR unresolved name `bar`
+    m::bar(); //~ ERROR unresolved name `m::bar`
+}
+

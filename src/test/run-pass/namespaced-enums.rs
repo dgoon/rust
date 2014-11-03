@@ -7,9 +7,18 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#![feature(struct_variant)]
 
-// error-pattern: too big for the current
-
-fn main() {
-   let fat : [u8, ..(1<<61)+(1<<31)] = [0, ..(1u64<<61) as uint +(1u64<<31) as uint];
+enum Foo {
+    A,
+    B(int),
+    C { a: int },
 }
+
+fn _foo (f: Foo) {
+    match f {
+        Foo::A | Foo::B(_) | Foo::C { .. } => {}
+    }
+}
+
+pub fn main() {}

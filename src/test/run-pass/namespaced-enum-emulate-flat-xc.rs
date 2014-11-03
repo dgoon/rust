@@ -8,8 +8,25 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// error-pattern: too big for the current
+// aux-build:namespaced_enum_emulate_flat.rs
+#![feature(struct_variant)]
 
-fn main() {
-   let fat : [u8, ..(1<<61)+(1<<31)] = [0, ..(1u64<<61) as uint +(1u64<<31) as uint];
+extern crate namespaced_enum_emulate_flat;
+
+use namespaced_enum_emulate_flat::{Foo, A, B, C};
+use namespaced_enum_emulate_flat::nest::{Bar, D, E, F};
+
+fn _f(f: Foo) {
+    match f {
+        A | B(_) | C { .. } => {}
+    }
 }
+
+fn _f2(f: Bar) {
+    match f {
+        D | E(_) | F { .. } => {}
+    }
+}
+
+pub fn main() {}
+
