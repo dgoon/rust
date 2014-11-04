@@ -37,9 +37,9 @@ use lint::{Context, LintPass, LintArray};
 
 use std::cmp;
 use std::collections::HashMap;
-use std::collections::hashmap::{Occupied, Vacant};
+use std::collections::hash_map::{Occupied, Vacant};
 use std::slice;
-use std::{int, i8, i16, i32, i64, uint, u8, u16, u32, u64, f32, f64};
+use std::{i8, i16, i32, i64, u8, u16, u32, u64, f32, f64};
 use syntax::abi;
 use syntax::ast_map;
 use syntax::ast_util::is_shift_binop;
@@ -116,7 +116,7 @@ declare_lint!(UNUSED_COMPARISONS, Warn,
 declare_lint!(OVERFLOWING_LITERALS, Warn,
               "literal out of range for its type")
 
-declare_lint!(EXCEEDING_BITSHIFTS, Deny,
+declare_lint!(EXCEEDING_BITSHIFTS, Allow,
               "shift exceeds the type's number of bits")
 
 pub struct TypeLimits {
@@ -180,19 +180,19 @@ impl LintPass for TypeLimits {
 
                 if is_shift_binop(binop) {
                     let opt_ty_bits = match ty::get(ty::expr_ty(cx.tcx, &**l)).sty {
-                        ty::ty_int(t) => Some(int_ty_bits(t)),
-                        ty::ty_uint(t) => Some(uint_ty_bits(t)),
+                        ty::ty_int(t) => Some(int_ty_bits(t, cx.sess().target.int_type)),
+                        ty::ty_uint(t) => Some(uint_ty_bits(t, cx.sess().target.uint_type)),
                         _ => None
                     };
 
                     if let Some(bits) = opt_ty_bits {
                         let exceeding = if let ast::ExprLit(ref lit) = r.node {
-                            if let ast::LitInt(shift, _) = lit.node { shift > bits }
+                            if let ast::LitInt(shift, _) = lit.node { shift >= bits }
                             else { false }
                         } else {
                             match eval_const_expr_partial(cx.tcx, &**r) {
-                                Ok(const_int(shift)) => { shift as u64 > bits },
-                                Ok(const_uint(shift)) => { shift > bits },
+                                Ok(const_int(shift)) => { shift as u64 >= bits },
+                                Ok(const_uint(shift)) => { shift >= bits },
                                 _ => { false }
                             }
                         };
@@ -210,7 +210,7 @@ impl LintPass for TypeLimits {
                             ast::LitInt(v, ast::SignedIntLit(_, ast::Plus)) |
                             ast::LitInt(v, ast::UnsuffixedIntLit(ast::Plus)) => {
                                 let int_type = if t == ast::TyI {
-                                    cx.sess().targ_cfg.int_type
+                                    cx.sess().target.int_type
                                 } else { t };
                                 let (min, max) = int_ty_range(int_type);
                                 let negative = self.negated_expr_id == e.id;
@@ -227,7 +227,7 @@ impl LintPass for TypeLimits {
                     },
                     ty::ty_uint(t) => {
                         let uint_type = if t == ast::TyU {
-                            cx.sess().targ_cfg.uint_type
+                            cx.sess().target.uint_type
                         } else { t };
                         let (min, max) = uint_ty_range(uint_type);
                         let lit_val: u64 = match lit.node {
@@ -312,9 +312,9 @@ impl LintPass for TypeLimits {
             }
         }
 
-        fn int_ty_bits(int_ty: ast::IntTy) -> u64 {
+        fn int_ty_bits(int_ty: ast::IntTy, target_int_ty: ast::IntTy) -> u64 {
             match int_ty {
-                ast::TyI =>    int::BITS as u64,
+                ast::TyI =>    int_ty_bits(target_int_ty, target_int_ty),
                 ast::TyI8 =>   i8::BITS  as u64,
                 ast::TyI16 =>  i16::BITS as u64,
                 ast::TyI32 =>  i32::BITS as u64,
@@ -322,9 +322,9 @@ impl LintPass for TypeLimits {
             }
         }
 
-        fn uint_ty_bits(uint_ty: ast::UintTy) -> u64 {
+        fn uint_ty_bits(uint_ty: ast::UintTy, target_uint_ty: ast::UintTy) -> u64 {
             match uint_ty {
-                ast::TyU =>    uint::BITS as u64,
+                ast::TyU =>    uint_ty_bits(target_uint_ty, target_uint_ty),
                 ast::TyU8 =>   u8::BITS  as u64,
                 ast::TyU16 =>  u16::BITS as u64,
                 ast::TyU32 =>  u32::BITS as u64,
