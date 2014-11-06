@@ -506,9 +506,16 @@ impl<T: PartialEq> PartialEq for Vec<T> {
 
 #[unstable = "waiting on PartialOrd stability"]
 impl<T: PartialOrd> PartialOrd for Vec<T> {
+    // NOTE(stage0): remove method after a snapshot
+    #[cfg(stage0)]
     #[inline]
     fn partial_cmp(&self, other: &Vec<T>) -> Option<Ordering> {
         self.as_slice().partial_cmp(&other.as_slice())
+    }
+    #[cfg(not(stage0))]  // NOTE(stage0): remove cfg after a snapshot
+    #[inline]
+    fn partial_cmp(&self, other: &Vec<T>) -> Option<Ordering> {
+        self.as_slice().partial_cmp(other.as_slice())
     }
 }
 
@@ -523,9 +530,16 @@ impl<T: PartialEq, V: AsSlice<T>> Equiv<V> for Vec<T> {
 
 #[unstable = "waiting on Ord stability"]
 impl<T: Ord> Ord for Vec<T> {
+    // NOTE(stage0): remove method after a snapshot
+    #[cfg(stage0)]
     #[inline]
     fn cmp(&self, other: &Vec<T>) -> Ordering {
         self.as_slice().cmp(&other.as_slice())
+    }
+    #[cfg(not(stage0))]  // NOTE(stage0): remove cfg after a snapshot
+    #[inline]
+    fn cmp(&self, other: &Vec<T>) -> Ordering {
+        self.as_slice().cmp(other.as_slice())
     }
 }
 
@@ -919,7 +933,7 @@ impl<T> Vec<T> {
     ///
     /// ```
     /// let mut vec = vec![1i, 2, 3, 4];
-    /// vec.retain(|x| x%2 == 0);
+    /// vec.retain(|&x| x%2 == 0);
     /// assert_eq!(vec, vec![2, 4]);
     /// ```
     #[unstable = "the closure argument may become an unboxed closure"]
@@ -1800,7 +1814,7 @@ mod tests {
             let (left, right) = values.split_at_mut(2);
             {
                 let left: &[_] = left;
-                assert!(left[0..left.len()] == [1, 2]);
+                assert!(left[0..left.len()] == [1, 2][]);
             }
             for p in left.iter_mut() {
                 *p += 1;
@@ -1808,7 +1822,7 @@ mod tests {
 
             {
                 let right: &[_] = right;
-                assert!(right[0..right.len()] == [3, 4, 5]);
+                assert!(right[0..right.len()] == [3, 4, 5][]);
             }
             for p in right.iter_mut() {
                 *p += 2;
@@ -1863,7 +1877,7 @@ mod tests {
     #[test]
     fn test_retain() {
         let mut vec = vec![1u, 2, 3, 4];
-        vec.retain(|x| x%2 == 0);
+        vec.retain(|&x| x % 2 == 0);
         assert!(vec == vec![2u, 4]);
     }
 

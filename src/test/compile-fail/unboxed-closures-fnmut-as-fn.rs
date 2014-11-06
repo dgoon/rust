@@ -8,18 +8,27 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct NoCloneOrEq;
+// Checks that the Fn trait hierarchy rules do not permit
+// Fn to be used where FnMut is implemented.
 
-#[deriving(PartialEq)]
-struct E {
-    x: NoCloneOrEq //~ ERROR binary operation `==` cannot be applied to type `NoCloneOrEq`
-         //~^ ERROR binary operation `!=` cannot be applied to type `NoCloneOrEq`
+#![feature(unboxed_closure_sugar)]
+#![feature(overloaded_calls)]
+
+use std::ops::{Fn,FnMut,FnOnce};
+
+struct S;
+
+impl FnMut<(int,),int> for S {
+    extern "rust-call" fn call_mut(&mut self, (x,): (int,)) -> int {
+        x * x
+    }
 }
-#[deriving(Clone)]
-struct C {
-    x: NoCloneOrEq
-    //~^ ERROR the trait `core::clone::Clone` is not implemented for the type `NoCloneOrEq`
+
+fn call_it<F:Fn(int)->int>(f: &F, x: int) -> int {
+    f.call((x,))
 }
 
+fn main() {
+    let x = call_it(&S, 22); //~ ERROR not implemented
+}
 
-fn main() {}

@@ -8,19 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[deriving(PartialEq, PartialOrd, Eq, Ord)]
+struct Foo(Box<[u8]>);
 
-trait vec_monad<A> {
-    fn bind<B>(&self, f: |A| -> Vec<B> );
-}
-
-impl<A> vec_monad<A> for Vec<A> {
-    fn bind<B>(&self, f: |A| -> Vec<B> ) {
-        let mut r = panic!();
-        for elt in self.iter() { r = r + f(*elt); }
-        //~^ ERROR the type of this value must be known
-   }
-}
-fn main() {
-    ["hi"].bind(|x| [x] );
-    //~^ ERROR type `[&str, ..1]` does not implement any method in scope named `bind`
+pub fn main() {
+    let a = Foo(box [0, 1, 2]);
+    let b = Foo(box [0, 1, 2]);
+    assert!(a == b);
+    println!("{}", a != b);
+    println!("{}", a < b);
+    println!("{}", a <= b);
+    println!("{}", a == b);
+    println!("{}", a > b);
+    println!("{}", a >= b);
 }
