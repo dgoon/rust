@@ -678,7 +678,7 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
         debug!("push_extension_candidates(expr_id={})", expr_id);
 
         let mut duplicates = HashSet::new();
-        let opt_applicable_traits = self.fcx.ccx.trait_map.find(&expr_id);
+        let opt_applicable_traits = self.fcx.ccx.trait_map.get(&expr_id);
         for applicable_traits in opt_applicable_traits.into_iter() {
             for &trait_did in applicable_traits.iter() {
                 if duplicates.insert(trait_did) {
@@ -912,7 +912,7 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
         // metadata if necessary.
         ty::populate_implementations_for_type_if_necessary(self.tcx(), did);
 
-        for impl_infos in self.tcx().inherent_impls.borrow().find(&did).iter() {
+        for impl_infos in self.tcx().inherent_impls.borrow().get(&did).iter() {
             for impl_did in impl_infos.iter() {
                 self.push_candidates_from_inherent_impl(*impl_did);
             }
@@ -1627,7 +1627,7 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
                                             .inh
                                             .adjustments
                                             .borrow()
-                                            .find(&expr.id) {
+                                            .get(&expr.id) {
                 Some(&ty::AdjustDerefRef(ty::AutoDerefRef {
                     autoderefs: autoderef_count,
                     autoref: _
@@ -1658,7 +1658,7 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
                 match expr.node {
                     ast::ExprIndex(ref base_expr, _) => {
                         let mut base_adjustment =
-                            match self.fcx.inh.adjustments.borrow().find(&base_expr.id) {
+                            match self.fcx.inh.adjustments.borrow().get(&base_expr.id) {
                                 Some(&ty::AdjustDerefRef(ref adr)) => (*adr).clone(),
                                 None => ty::AutoDerefRef { autoderefs: 0, autoref: None },
                                 Some(_) => {
@@ -1702,13 +1702,18 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
                             PreferMutLvalue);
                     }
                     ast::ExprUnary(ast::UnDeref, ref base_expr) => {
-                        check::try_overloaded_deref(
-                            self.fcx,
-                            expr.span,
-                            Some(MethodCall::expr(expr.id)),
-                            Some(&**base_expr),
-                            self.fcx.expr_ty(&**base_expr),
-                            PreferMutLvalue);
+                        // if this is an overloaded deref, then re-evaluate with
+                        // a preference for mut
+                        let method_call = MethodCall::expr(expr.id);
+                        if self.fcx.inh.method_map.borrow().contains_key(&method_call) {
+                            check::try_overloaded_deref(
+                                self.fcx,
+                                expr.span,
+                                Some(method_call),
+                                Some(&**base_expr),
+                                self.fcx.expr_ty(&**base_expr),
+                                PreferMutLvalue);
+                        }
                     }
                     _ => {}
                 }
@@ -1839,7 +1844,7 @@ fn impl_method(tcx: &ty::ctxt,
                -> Option<Rc<ty::Method>>
 {
     let impl_items = tcx.impl_items.borrow();
-    let impl_items = impl_items.find(&impl_def_id).unwrap();
+    let impl_items = impl_items.get(&impl_def_id).unwrap();
     impl_items
         .iter()
         .map(|&did| ty::impl_or_trait_item(tcx, did.def_id()))
