@@ -8,6 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub fn expr_add_3() {
-    3i + 4;
+// Test that param substitutions from the correct environment are
+// used when translating unboxed closure calls.
+
+#![feature(unboxed_closures)]
+
+pub fn inside<F: Fn()>(c: F) {
+    c.call(());
+}
+
+// Use different number of type parameters and closure type to trigger
+// an obvious ICE when param environments are mixed up
+pub fn outside<A,B>() {
+    inside(|&:| {});
+}
+
+fn main() {
+    outside::<(),()>();
 }

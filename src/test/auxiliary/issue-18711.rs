@@ -8,6 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub fn expr_add_3() {
-    3i + 4;
+#![feature(unboxed_closures, overloaded_calls)]
+#![crate_type = "rlib"]
+
+pub fn inner<F>(f: F) -> F {
+    (move |:| f)()
 }

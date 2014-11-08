@@ -8,6 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub fn expr_add_3() {
-    3i + 4;
+// Test that we don't panic on a RefCell borrow conflict in certain
+// code paths involving unboxed closures.
+
+#![feature(unboxed_closures, overloaded_calls)]
+
+// aux-build:issue-18711.rs
+extern crate "issue-18711" as issue;
+
+fn main() {
+    (|:| issue::inner(()))();
 }
