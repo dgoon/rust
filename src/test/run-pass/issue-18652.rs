@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,20 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Testing guarantees provided by once functions.
-// This program would segfault if it were legal.
+// Tests multiple free variables being passed by value into an unboxed
+// once closure as an optimization by trans.  This used to hit an
+// incorrect assert.
 
-use std::sync::Arc;
-
-fn foo(blk: ||) {
-    blk();
-    blk();
-}
+#![feature(unboxed_closures, overloaded_calls)]
 
 fn main() {
-    let x = Arc::new(true);
-    foo(|| {
-        assert!(*x);
-        drop(x); //~ ERROR cannot move out of captured outer variable
-    })
+    let x = 2u8;
+    let y = 3u8;
+    assert_eq!((move |:| x + y)(), 5);
 }
