@@ -345,7 +345,7 @@ fn parse_str(st: &mut PState, term: char) -> String {
     let mut result = String::new();
     while peek(st) != term {
         unsafe {
-            result.as_mut_vec().push_all([next_byte(st)])
+            result.as_mut_vec().push_all(&[next_byte(st)])
         }
     }
     next(st);
@@ -439,7 +439,7 @@ fn parse_ty(st: &mut PState, conv: conv_did) -> ty::t {
                                          pos: pos,
                                          len: len };
 
-        match st.tcx.rcache.borrow().find_copy(&key) {
+        match st.tcx.rcache.borrow().get(&key).cloned() {
           Some(tt) => return tt,
           None => {}
         }

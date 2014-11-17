@@ -150,6 +150,7 @@ use mem;
 use result::{Result, Ok, Err};
 use slice;
 use slice::AsSlice;
+use clone::Clone;
 
 // Note that this is not a lang item per se, but it has a hidden dependency on
 // `Iterator`, which is one. The compiler assumes that the `next` method of
@@ -235,7 +236,10 @@ impl<T> Option<T> {
     #[inline]
     #[stable]
     pub fn as_ref<'r>(&'r self) -> Option<&'r T> {
-        match *self { Some(ref x) => Some(x), None => None }
+        match *self {
+            Some(ref x) => Some(x),
+            None => None
+        }
     }
 
     /// Convert from `Option<T>` to `Option<&mut T>`
@@ -253,7 +257,10 @@ impl<T> Option<T> {
     #[inline]
     #[unstable = "waiting for mut conventions"]
     pub fn as_mut<'r>(&'r mut self) -> Option<&'r mut T> {
-        match *self { Some(ref mut x) => Some(x), None => None }
+        match *self {
+            Some(ref mut x) => Some(x),
+            None => None
+        }
     }
 
     /// Convert from `Option<T>` to `&mut [T]` (without copying)
@@ -264,9 +271,9 @@ impl<T> Option<T> {
     /// let mut x = Some("Diamonds");
     /// {
     ///     let v = x.as_mut_slice();
-    ///     assert!(v == ["Diamonds"]);
+    ///     assert!(v == &mut ["Diamonds"]);
     ///     v[0] = "Dirt";
-    ///     assert!(v == ["Dirt"]);
+    ///     assert!(v == &mut ["Dirt"]);
     /// }
     /// assert_eq!(x, Some("Dirt"));
     /// ```
@@ -401,7 +408,10 @@ impl<T> Option<T> {
     #[inline]
     #[unstable = "waiting for unboxed closures"]
     pub fn map<U>(self, f: |T| -> U) -> Option<U> {
-        match self { Some(x) => Some(f(x)), None => None }
+        match self {
+            Some(x) => Some(f(x)),
+            None => None
+        }
     }
 
     /// Applies a function to the contained value or returns a default.
@@ -418,7 +428,10 @@ impl<T> Option<T> {
     #[inline]
     #[unstable = "waiting for unboxed closures"]
     pub fn map_or<U>(self, def: U, f: |T| -> U) -> U {
-        match self { None => def, Some(t) => f(t) }
+        match self {
+            Some(t) => f(t),
+            None => def
+        }
     }
 
     /// Applies a function to the contained value or computes a default.
@@ -437,7 +450,10 @@ impl<T> Option<T> {
     #[inline]
     #[unstable = "waiting for unboxed closures"]
     pub fn map_or_else<U>(self, def: || -> U, f: |T| -> U) -> U {
-        match self { None => def(), Some(t) => f(t) }
+        match self {
+            Some(t) => f(t),
+            None => def()
+        }
     }
 
     /// Transforms the `Option<T>` into a `Result<T, E>`, mapping `Some(v)` to
@@ -673,6 +689,14 @@ impl<T> Option<T> {
     #[stable]
     pub fn take(&mut self) -> Option<T> {
         mem::replace(self, None)
+    }
+}
+
+impl<'a, T: Clone> Option<&'a T> {
+    /// Maps an Option<&T> to an Option<T> by cloning the contents of the Option<&T>.
+    #[unstable = "recently added as part of collections reform"]
+    pub fn cloned(self) -> Option<T> {
+        self.map(|t| t.clone())
     }
 }
 
