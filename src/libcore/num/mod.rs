@@ -14,6 +14,8 @@
 
 #![allow(missing_docs)]
 
+pub use self::FPCategory::*;
+
 use {int, i8, i16, i32, i64};
 use {uint, u8, u16, u32, u64};
 use {f32, f64};
@@ -37,28 +39,10 @@ pub fn div_rem<T: Div<T, T> + Rem<T, T>>(x: T, y: T) -> (T, T) {
 }
 
 /// Raises a `base` to the power of `exp`, using exponentiation by squaring.
-///
-/// # Example
-///
-/// ```rust
-/// use std::num;
-///
-/// assert_eq!(num::pow(2i, 4), 16);
-/// ```
 #[inline]
-pub fn pow<T: Int>(mut base: T, mut exp: uint) -> T {
-    if exp == 1 { base }
-    else {
-        let mut acc: T = Int::one();
-        while exp > 0 {
-            if (exp & 1) == 1 {
-                acc = acc * base;
-            }
-            base = base * base;
-            exp = exp >> 1;
-        }
-        acc
-    }
+#[deprecated = "Use Int::pow() instead, as in 2i.pow(4)"]
+pub fn pow<T: Int>(base: T, exp: uint) -> T {
+    base.pow(exp)
 }
 
 /// A built-in signed or unsigned integer.
@@ -196,7 +180,7 @@ pub trait Int
     /// ```
     fn swap_bytes(self) -> Self;
 
-    /// Convert a integer from big endian to the target's endianness.
+    /// Convert an integer from big endian to the target's endianness.
     ///
     /// On big endian this is a no-op. On little endian the bytes are swapped.
     ///
@@ -218,7 +202,7 @@ pub trait Int
         if cfg!(target_endian = "big") { x } else { x.swap_bytes() }
     }
 
-    /// Convert a integer from little endian to the target's endianness.
+    /// Convert an integer from little endian to the target's endianness.
     ///
     /// On little endian this is a no-op. On big endian the bytes are swapped.
     ///
@@ -358,6 +342,29 @@ pub trait Int
             None if other >= Int::zero() => Int::min_value(),
             None                         => Int::max_value(),
         }
+    }
+
+    /// Raises self to the power of `exp`, using exponentiation by squaring.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::num::Int;
+    ///
+    /// assert_eq!(2i.pow(4), 16);
+    /// ```
+    #[inline]
+    fn pow(self, mut exp: uint) -> Self {
+        let mut base = self;
+        let mut acc: Self = Int::one();
+        while exp > 0 {
+            if (exp & 1) == 1 {
+                acc = acc * base;
+            }
+            base = base * base;
+            exp /= 2;
+        }
+        acc
     }
 }
 
@@ -1455,10 +1462,10 @@ macro_rules! from_str_radix_float_impl {
                 }
 
                 let (is_positive, src) =  match src.slice_shift_char() {
-                    (None, _)        => return None,
-                    (Some('-'), "")  => return None,
-                    (Some('-'), src) => (false, src),
-                    (Some(_), _)     => (true,  src),
+                    None             => return None,
+                    Some(('-', ""))  => return None,
+                    Some(('-', src)) => (false, src),
+                    Some((_, _))     => (true,  src),
                 };
 
                 // The significand to accumulate
@@ -1561,10 +1568,10 @@ macro_rules! from_str_radix_float_impl {
                         // Parse the exponent as decimal integer
                         let src = src[offset..];
                         let (is_positive, exp) = match src.slice_shift_char() {
-                            (Some('-'), src) => (false, from_str::<uint>(src)),
-                            (Some('+'), src) => (true,  from_str::<uint>(src)),
-                            (Some(_), _)     => (true,  from_str::<uint>(src)),
-                            (None, _)        => return None,
+                            Some(('-', src)) => (false, from_str::<uint>(src)),
+                            Some(('+', src)) => (true,  from_str::<uint>(src)),
+                            Some((_, _))     => (true,  from_str::<uint>(src)),
+                            None             => return None,
                         };
 
                         match (is_positive, exp) {
@@ -1604,7 +1611,7 @@ macro_rules! from_str_radix_int_impl {
                 let is_signed_ty = (0 as $T) > Int::min_value();
 
                 match src.slice_shift_char() {
-                    (Some('-'), src) if is_signed_ty => {
+                    Some(('-', src)) if is_signed_ty => {
                         // The number is negative
                         let mut result = 0;
                         for c in src.chars() {
@@ -1623,7 +1630,7 @@ macro_rules! from_str_radix_int_impl {
                         }
                         Some(result)
                     },
-                    (Some(_), _) => {
+                    Some((_, _)) => {
                         // The number is signed
                         let mut result = 0;
                         for c in src.chars() {
@@ -1642,7 +1649,7 @@ macro_rules! from_str_radix_int_impl {
                         }
                         Some(result)
                     },
-                    (None, _) => None,
+                    None => None,
                 }
             }
         }

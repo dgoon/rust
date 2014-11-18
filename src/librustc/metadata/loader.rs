@@ -214,7 +214,7 @@
 
 use back::archive::{METADATA_FILENAME};
 use back::svh::Svh;
-use driver::session::Session;
+use session::Session;
 use llvm;
 use llvm::{False, ObjectFile, mk_section_iter};
 use llvm::archive_ro::ArchiveRO;
@@ -596,7 +596,7 @@ impl<'a> Context<'a> {
     }
 
     fn find_commandline_library(&mut self) -> Option<Library> {
-        let locs = match self.sess.opts.externs.find_equiv(self.crate_name) {
+        let locs = match self.sess.opts.externs.get(self.crate_name) {
             Some(s) => s,
             None => return None,
         };

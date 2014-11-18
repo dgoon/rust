@@ -8,6 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+pub use self::Invocation::*;
+use self::ArgumentType::*;
+use self::Position::*;
+
 use ast;
 use codemap::{Span, respan};
 use ext::base::*;
@@ -140,7 +144,7 @@ fn parse_args(ecx: &mut ExtCtxt, sp: Span, allow_method: bool,
             let name = interned_name.get();
             p.expect(&token::Eq);
             let e = p.parse_expr();
-            match names.find_equiv(name) {
+            match names.get(name) {
                 None => {}
                 Some(prev) => {
                     ecx.span_err(e.span,
@@ -362,7 +366,7 @@ impl<'a, 'b> Context<'a, 'b> {
                 self.ecx.expr_path(path)
             }
             parse::CountIsName(n) => {
-                let i = match self.name_positions.find_equiv(n) {
+                let i = match self.name_positions.get(n) {
                     Some(&i) => i,
                     None => 0, // error already emitted elsewhere
                 };
@@ -406,7 +410,7 @@ impl<'a, 'b> Context<'a, 'b> {
                     // Named arguments are converted to positional arguments at
                     // the end of the list of arguments
                     parse::ArgumentNamed(n) => {
-                        let i = match self.name_positions.find_equiv(n) {
+                        let i = match self.name_positions.get(n) {
                             Some(&i) => i,
                             None => 0, // error already emitted elsewhere
                         };

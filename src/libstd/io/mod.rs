@@ -221,6 +221,12 @@ responding to errors that may occur while attempting to read the numbers.
 #![experimental]
 #![deny(unused_must_use)]
 
+pub use self::SeekStyle::*;
+pub use self::FileMode::*;
+pub use self::FileAccess::*;
+pub use self::FileType::*;
+pub use self::IoErrorKind::*;
+
 use char::Char;
 use clone::Clone;
 use default::Default;
@@ -1291,9 +1297,9 @@ impl<'a> Writer for &'a mut Writer+'a {
 /// # fn process_input<R: Reader>(r: R) {}
 /// # fn foo () {
 /// use std::io::util::TeeReader;
-/// use std::io::{stdin, MemWriter, ByRefWriter};
+/// use std::io::{stdin, ByRefWriter};
 ///
-/// let mut output = MemWriter::new();
+/// let mut output = Vec::new();
 ///
 /// {
 ///     // Don't give ownership of 'output' to the 'tee'. Instead we keep a
@@ -1302,7 +1308,7 @@ impl<'a> Writer for &'a mut Writer+'a {
 ///     process_input(tee);
 /// }
 ///
-/// println!("input processed: {}", output.unwrap());
+/// println!("input processed: {}", output);
 /// # }
 /// ```
 pub struct RefWriter<'a, W:'a> {
@@ -1899,6 +1905,7 @@ impl fmt::Show for FilePermission {
 
 #[cfg(test)]
 mod tests {
+    use self::BadReaderBehavior::*;
     use super::{IoResult, Reader, MemReader, NoProgress, InvalidInput};
     use prelude::*;
     use uint;

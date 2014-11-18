@@ -10,8 +10,34 @@
 
 #![allow(non_camel_case_types)]
 
+pub use self::terr_vstore_kind::*;
+pub use self::type_err::*;
+pub use self::BuiltinBound::*;
+pub use self::InferTy::*;
+pub use self::InferRegion::*;
+pub use self::ImplOrTraitItemId::*;
+pub use self::UnboxedClosureKind::*;
+pub use self::TraitStore::*;
+pub use self::ast_ty_to_ty_cache_entry::*;
+pub use self::Variance::*;
+pub use self::AutoAdjustment::*;
+pub use self::Representability::*;
+pub use self::UnsizeKind::*;
+pub use self::AutoRef::*;
+pub use self::ExprKind::*;
+pub use self::DtorKind::*;
+pub use self::ExplicitSelfCategory::*;
+pub use self::FnOutput::*;
+pub use self::Region::*;
+pub use self::ImplOrTraitItemContainer::*;
+pub use self::BorrowKind::*;
+pub use self::ImplOrTraitItem::*;
+pub use self::BoundRegion::*;
+pub use self::sty::*;
+pub use self::IntVarValue::*;
+
 use back::svh::Svh;
-use driver::session::Session;
+use session::Session;
 use lint;
 use metadata::csearch;
 use middle::const_eval;
@@ -3465,43 +3491,45 @@ pub fn adjust_ty(cx: &ctxt,
                         }
                     }
 
-                    match adj.autoref {
-                        None => adjusted_ty,
-                        Some(ref autoref) => adjust_for_autoref(cx, span, adjusted_ty, autoref)
-                    }
+                    adjust_ty_for_autoref(cx, span, adjusted_ty, adj.autoref.as_ref())
                 }
             }
         }
         None => unadjusted_ty
     };
+}
 
-    fn adjust_for_autoref(cx: &ctxt,
-                          span: Span,
-                          ty: ty::t,
-                          autoref: &AutoRef) -> ty::t{
-        match *autoref {
-            AutoPtr(r, m, ref a) => {
-                let adjusted_ty = match a {
-                    &Some(box ref a) => adjust_for_autoref(cx, span, ty, a),
-                    &None => ty
-                };
-                mk_rptr(cx, r, mt {
-                    ty: adjusted_ty,
-                    mutbl: m
-                })
-            }
+pub fn adjust_ty_for_autoref(cx: &ctxt,
+                             span: Span,
+                             ty: ty::t,
+                             autoref: Option<&AutoRef>)
+                             -> ty::t
+{
+    match autoref {
+        None => ty,
 
-            AutoUnsafe(m, ref a) => {
-                let adjusted_ty = match a {
-                    &Some(box ref a) => adjust_for_autoref(cx, span, ty, a),
-                    &None => ty
-                };
-                mk_ptr(cx, mt {ty: adjusted_ty, mutbl: m})
-            }
-
-            AutoUnsize(ref k) => unsize_ty(cx, ty, k, span),
-            AutoUnsizeUniq(ref k) => ty::mk_uniq(cx, unsize_ty(cx, ty, k, span)),
+        Some(&AutoPtr(r, m, ref a)) => {
+            let adjusted_ty = match a {
+                &Some(box ref a) => adjust_ty_for_autoref(cx, span, ty, Some(a)),
+                &None => ty
+            };
+            mk_rptr(cx, r, mt {
+                ty: adjusted_ty,
+                mutbl: m
+            })
         }
+
+        Some(&AutoUnsafe(m, ref a)) => {
+            let adjusted_ty = match a {
+                &Some(box ref a) => adjust_ty_for_autoref(cx, span, ty, Some(a)),
+                &None => ty
+            };
+            mk_ptr(cx, mt {ty: adjusted_ty, mutbl: m})
+        }
+
+        Some(&AutoUnsize(ref k)) => unsize_ty(cx, ty, k, span),
+
+        Some(&AutoUnsizeUniq(ref k)) => ty::mk_uniq(cx, unsize_ty(cx, ty, k, span)),
     }
 }
 

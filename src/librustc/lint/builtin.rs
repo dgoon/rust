@@ -24,6 +24,7 @@
 //! `add_builtin!` or `add_builtin_with_new!` invocation in `context.rs`.
 //! Use the former for unit-like structs and the latter for structs with
 //! a `pub fn new()`.
+use self::MethodContext::*;
 
 use metadata::csearch;
 use middle::def::*;
@@ -622,6 +623,7 @@ impl LintPass for UnusedAttributes {
             "link",
             "link_name",
             "link_section",
+            "linkage",
             "no_builtins",
             "no_mangle",
             "no_split_stack",

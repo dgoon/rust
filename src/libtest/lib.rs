@@ -33,12 +33,21 @@
        html_favicon_url = "http://www.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![feature(asm, macro_rules, phase)]
+#![feature(asm, macro_rules, phase, globs, slicing_syntax)]
 
 extern crate getopts;
 extern crate regex;
 extern crate serialize;
 extern crate term;
+
+pub use self::TestFn::*;
+pub use self::MetricChange::*;
+pub use self::ColorConfig::*;
+pub use self::TestResult::*;
+pub use self::TestName::*;
+use self::TestEvent::*;
+use self::NamePadding::*;
+use self::OutputLocation::*;
 
 use std::collections::TreeMap;
 use stats::Stats;
@@ -839,8 +848,6 @@ pub fn run_tests_console(opts: &TestOpts, tests: Vec<TestDescAndFn> ) -> io::IoR
 
 #[test]
 fn should_sort_failures_before_printing_them() {
-    use std::io::MemWriter;
-
     let test_a = TestDesc {
         name: StaticTestName("a"),
         ignore: false,
@@ -855,7 +862,7 @@ fn should_sort_failures_before_printing_them() {
 
     let mut st = ConsoleTestState {
         log_out: None,
-        out: Raw(MemWriter::new()),
+        out: Raw(Vec::new()),
         use_color: false,
         total: 0u,
         passed: 0u,
@@ -869,7 +876,7 @@ fn should_sort_failures_before_printing_them() {
 
     st.write_failures().unwrap();
     let s = match st.out {
-        Raw(ref m) => String::from_utf8_lossy(m.get_ref()),
+        Raw(ref m) => String::from_utf8_lossy(m[]),
         Pretty(_) => unreachable!()
     };
 

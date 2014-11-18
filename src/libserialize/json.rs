@@ -194,10 +194,18 @@ fn main() {
 
 */
 
+pub use self::JsonEvent::*;
+pub use self::StackElement::*;
+pub use self::Json::*;
+pub use self::ErrorCode::*;
+pub use self::ParserError::*;
+pub use self::DecoderError::*;
+use self::ParserState::*;
+use self::InternalStackElement::*;
+
 use std;
 use std::collections::{HashMap, TreeMap};
 use std::{char, f64, fmt, io, num, str};
-use std::io::MemWriter;
 use std::mem::{swap, transmute};
 use std::num::{Float, FPNaN, FPInfinite, Int};
 use std::str::{FromStr, ScalarValue};
@@ -403,14 +411,14 @@ impl<'a> Encoder<'a> {
     /// Encode the specified struct into a json [u8]
     pub fn buffer_encode<T:Encodable<Encoder<'a>, io::IoError>>(object: &T) -> Vec<u8>  {
         //Serialize the object in a string using a writer
-        let mut m = MemWriter::new();
+        let mut m = Vec::new();
         // FIXME(14302) remove the transmute and unsafe block.
         unsafe {
             let mut encoder = Encoder::new(&mut m as &mut io::Writer);
-            // MemWriter never Errs
+            // Vec<u8> never Errs
             let _ = object.encode(transmute(&mut encoder));
         }
-        m.unwrap()
+        m
     }
 }
 
@@ -569,13 +577,13 @@ impl<'a> ::Encoder<io::IoError> for Encoder<'a> {
         if idx != 0 { try!(write!(self.writer, ",")) }
         // ref #12967, make sure to wrap a key in double quotes,
         // in the event that its of a type that omits them (eg numbers)
-        let mut buf = MemWriter::new();
+        let mut buf = Vec::new();
         // FIXME(14302) remove the transmute and unsafe block.
         unsafe {
             let mut check_encoder = Encoder::new(&mut buf);
             try!(f(transmute(&mut check_encoder)));
         }
-        let out = str::from_utf8(buf.get_ref()).unwrap();
+        let out = str::from_utf8(buf[]).unwrap();
         let needs_wrapping = out.char_at(0) != '"' && out.char_at_reverse(out.len()) != '"';
         if needs_wrapping { try!(write!(self.writer, "\"")); }
         try!(f(self));
@@ -830,13 +838,13 @@ impl<'a> ::Encoder<io::IoError> for PrettyEncoder<'a> {
         try!(spaces(self.writer, self.curr_indent));
         // ref #12967, make sure to wrap a key in double quotes,
         // in the event that its of a type that omits them (eg numbers)
-        let mut buf = MemWriter::new();
+        let mut buf = Vec::new();
         // FIXME(14302) remove the transmute and unsafe block.
         unsafe {
             let mut check_encoder = PrettyEncoder::new(&mut buf);
             try!(f(transmute(&mut check_encoder)));
         }
-        let out = str::from_utf8(buf.get_ref()).unwrap();
+        let out = str::from_utf8(buf[]).unwrap();
         let needs_wrapping = out.char_at(0) != '"' && out.char_at_reverse(out.len()) != '"';
         if needs_wrapping { try!(write!(self.writer, "\"")); }
         try!(f(self));
@@ -883,16 +891,16 @@ impl Json {
 
     /// Encodes a json value into a string
     pub fn to_pretty_str(&self) -> string::String {
-        let mut s = MemWriter::new();
+        let mut s = Vec::new();
         self.to_pretty_writer(&mut s as &mut io::Writer).unwrap();
-        string::String::from_utf8(s.unwrap()).unwrap()
+        string::String::from_utf8(s).unwrap()
     }
 
      /// If the Json value is an Object, returns the value associated with the provided key.
     /// Otherwise, returns None.
     pub fn find<'a>(&'a self, key: &str) -> Option<&'a Json>{
         match self {
-            &Object(ref map) => map.find_with(|s| key.cmp(s.as_slice())),
+            &Object(ref map) => map.get(key),
             _ => None
         }
     }
@@ -917,7 +925,7 @@ impl Json {
     pub fn search<'a>(&'a self, key: &str) -> Option<&'a Json> {
         match self {
             &Object(ref map) => {
-                match map.find_with(|s| key.cmp(s.as_slice())) {
+                match map.get(key) {
                     Some(json_value) => Some(json_value),
                     None => {
                         for (_, v) in map.iter() {
@@ -2408,6 +2416,8 @@ impl FromStr for Json {
 #[cfg(test)]
 mod tests {
     extern crate test;
+    use self::Animal::*;
+    use self::DecodeEnum::*;
     use self::test::Bencher;
     use {Encodable, Decodable};
     use super::{List, Encoder, Decoder, Error, Boolean, I64, U64, F64, String, Null,
@@ -2648,12 +2658,11 @@ mod tests {
     }
 
     fn with_str_writer(f: |&mut io::Writer|) -> string::String {
-        use std::io::MemWriter;
         use std::str;
 
-        let mut m = MemWriter::new();
+        let mut m = Vec::new();
         f(&mut m as &mut io::Writer);
-        str::from_utf8(m.unwrap().as_slice()).unwrap().to_string()
+        string::String::from_utf8(m).unwrap()
     }
 
     #[test]
@@ -3275,17 +3284,15 @@ mod tests {
     fn test_encode_hashmap_with_numeric_key() {
         use std::str::from_utf8;
         use std::io::Writer;
-        use std::io::MemWriter;
         use std::collections::HashMap;
         let mut hm: HashMap<uint, bool> = HashMap::new();
         hm.insert(1, true);
-        let mut mem_buf = MemWriter::new();
+        let mut mem_buf = Vec::new();
         {
             let mut encoder = Encoder::new(&mut mem_buf as &mut io::Writer);
             hm.encode(&mut encoder).unwrap();
         }
-        let bytes = mem_buf.unwrap();
-        let json_str = from_utf8(bytes.as_slice()).unwrap();
+        let json_str = from_utf8(mem_buf[]).unwrap();
         match from_str(json_str) {
             Err(_) => panic!("Unable to parse json_str: {}", json_str),
             _ => {} // it parsed and we are good to go
@@ -3296,17 +3303,15 @@ mod tests {
     fn test_prettyencode_hashmap_with_numeric_key() {
         use std::str::from_utf8;
         use std::io::Writer;
-        use std::io::MemWriter;
         use std::collections::HashMap;
         let mut hm: HashMap<uint, bool> = HashMap::new();
         hm.insert(1, true);
-        let mut mem_buf = MemWriter::new();
+        let mut mem_buf = Vec::new();
         {
             let mut encoder = PrettyEncoder::new(&mut mem_buf as &mut io::Writer);
             hm.encode(&mut encoder).unwrap()
         }
-        let bytes = mem_buf.unwrap();
-        let json_str = from_utf8(bytes.as_slice()).unwrap();
+        let json_str = from_utf8(mem_buf[]).unwrap();
         match from_str(json_str) {
             Err(_) => panic!("Unable to parse json_str: {}", json_str),
             _ => {} // it parsed and we are good to go
@@ -3316,7 +3321,6 @@ mod tests {
     #[test]
     fn test_prettyencoder_indent_level_param() {
         use std::str::from_utf8;
-        use std::io::MemWriter;
         use std::collections::TreeMap;
 
         let mut tree = TreeMap::new();
@@ -3343,15 +3347,14 @@ mod tests {
 
         // Test up to 4 spaces of indents (more?)
         for i in range(0, 4u) {
-            let mut writer = MemWriter::new();
+            let mut writer = Vec::new();
             {
                 let ref mut encoder = PrettyEncoder::new(&mut writer);
                 encoder.set_indent(i);
                 json.encode(encoder).unwrap();
             }
 
-            let bytes = writer.unwrap();
-            let printed = from_utf8(bytes.as_slice()).unwrap();
+            let printed = from_utf8(writer[]).unwrap();
 
             // Check for indents at each line
             let lines: Vec<&str> = printed.lines().collect();

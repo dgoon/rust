@@ -61,13 +61,16 @@ independently:
 
 #![allow(non_camel_case_types)]
 
-use driver::config;
+pub use self::ExprAdjustment::*;
+pub use self::vtable_origin::*;
+pub use self::MethodOrigin::*;
 
 use middle::def;
 use middle::resolve;
 use middle::subst;
 use middle::subst::VecPerParamSpace;
 use middle::ty;
+use session::config;
 use util::common::time;
 use util::ppaux::Repr;
 use util::ppaux;

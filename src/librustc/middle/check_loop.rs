@@ -7,8 +7,9 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use self::Context::*;
 
-use driver::session::Session;
+use session::Session;
 
 use syntax::ast;
 use syntax::codemap::Span;

@@ -17,7 +17,10 @@
  * way. Therefore we break lifetime name resolution into a separate pass.
  */
 
-use driver::session::Session;
+pub use self::DefRegion::*;
+use self::ScopeChain::*;
+
+use session::Session;
 use middle::subst;
 use std::fmt;
 use syntax::ast;

@@ -541,6 +541,8 @@ mod imp {
     #[allow(non_snake_case)]
     #[allow(dead_code)]
     mod uw {
+        pub use self::_Unwind_Reason_Code::*;
+
         use libc;
 
         #[repr(C)]
@@ -622,7 +624,8 @@ mod imp {
 
             let mut val: _Unwind_Word = 0;
             let ptr = &mut val as *mut _Unwind_Word;
-            let _ = _Unwind_VRS_Get(ctx, _UVRSC_CORE, 15, _UVRSD_UINT32,
+            let _ = _Unwind_VRS_Get(ctx, _Unwind_VRS_RegClass::_UVRSC_CORE, 15,
+                                    _Unwind_VRS_DataRepresentation::_UVRSD_UINT32,
                                     ptr as *mut libc::c_void);
             (val & !1) as libc::uintptr_t
         }
@@ -813,11 +816,11 @@ mod imp {
         pub fn init_frame(frame: &mut super::STACKFRAME64,
                           ctx: &CONTEXT) -> libc::DWORD {
             frame.AddrPC.Offset = ctx.Eip as u64;
-            frame.AddrPC.Mode = super::AddrModeFlat;
+            frame.AddrPC.Mode = super::ADDRESS_MODE::AddrModeFlat;
             frame.AddrStack.Offset = ctx.Esp as u64;
-            frame.AddrStack.Mode = super::AddrModeFlat;
+            frame.AddrStack.Mode = super::ADDRESS_MODE::AddrModeFlat;
             frame.AddrFrame.Offset = ctx.Ebp as u64;
-            frame.AddrFrame.Mode = super::AddrModeFlat;
+            frame.AddrFrame.Mode = super::ADDRESS_MODE::AddrModeFlat;
             super::IMAGE_FILE_MACHINE_I386
         }
     }
@@ -903,11 +906,11 @@ mod imp {
         pub fn init_frame(frame: &mut super::STACKFRAME64,
                           ctx: &CONTEXT) -> DWORD {
             frame.AddrPC.Offset = ctx.Rip as u64;
-            frame.AddrPC.Mode = super::AddrModeFlat;
+            frame.AddrPC.Mode = super::ADDRESS_MODE::AddrModeFlat;
             frame.AddrStack.Offset = ctx.Rsp as u64;
-            frame.AddrStack.Mode = super::AddrModeFlat;
+            frame.AddrStack.Mode = super::ADDRESS_MODE::AddrModeFlat;
             frame.AddrFrame.Offset = ctx.Rbp as u64;
-            frame.AddrFrame.Mode = super::AddrModeFlat;
+            frame.AddrFrame.Mode = super::ADDRESS_MODE::AddrModeFlat;
             super::IMAGE_FILE_MACHINE_AMD64
         }
     }
@@ -996,7 +999,7 @@ mod imp {
                     None => try!(w.write(bytes[..bytes.len()-1])),
                 }
             }
-            try!(w.write(['\n' as u8]));
+            try!(w.write(&['\n' as u8]));
         }
 
         Ok(())
@@ -1006,12 +1009,10 @@ mod imp {
 #[cfg(test)]
 mod test {
     use prelude::*;
-    use io::MemWriter;
-
     macro_rules! t( ($a:expr, $b:expr) => ({
-        let mut m = MemWriter::new();
+        let mut m = Vec::new();
         super::demangle(&mut m, $a).unwrap();
-        assert_eq!(String::from_utf8(m.unwrap()).unwrap(), $b.to_string());
+        assert_eq!(String::from_utf8(m).unwrap(), $b.to_string());
     }) )
 
     #[test]
