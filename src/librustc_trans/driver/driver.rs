@@ -358,7 +358,7 @@ pub struct CrateAnalysis<'tcx> {
 /// structures carrying the results of the analysis.
 pub fn phase_3_run_analysis_passes<'tcx>(sess: Session,
                                          ast_map: ast_map::Map<'tcx>,
-                                         type_arena: &'tcx TypedArena<ty::t_box_>,
+                                         type_arena: &'tcx TypedArena<ty::TyS<'tcx>>,
                                          name: String) -> CrateAnalysis<'tcx> {
     let time_passes = sess.time_passes();
     let krate = ast_map.krate();
@@ -385,7 +385,7 @@ pub fn phase_3_run_analysis_passes<'tcx>(sess: Session,
     syntax::ext::mtwt::clear_tables();
 
     let named_region_map = time(time_passes, "lifetime resolution", (),
-                                |_| middle::resolve_lifetime::krate(&sess, krate));
+                                |_| middle::resolve_lifetime::krate(&sess, krate, &def_map));
 
     time(time_passes, "looking for entry point", (),
          |_| middle::entry::find_entry_point(&sess, &ast_map));
