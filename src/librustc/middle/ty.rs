@@ -46,6 +46,7 @@ use middle::dependency_format;
 use middle::lang_items::{FnTraitLangItem, FnMutTraitLangItem};
 use middle::lang_items::{FnOnceTraitLangItem, TyDescStructLangItem};
 use middle::mem_categorization as mc;
+use middle::region;
 use middle::resolve;
 use middle::resolve_lifetime;
 use middle::stability;
@@ -837,7 +838,7 @@ pub enum Region {
     ReFree(FreeRegion),
 
     /// A concrete region naming some expression within the current function.
-    ReScope(NodeId),
+    ReScope(region::CodeExtent),
 
     /// Static data that has an "infinite" lifetime. Top in the region lattice.
     ReStatic,
@@ -987,8 +988,10 @@ impl Region {
 }
 
 #[deriving(Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Encodable, Decodable, Show)]
+/// A "free" region `fr` can be interpreted as "some region
+/// at least as big as the scope `fr.scope`".
 pub struct FreeRegion {
-    pub scope_id: NodeId,
+    pub scope: region::CodeExtent,
     pub bound_region: BoundRegion
 }
 
@@ -2635,8 +2638,13 @@ impl ops::Sub<TypeContents,TypeContents> for TypeContents {
 }
 
 impl fmt::Show for TypeContents {
+    #[cfg(stage0)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "TypeContents({:t})", self.bits)
+    }
+    #[cfg(not(stage0))]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TypeContents({:b})", self.bits)
     }
 }
 
@@ -3396,14 +3404,6 @@ pub fn deref<'tcx>(ty: Ty<'tcx>, explicit: bool) -> Option<mt<'tcx>> {
     }
 }
 
-pub fn deref_or_dont<'tcx>(ty: Ty<'tcx>) -> Ty<'tcx> {
-    match ty.sty {
-        ty_uniq(ty) => ty,
-        ty_rptr(_, mt) | ty_ptr(mt) => mt.ty,
-        _ => ty
-    }
-}
-
 pub fn close_type<'tcx>(cx: &ctxt<'tcx>, ty: Ty<'tcx>) -> Ty<'tcx> {
     match ty.sty {
         ty_open(ty) => mk_rptr(cx, ReStatic, mt {ty: ty, mutbl:ast::MutImmutable}),
@@ -3567,7 +3567,7 @@ pub fn ty_region(tcx: &ctxt,
 pub fn free_region_from_def(free_id: ast::NodeId, def: &RegionParameterDef)
     -> ty::Region
 {
-    ty::ReFree(ty::FreeRegion { scope_id: free_id,
+    ty::ReFree(ty::FreeRegion { scope: region::CodeExtent::from_node_id(free_id),
                                 bound_region: ty::BrNamed(def.def_id,
                                                           def.name) })
 }
@@ -3922,9 +3922,8 @@ pub fn expr_kind(tcx: &ctxt, expr: &ast::Expr) -> ExprKind {
         ast::ExprTup(..) |
         ast::ExprIf(..) |
         ast::ExprMatch(..) |
-        ast::ExprFnBlock(..) |
+        ast::ExprClosure(..) |
         ast::ExprProc(..) |
-        ast::ExprUnboxedFn(..) |
         ast::ExprBlock(..) |
         ast::ExprRepeat(..) |
         ast::ExprVec(..) => {
@@ -5632,12 +5631,14 @@ pub fn construct_parameter_environment<'tcx>(
         regions: subst::NonerasedRegions(regions)
     };
 
+    let free_id_scope = region::CodeExtent::from_node_id(free_id);
+
     //
     // Compute the bounds on Self and the type parameters.
     //
 
     let bounds = generics.to_bounds(tcx, &free_substs);
-    let bounds = liberate_late_bound_regions(tcx, free_id, &bind(bounds)).value;
+    let bounds = liberate_late_bound_regions(tcx, free_id_scope, &bind(bounds)).value;
     let obligations = traits::obligations_for_generics(tcx,
                                                        traits::ObligationCause::misc(span),
                                                        &bounds,
@@ -5665,7 +5666,7 @@ pub fn construct_parameter_environment<'tcx>(
     return ty::ParameterEnvironment {
         free_substs: free_substs,
         bounds: bounds.types,
-        implicit_region_bound: ty::ReScope(free_id),
+        implicit_region_bound: ty::ReScope(free_id_scope),
         caller_obligations: obligations,
         selection_cache: traits::SelectionCache::new(),
     };
@@ -5784,7 +5785,7 @@ impl<'tcx> mc::Typer<'tcx> for ty::ctxt<'tcx> {
         self.method_map.borrow().contains_key(&typeck::MethodCall::expr(id))
     }
 
-    fn temporary_scope(&self, rvalue_id: ast::NodeId) -> Option<ast::NodeId> {
+    fn temporary_scope(&self, rvalue_id: ast::NodeId) -> Option<region::CodeExtent> {
         self.region_maps.temporary_scope(rvalue_id)
     }
 
@@ -5909,7 +5910,7 @@ impl<'tcx> AutoDerefRef<'tcx> {
 
 pub fn liberate_late_bound_regions<'tcx, HR>(
     tcx: &ty::ctxt<'tcx>,
-    scope_id: ast::NodeId,
+    scope: region::CodeExtent,
     value: &HR)
     -> HR
     where HR : HigherRankedFoldable<'tcx>
@@ -5921,7 +5922,7 @@ pub fn liberate_late_bound_regions<'tcx, HR>(
 
     replace_late_bound_regions(
         tcx, value,
-        |br, _| ty::ReFree(ty::FreeRegion{scope_id: scope_id, bound_region: br})).0
+        |br, _| ty::ReFree(ty::FreeRegion{scope: scope, bound_region: br})).0
 }
 
 pub fn erase_late_bound_regions<'tcx, HR>(
@@ -5987,5 +5988,61 @@ impl DebruijnIndex {
 
     pub fn shifted(&self, amount: uint) -> DebruijnIndex {
         DebruijnIndex { depth: self.depth + amount }
+    }
+}
+
+impl<'tcx> Repr<'tcx> for AutoAdjustment<'tcx> {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
+        match *self {
+            AdjustAddEnv(ref trait_store) => {
+                format!("AdjustAddEnv({})", trait_store)
+            }
+            AdjustDerefRef(ref data) => {
+                data.repr(tcx)
+            }
+        }
+    }
+}
+
+impl<'tcx> Repr<'tcx> for UnsizeKind<'tcx> {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
+        match *self {
+            UnsizeLength(n) => format!("UnsizeLength({})", n),
+            UnsizeStruct(ref k, n) => format!("UnsizeStruct({},{})", k.repr(tcx), n),
+            UnsizeVtable(ref a, ref b) => format!("UnsizeVtable({},{})", a.repr(tcx), b.repr(tcx)),
+        }
+    }
+}
+
+impl<'tcx> Repr<'tcx> for AutoDerefRef<'tcx> {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
+        format!("AutoDerefRef({}, {})", self.autoderefs, self.autoref.repr(tcx))
+    }
+}
+
+impl<'tcx> Repr<'tcx> for AutoRef<'tcx> {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
+        match *self {
+            AutoPtr(a, b, ref c) => {
+                format!("AutoPtr({},{},{})", a.repr(tcx), b, c.repr(tcx))
+            }
+            AutoUnsize(ref a) => {
+                format!("AutoUnsize({})", a.repr(tcx))
+            }
+            AutoUnsizeUniq(ref a) => {
+                format!("AutoUnsizeUniq({})", a.repr(tcx))
+            }
+            AutoUnsafe(ref a, ref b) => {
+                format!("AutoUnsafe({},{})", a, b.repr(tcx))
+            }
+        }
+    }
+}
+
+impl<'tcx> Repr<'tcx> for TyTrait<'tcx> {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
+        format!("TyTrait({},{})",
+                self.principal.repr(tcx),
+                self.bounds.repr(tcx))
     }
 }
