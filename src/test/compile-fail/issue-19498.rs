@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,14 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::result::Result;
-use std::result::Result::Ok;
+use self::A; //~ ERROR import `A` conflicts with existing submodule
+use self::B; //~ ERROR import `B` conflicts with existing submodule
+mod A {}
+pub mod B {}
 
-static C: Result<(), Box<int>> = Ok(());
-
-// This is because of yet another bad assertion (ICE) about the null side of a nullable enum.
-// So we won't actually compile if the bug is present, but we check the value in main anyway.
-
-pub fn main() {
-    assert!(C.is_ok());
+mod C {
+    use C::D; //~ ERROR import `D` conflicts with existing submodule
+    mod D {}
 }
+
+fn main() {}
