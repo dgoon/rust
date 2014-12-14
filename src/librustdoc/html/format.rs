@@ -218,10 +218,14 @@ fn resolved_path(w: &mut fmt::Formatter, did: ast::DefId, p: &clean::Path,
         })
 }
 
-fn path(w: &mut fmt::Formatter, path: &clean::Path, print_all: bool,
-        root: |&render::Cache, &[String]| -> Option<String>,
-        info: |&render::Cache| -> Option<(Vec<String> , ItemType)>)
-    -> fmt::Result
+fn path<F, G>(w: &mut fmt::Formatter,
+              path: &clean::Path,
+              print_all: bool,
+              root: F,
+              info: G)
+              -> fmt::Result where
+    F: FnOnce(&render::Cache, &[String]) -> Option<String>,
+    G: FnOnce(&render::Cache) -> Option<(Vec<String>, ItemType)>,
 {
     // The generics will get written to both the title and link
     let mut generics = String::new();
@@ -342,7 +346,7 @@ fn primitive_link(f: &mut fmt::Formatter,
                 Some(root) => {
                     try!(write!(f, "<a href='{}{}/primitive.{}.html'>",
                                 root,
-                                path.ref0().head().unwrap(),
+                                path.0.head().unwrap(),
                                 prim.to_url_str()));
                     needs_termination = true;
                 }
@@ -386,6 +390,16 @@ impl fmt::Show for clean::Type {
                 try!(resolved_path(f, did, path, false));
                 tybounds(f, typarams)
             }
+            clean::PolyTraitRef(ref bounds) => {
+                for (i, bound) in bounds.iter().enumerate() {
+                    if i != 0 {
+                        try!(write!(f, " + "));
+                    }
+                    try!(write!(f, "{}", *bound));
+                }
+                Ok(())
+            }
+            clean::Infer => write!(f, "_"),
             clean::Self(..) => f.write("Self".as_bytes()),
             clean::Primitive(prim) => primitive_link(f, prim, prim.to_string()),
             clean::Closure(ref decl) => {

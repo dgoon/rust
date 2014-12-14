@@ -32,11 +32,11 @@ use std::rc::Rc;
 
 // This could have a better place to live.
 pub trait MoveMap<T> {
-    fn move_map(self, f: |T| -> T) -> Self;
+    fn move_map<F>(self, f: F) -> Self where F: FnMut(T) -> T;
 }
 
 impl<T> MoveMap<T> for Vec<T> {
-    fn move_map(mut self, f: |T| -> T) -> Vec<T> {
+    fn move_map<F>(mut self, mut f: F) -> Vec<T> where F: FnMut(T) -> T {
         for p in self.iter_mut() {
             unsafe {
                 // FIXME(#5016) this shouldn't need to zero to be safe.
@@ -48,7 +48,7 @@ impl<T> MoveMap<T> for Vec<T> {
 }
 
 impl<T> MoveMap<T> for OwnedSlice<T> {
-    fn move_map(self, f: |T| -> T) -> OwnedSlice<T> {
+    fn move_map<F>(self, f: F) -> OwnedSlice<T> where F: FnMut(T) -> T {
         OwnedSlice::from_vec(self.into_vec().move_map(f))
     }
 }
@@ -416,17 +416,6 @@ pub fn noop_fold_ty<T: Folder>(t: P<Ty>, fld: &mut T) -> P<Ty> {
             }
             TyClosure(f) => {
                 TyClosure(f.map(|ClosureTy {fn_style, onceness, bounds, decl, lifetimes}| {
-                    ClosureTy {
-                        fn_style: fn_style,
-                        onceness: onceness,
-                        bounds: fld.fold_bounds(bounds),
-                        decl: fld.fold_fn_decl(decl),
-                        lifetimes: fld.fold_lifetime_defs(lifetimes)
-                    }
-                }))
-            }
-            TyProc(f) => {
-                TyProc(f.map(|ClosureTy {fn_style, onceness, bounds, decl, lifetimes}| {
                     ClosureTy {
                         fn_style: fn_style,
                         onceness: onceness,
@@ -1359,10 +1348,6 @@ pub fn noop_fold_expr<T: Folder>(Expr {id, node, span}: Expr, folder: &mut T) ->
                 ExprMatch(folder.fold_expr(expr),
                         arms.move_map(|x| folder.fold_arm(x)),
                         source)
-            }
-            ExprProc(decl, body) => {
-                ExprProc(folder.fold_fn_decl(decl),
-                         folder.fold_block(body))
             }
             ExprClosure(capture_clause, opt_kind, decl, body) => {
                 ExprClosure(capture_clause,

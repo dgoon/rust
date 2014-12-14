@@ -8,13 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn is_static<T: 'static>() {}
+// Test that we generate obsolete syntax errors around usages of `proc`.
 
-fn foo<'a>() {
-    is_static::<proc():'a>();
-    //~^ ERROR declared lifetime bound not satisfied
+fn foo(p: proc()) { } //~ ERROR obsolete syntax: the `proc` type
 
-    is_static::<proc():'static>();
-}
+fn bar() { proc() 1; } //~ ERROR obsolete syntax: `proc` expression
 
 fn main() { }

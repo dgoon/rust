@@ -136,7 +136,7 @@ mod callee;
 /// closures defined within the function.  For example:
 ///
 ///     fn foo() {
-///         bar(proc() { ... })
+///         bar(move|| { ... })
 ///     }
 ///
 /// Here, the function `foo()` and the closure passed to
@@ -1885,9 +1885,11 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self.inh.item_substs.borrow()
     }
 
-    pub fn opt_node_ty_substs(&self,
-                              id: ast::NodeId,
-                              f: |&ty::ItemSubsts<'tcx>|) {
+    pub fn opt_node_ty_substs<F>(&self,
+                                 id: ast::NodeId,
+                                 f: F) where
+        F: FnOnce(&ty::ItemSubsts<'tcx>),
+    {
         match self.inh.item_substs.borrow().get(&id) {
             Some(s) => { f(s) }
             None => { }
@@ -1938,11 +1940,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         infer::mk_subr(self.infcx(), origin, sub, sup)
     }
 
-    pub fn type_error_message(&self,
-                              sp: Span,
-                              mk_msg: |String| -> String,
-                              actual_ty: Ty<'tcx>,
-                              err: Option<&ty::type_err<'tcx>>) {
+    pub fn type_error_message<M>(&self,
+                                 sp: Span,
+                                 mk_msg: M,
+                                 actual_ty: Ty<'tcx>,
+                                 err: Option<&ty::type_err<'tcx>>) where
+        M: FnOnce(String) -> String,
+    {
         self.infcx().type_error_message(sp, mk_msg, actual_ty, err);
     }
 
@@ -2025,12 +2029,14 @@ impl Copy for LvaluePreference {}
 ///
 /// Note: this method does not modify the adjustments table. The caller is responsible for
 /// inserting an AutoAdjustment record into the `fcx` using one of the suitable methods.
-pub fn autoderef<'a, 'tcx, T>(fcx: &FnCtxt<'a, 'tcx>, sp: Span,
-                              base_ty: Ty<'tcx>,
-                              expr_id: Option<ast::NodeId>,
-                              mut lvalue_pref: LvaluePreference,
-                              should_stop: |Ty<'tcx>, uint| -> Option<T>)
-                              -> (Ty<'tcx>, uint, Option<T>) {
+pub fn autoderef<'a, 'tcx, T, F>(fcx: &FnCtxt<'a, 'tcx>, sp: Span,
+                                 base_ty: Ty<'tcx>,
+                                 expr_id: Option<ast::NodeId>,
+                                 mut lvalue_pref: LvaluePreference,
+                                 mut should_stop: F)
+                                 -> (Ty<'tcx>, uint, Option<T>) where
+    F: FnMut(Ty<'tcx>, uint) -> Option<T>,
+{
     let mut t = base_ty;
     for autoderefs in range(0, fcx.tcx().sess.recursion_limit.get()) {
         let resolved_t = structurally_resolved_type(fcx, sp, t);
@@ -2116,14 +2122,6 @@ fn try_overloaded_call<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
         fcx.inh.method_map.borrow_mut().insert(method_call, method_callee);
         write_call(fcx, call_expression, output_type);
 
-        if !fcx.tcx().sess.features.borrow().unboxed_closures {
-            span_err!(fcx.tcx().sess, call_expression.span, E0056,
-                "overloaded calls are experimental");
-            span_help!(fcx.tcx().sess, call_expression.span,
-                "add `#![feature(unboxed_closures)]` to \
-                the crate attributes to enable");
-        }
-
         return true
     }
 
@@ -2192,12 +2190,13 @@ fn make_overloaded_lvalue_return_type<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
     }
 }
 
-fn autoderef_for_index<'a, 'tcx, T>(fcx: &FnCtxt<'a, 'tcx>,
-                                    base_expr: &ast::Expr,
-                                    base_ty: Ty<'tcx>,
-                                    lvalue_pref: LvaluePreference,
-                                    step: |Ty<'tcx>, ty::AutoDerefRef<'tcx>| -> Option<T>)
-                                    -> Option<T>
+fn autoderef_for_index<'a, 'tcx, T, F>(fcx: &FnCtxt<'a, 'tcx>,
+                                       base_expr: &ast::Expr,
+                                       base_ty: Ty<'tcx>,
+                                       lvalue_pref: LvaluePreference,
+                                       mut step: F)
+                                       -> Option<T> where
+    F: FnMut(Ty<'tcx>, ty::AutoDerefRef<'tcx>) -> Option<T>,
 {
     // FIXME(#18741) -- this is almost but not quite the same as the
     // autoderef that normal method probing does. They could likely be
@@ -2659,7 +2658,7 @@ fn check_argument_types<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
         };
         for (i, arg) in args.iter().take(t).enumerate() {
             let is_block = match arg.node {
-                ast::ExprClosure(..) | ast::ExprProc(..) => true,
+                ast::ExprClosure(..) => true,
                 _ => false
             };
 
@@ -2936,11 +2935,12 @@ enum TupleArgumentsFlag {
 /// Note that inspecting a type's structure *directly* may expose the fact
 /// that there are actually multiple representations for `ty_err`, so avoid
 /// that when err needs to be handled differently.
-fn check_expr_with_unifier<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
-                                     expr: &ast::Expr,
-                                     expected: Expectation<'tcx>,
-                                     lvalue_pref: LvaluePreference,
-                                     unifier: ||)
+fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
+                                        expr: &ast::Expr,
+                                        expected: Expectation<'tcx>,
+                                        lvalue_pref: LvaluePreference,
+                                        unifier: F) where
+    F: FnOnce(),
 {
     debug!(">> typechecking: expr={} expected={}",
            expr.repr(fcx.tcx()), expected.repr(fcx.tcx()));
@@ -3115,14 +3115,16 @@ fn check_expr_with_unifier<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
         fcx.write_ty(id, if_ty);
     }
 
-    fn lookup_op_method<'a, 'tcx>(fcx: &'a FnCtxt<'a, 'tcx>,
-                                  op_ex: &ast::Expr,
-                                  lhs_ty: Ty<'tcx>,
-                                  opname: ast::Name,
-                                  trait_did: Option<ast::DefId>,
-                                  lhs: &'a ast::Expr,
-                                  rhs: Option<&P<ast::Expr>>,
-                                  unbound_method: ||) -> Ty<'tcx> {
+    fn lookup_op_method<'a, 'tcx, F>(fcx: &'a FnCtxt<'a, 'tcx>,
+                                     op_ex: &ast::Expr,
+                                     lhs_ty: Ty<'tcx>,
+                                     opname: ast::Name,
+                                     trait_did: Option<ast::DefId>,
+                                     lhs: &'a ast::Expr,
+                                     rhs: Option<&P<ast::Expr>>,
+                                     unbound_method: F) -> Ty<'tcx> where
+        F: FnOnce(),
+    {
         let method = match trait_did {
             Some(trait_did) => {
                 // We do eager coercions to make using operators
@@ -3987,14 +3989,6 @@ fn check_expr_with_unifier<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
       ast::ExprClosure(_, opt_kind, ref decl, ref body) => {
           closure::check_expr_closure(fcx, expr, opt_kind, &**decl, &**body, expected);
       }
-      ast::ExprProc(ref decl, ref body) => {
-          closure::check_boxed_closure(fcx,
-                                       expr,
-                                       ty::UniqTraitStore,
-                                       &**decl,
-                                       &**body,
-                                       expected);
-      }
       ast::ExprBlock(ref b) => {
         check_block_with_expected(fcx, &**b, expected);
         fcx.write_ty(id, fcx.node_ty(b.id));
@@ -4374,19 +4368,17 @@ impl<'tcx> Expectation<'tcx> {
         }
     }
 
-    fn map<'a>(self, fcx: &FnCtxt<'a, 'tcx>,
-               unpack: |&ty::sty<'tcx>| -> Expectation<'tcx>)
-               -> Expectation<'tcx> {
+    fn map<'a, F>(self, fcx: &FnCtxt<'a, 'tcx>, unpack: F) -> Expectation<'tcx> where
+        F: FnOnce(&ty::sty<'tcx>) -> Expectation<'tcx>
+    {
         match self.resolve(fcx) {
             NoExpectation => NoExpectation,
             ExpectCastableToType(t) | ExpectHasType(t) => unpack(&t.sty),
         }
     }
 
-    fn map_to_option<'a, O>(self,
-                            fcx: &FnCtxt<'a, 'tcx>,
-                            unpack: |&ty::sty<'tcx>| -> Option<O>)
-                            -> Option<O>
+    fn map_to_option<'a, O, F>(self, fcx: &FnCtxt<'a, 'tcx>, unpack: F) -> Option<O> where
+        F: FnOnce(&ty::sty<'tcx>) -> Option<O>,
     {
         match self.resolve(fcx) {
             NoExpectation => None,
@@ -5151,6 +5143,9 @@ pub fn instantiate_path<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
             }
 
             ast::ParenthesizedParameters(ref data) => {
+                fcx.tcx().sess.span_err(
+                    span,
+                    "parenthesized parameters may only be used with a trait");
                 push_explicit_parenthesized_parameters_from_segment_to_substs(
                     fcx, space, span, type_defs, data, substs);
             }

@@ -8,12 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Test that we don't ICE due to encountering unsubstituted type
-// parameters when untupling FnOnce parameters during translation of
-// an unboxing shim.
+// Check that parenthetical notation is feature-gated except with the
+// `Fn` traits.
 
-#![feature(unboxed_closures)]
+trait Foo<A,R> {
+}
 
 fn main() {
-    let _: Box<FnOnce<(),()>> = box move |&mut:| {};
+    let x: Box<Foo(int)>;
+    //~^ ERROR parenthetical notation is only stable when used with the `Fn` family
+
+    // No errors with these:
+    let x: Box<Fn(int)>;
+    let x: Box<FnMut(int)>;
+    let x: Box<FnOnce(int)>;
 }

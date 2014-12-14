@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(unboxed_closures)]
 
-use std::ops::FnOnce;
+// check that the &int here does not cause us to think that `foo`
+// contains region pointers
+struct foo(Box<FnMut(&int)+'static>);
 
-fn main() {
-    let task: Box<FnOnce(int) -> int> = box |: x| x;
-    assert!(task.call_once((1234i,)) == 1234i);
+fn take_foo<T:'static>(x: T) {}
+
+fn have_foo(f: foo) {
+    take_foo(f);
 }
 
+fn main() {}

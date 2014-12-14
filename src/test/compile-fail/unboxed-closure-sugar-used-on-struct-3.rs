@@ -8,10 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn main() {
-    if true {
-        proc(_) {}
-    } else {
-        proc(_: &mut ()) {}
-    };
+// Test that parentheses form doesn't work in expression paths.
+
+struct Bar<A,R> {
+    f: A, r: R
 }
+
+impl<A,B> Bar<A,B> {
+    fn new() -> Bar<A,B> { panic!() }
+}
+
+fn bar() {
+    let b = Box::Bar::<int,uint>::new(); // OK
+
+    let b = Box::Bar::()::new();
+    //~^ ERROR expected ident, found `(`
+}
+
+fn main() { }
+

@@ -241,7 +241,9 @@ pub fn trait_store_to_string(cx: &ctxt, s: ty::TraitStore) -> String {
     }
 }
 
-pub fn vec_map_to_string<T>(ts: &[T], f: |t: &T| -> String) -> String {
+pub fn vec_map_to_string<T, F>(ts: &[T], f: F) -> String where
+    F: FnMut(&T) -> String,
+{
     let tstrs = ts.iter().map(f).collect::<Vec<String>>();
     format!("[{}]", tstrs.connect(", "))
 }
@@ -447,7 +449,14 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
             let unboxed_closures = cx.unboxed_closures.borrow();
             unboxed_closures.get(did).map(|cl| {
                 closure_to_string(cx, &cl.closure_type.subst(cx, substs))
-            }).unwrap_or_else(|| "closure".to_string())
+            }).unwrap_or_else(|| {
+                if did.krate == ast::LOCAL_CRATE {
+                    let span = cx.map.span(did.node);
+                    format!("closure[{}]", span.repr(cx))
+                } else {
+                    format!("closure")
+                }
+            })
         }
         ty_vec(t, sz) => {
             let inner_str = ty_to_string(cx, t);

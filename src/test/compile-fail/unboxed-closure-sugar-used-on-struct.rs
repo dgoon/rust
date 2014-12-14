@@ -1,4 +1,4 @@
-// Copyright 2012-2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct Foo {
-    f: proc():'static
+// Test that parentheses form doesn't work with struct types appearing in argument types.
+
+struct Bar<A,R> {
+    f: A, r: R
 }
 
-fn call(x: Foo) {
-    x.f(); //~ ERROR does not implement any method in scope named `f`
+fn foo(b: Box<Bar()>) {
+    //~^ ERROR parenthesized parameters may only be used with a trait
 }
 
-fn main() {}
+fn main() { }
+

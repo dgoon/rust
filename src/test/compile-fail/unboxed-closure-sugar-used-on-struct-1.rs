@@ -8,15 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn is_send<T: Send>() {}
-fn is_freeze<T: Sync>() {}
 
-fn foo<'a>() {
-    is_send::<proc()>();
-    //~^ ERROR: the trait `core::kinds::Send` is not implemented
+// Test that parentheses form doesn't work with struct types appearing in local variables.
 
-    is_freeze::<proc()>();
-    //~^ ERROR: the trait `core::kinds::Sync` is not implemented
+struct Bar<A,R> {
+    f: A, r: R
+}
+
+fn bar() {
+    let x: Box<Bar()> = panic!();
+    //~^ ERROR parenthesized parameters may only be used with a trait
 }
 
 fn main() { }
+
