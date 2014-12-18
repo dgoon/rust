@@ -179,6 +179,38 @@ enum Expectation<'tcx> {
 
 impl<'tcx> Copy for Expectation<'tcx> {}
 
+impl<'tcx> Expectation<'tcx> {
+    // Disregard "castable to" expectations because they
+    // can lead us astray. Consider for example `if cond
+    // {22} else {c} as u8` -- if we propagate the
+    // "castable to u8" constraint to 22, it will pick the
+    // type 22u8, which is overly constrained (c might not
+    // be a u8). In effect, the problem is that the
+    // "castable to" expectation is not the tightest thing
+    // we can say, so we want to drop it in this case.
+    // The tightest thing we can say is "must unify with
+    // else branch". Note that in the case of a "has type"
+    // constraint, this limitation does not hold.
+
+    // If the expected type is just a type variable, then don't use
+    // an expected type. Otherwise, we might write parts of the type
+    // when checking the 'then' block which are incompatible with the
+    // 'else' branch.
+    fn adjust_for_branches<'a>(&self, fcx: &FnCtxt<'a, 'tcx>) -> Expectation<'tcx> {
+        match self.only_has_type() {
+            ExpectHasType(ety) => {
+                let ety = fcx.infcx().shallow_resolve(ety);
+                if !ty::type_is_ty_var(ety) {
+                    ExpectHasType(ety)
+                } else {
+                    NoExpectation
+                }
+            }
+            _ => NoExpectation
+        }
+    }
+}
+
 #[deriving(Copy, Clone)]
 pub struct UnsafetyState {
     pub def: ast::NodeId,
@@ -1188,7 +1220,7 @@ fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
 
     // Finally, resolve all regions. This catches wily misuses of lifetime
     // parameters.
-    infcx.resolve_regions_and_report_errors();
+    infcx.resolve_regions_and_report_errors(impl_m_body_id);
 
     /// Check that region bounds on impl method are the same as those on the trait. In principle,
     /// it could be ok for there to be fewer region bounds on the impl method, but this leads to an
@@ -3047,7 +3079,7 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
     }
 
     // A generic function for checking the then and else in an if
-    // or if-check
+    // or if-else.
     fn check_then_else<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                                  cond_expr: &ast::Expr,
                                  then_blk: &ast::Block,
@@ -3057,33 +3089,7 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
                                  expected: Expectation<'tcx>) {
         check_expr_has_type(fcx, cond_expr, ty::mk_bool());
 
-        // Disregard "castable to" expectations because they
-        // can lead us astray. Consider for example `if cond
-        // {22} else {c} as u8` -- if we propagate the
-        // "castable to u8" constraint to 22, it will pick the
-        // type 22u8, which is overly constrained (c might not
-        // be a u8). In effect, the problem is that the
-        // "castable to" expectation is not the tightest thing
-        // we can say, so we want to drop it in this case.
-        // The tightest thing we can say is "must unify with
-        // else branch". Note that in the case of a "has type"
-        // constraint, this limitation does not hold.
-
-        // If the expected type is just a type variable, then don't use
-        // an expected type. Otherwise, we might write parts of the type
-        // when checking the 'then' block which are incompatible with the
-        // 'else' branch.
-        let expected = match expected.only_has_type() {
-            ExpectHasType(ety) => {
-                let ety = fcx.infcx().shallow_resolve(ety);
-                if !ty::type_is_ty_var(ety) {
-                    ExpectHasType(ety)
-                } else {
-                    NoExpectation
-                }
-            }
-            _ => NoExpectation
-        };
+        let expected = expected.adjust_for_branches(fcx);
         check_block_with_expected(fcx, then_blk, expected);
         let then_ty = fcx.node_ty(then_blk.id);
 
@@ -3662,22 +3668,25 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
     let tcx = fcx.ccx.tcx;
     let id = expr.id;
     match expr.node {
-      ast::ExprBox(ref place, ref subexpr) => {
-          check_expr(fcx, &**place);
+      ast::ExprBox(ref opt_place, ref subexpr) => {
+          opt_place.as_ref().map(|place|check_expr(fcx, &**place));
           check_expr(fcx, &**subexpr);
 
           let mut checked = false;
-          if let ast::ExprPath(ref path) = place.node {
-              // FIXME(pcwalton): For now we hardcode the two permissible
-              // places: the exchange heap and the managed heap.
-              let definition = lookup_def(fcx, path.span, place.id);
-              let def_id = definition.def_id();
-              let referent_ty = fcx.expr_ty(&**subexpr);
-              if tcx.lang_items.exchange_heap() == Some(def_id) {
-                  fcx.write_ty(id, ty::mk_uniq(tcx, referent_ty));
-                  checked = true
+          opt_place.as_ref().map(|place| match place.node {
+              ast::ExprPath(ref path) => {
+                  // FIXME(pcwalton): For now we hardcode the two permissible
+                  // places: the exchange heap and the managed heap.
+                  let definition = lookup_def(fcx, path.span, place.id);
+                  let def_id = definition.def_id();
+                  let referent_ty = fcx.expr_ty(&**subexpr);
+                  if tcx.lang_items.exchange_heap() == Some(def_id) {
+                      fcx.write_ty(id, ty::mk_uniq(tcx, referent_ty));
+                      checked = true
+                  }
               }
-          }
+              _ => {}
+          });
 
           if !checked {
               span_err!(tcx.sess, expr.span, E0066,
@@ -3986,7 +3995,7 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
         }
       }
       ast::ExprMatch(ref discrim, ref arms, _) => {
-        _match::check_match(fcx, expr, &**discrim, arms.as_slice());
+        _match::check_match(fcx, expr, &**discrim, arms.as_slice(), expected);
       }
       ast::ExprClosure(_, opt_kind, ref decl, ref body) => {
           closure::check_expr_closure(fcx, expr, opt_kind, &**decl, &**body, expected);
