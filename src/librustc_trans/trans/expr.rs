@@ -316,10 +316,10 @@ fn apply_adjustments<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
                                           bcx.ty_to_string(unadjusted_ty)).as_slice())
             },
             &ty::UnsizeVtable(ty::TyTrait { ref principal, .. }, _) => {
-                let substs = principal.substs.with_self_ty(unadjusted_ty).erase_regions();
+                let substs = principal.substs().with_self_ty(unadjusted_ty).erase_regions();
                 let trait_ref =
-                    Rc::new(ty::TraitRef { def_id: principal.def_id,
-                                           substs: substs });
+                    Rc::new(ty::Binder(ty::TraitRef { def_id: principal.def_id(),
+                                                      substs: substs }));
                 let trait_ref = trait_ref.subst(bcx.tcx(), bcx.fcx.param_substs);
                 let box_ty = mk_ty(unadjusted_ty);
                 PointerCast(bcx,
@@ -1101,11 +1101,11 @@ fn trans_rvalue_dps_unadjusted<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
                                 vec![(rhs_datum, rhs.id)], Some(dest),
                                 !ast_util::is_by_value_binop(op)).bcx
         }
-        ast::ExprUnary(_, ref subexpr) => {
+        ast::ExprUnary(op, ref subexpr) => {
             // if not overloaded, would be RvalueDatumExpr
             let arg = unpack_datum!(bcx, trans(bcx, &**subexpr));
             trans_overloaded_op(bcx, expr, MethodCall::expr(expr.id),
-                                arg, Vec::new(), Some(dest), true).bcx
+                                arg, Vec::new(), Some(dest), !ast_util::is_by_value_unop(op)).bcx
         }
         ast::ExprIndex(ref base, ref idx) => {
             // if not overloaded, would be RvalueDatumExpr

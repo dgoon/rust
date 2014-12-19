@@ -21,6 +21,7 @@ pub use self::Searcher::{Naive, TwoWay, TwoWayLong};
 
 use char::Char;
 use char;
+use clone::Clone;
 use cmp::{Eq, mod};
 use default::Default;
 use iter::{Map, Iterator, IteratorExt, DoubleEndedIterator};
@@ -31,7 +32,7 @@ use mem;
 use num::Int;
 use option::Option;
 use option::Option::{None, Some};
-use ops::FnMut;
+use ops::{Fn, FnMut};
 use ptr::RawPtr;
 use raw::{Repr, Slice};
 use slice::{mod, SliceExt};
@@ -174,18 +175,18 @@ impl<'a> Copy for Chars<'a> {}
 // Return the initial codepoint accumulator for the first byte.
 // The first byte is special, only want bottom 5 bits for width 2, 4 bits
 // for width 3, and 3 bits for width 4
-macro_rules! utf8_first_byte(
+macro_rules! utf8_first_byte {
     ($byte:expr, $width:expr) => (($byte & (0x7F >> $width)) as u32)
-)
+}
 
 // return the value of $ch updated with continuation byte $byte
-macro_rules! utf8_acc_cont_byte(
+macro_rules! utf8_acc_cont_byte {
     ($ch:expr, $byte:expr) => (($ch << 6) | ($byte & CONT_MASK) as u32)
-)
+}
 
-macro_rules! utf8_is_cont_byte(
+macro_rules! utf8_is_cont_byte {
     ($byte:expr) => (($byte & !CONT_MASK) == TAG_CONT_U8)
-)
+}
 
 #[inline]
 fn unwrap_or_0(opt: Option<&u8>) -> u8 {
@@ -316,7 +317,23 @@ impl<'a> DoubleEndedIterator<(uint, char)> for CharOffsets<'a> {
 
 /// External iterator for a string's bytes.
 /// Use with the `std::iter` module.
-pub type Bytes<'a> = Map<&'a u8, u8, slice::Items<'a, u8>, fn(&u8) -> u8>;
+pub type Bytes<'a> = Map<&'a u8, u8, slice::Items<'a, u8>, BytesFn>;
+
+/// A temporary new type wrapper that ensures that the `Bytes` iterator
+/// is cloneable.
+#[deriving(Copy)]
+#[experimental = "iterator type instability"]
+pub struct BytesFn(fn(&u8) -> u8);
+
+impl<'a> Fn(&'a u8) -> u8 for BytesFn {
+    extern "rust-call" fn call(&self, (ptr,): (&'a u8,)) -> u8 {
+        (self.0)(ptr)
+    }
+}
+
+impl Clone for BytesFn {
+    fn clone(&self) -> BytesFn { *self }
+}
 
 /// An iterator over the substrings of a string, separated by `sep`.
 #[deriving(Clone)]
@@ -959,7 +976,7 @@ pub fn is_utf16(v: &[u16]) -> bool {
     macro_rules! next ( ($ret:expr) => {
             match it.next() { Some(u) => *u, None => return $ret }
         }
-    )
+    );
     loop {
         let u = next!(true);
 
@@ -1660,10 +1677,10 @@ pub trait StrPrelude for Sized? {
     /// # #![feature(unboxed_closures)]
     ///
     /// # fn main() {
-    /// assert_eq!("11foo1bar11".trim_chars('1'), "foo1bar")
+    /// assert_eq!("11foo1bar11".trim_chars('1'), "foo1bar");
     /// let x: &[_] = &['1', '2'];
-    /// assert_eq!("12foo1bar12".trim_chars(x), "foo1bar")
-    /// assert_eq!("123foo1bar123".trim_chars(|&: c: char| c.is_numeric()), "foo1bar")
+    /// assert_eq!("12foo1bar12".trim_chars(x), "foo1bar");
+    /// assert_eq!("123foo1bar123".trim_chars(|&: c: char| c.is_numeric()), "foo1bar");
     /// # }
     /// ```
     fn trim_chars<'a, C: CharEq>(&'a self, to_trim: C) -> &'a str;
@@ -1680,10 +1697,10 @@ pub trait StrPrelude for Sized? {
     /// # #![feature(unboxed_closures)]
     ///
     /// # fn main() {
-    /// assert_eq!("11foo1bar11".trim_left_chars('1'), "foo1bar11")
+    /// assert_eq!("11foo1bar11".trim_left_chars('1'), "foo1bar11");
     /// let x: &[_] = &['1', '2'];
-    /// assert_eq!("12foo1bar12".trim_left_chars(x), "foo1bar12")
-    /// assert_eq!("123foo1bar123".trim_left_chars(|&: c: char| c.is_numeric()), "foo1bar123")
+    /// assert_eq!("12foo1bar12".trim_left_chars(x), "foo1bar12");
+    /// assert_eq!("123foo1bar123".trim_left_chars(|&: c: char| c.is_numeric()), "foo1bar123");
     /// # }
     /// ```
     fn trim_left_chars<'a, C: CharEq>(&'a self, to_trim: C) -> &'a str;
@@ -1700,10 +1717,10 @@ pub trait StrPrelude for Sized? {
     /// # #![feature(unboxed_closures)]
     ///
     /// # fn main() {
-    /// assert_eq!("11foo1bar11".trim_right_chars('1'), "11foo1bar")
+    /// assert_eq!("11foo1bar11".trim_right_chars('1'), "11foo1bar");
     /// let x: &[_] = &['1', '2'];
-    /// assert_eq!("12foo1bar12".trim_right_chars(x), "12foo1bar")
-    /// assert_eq!("123foo1bar123".trim_right_chars(|&: c: char| c.is_numeric()), "123foo1bar")
+    /// assert_eq!("12foo1bar12".trim_right_chars(x), "12foo1bar");
+    /// assert_eq!("123foo1bar123".trim_right_chars(|&: c: char| c.is_numeric()), "123foo1bar");
     /// # }
     /// ```
     fn trim_right_chars<'a, C: CharEq>(&'a self, to_trim: C) -> &'a str;
@@ -2009,7 +2026,7 @@ impl StrPrelude for str {
     fn bytes(&self) -> Bytes {
         fn deref(&x: &u8) -> u8 { x }
 
-        self.as_bytes().iter().map(deref)
+        self.as_bytes().iter().map(BytesFn(deref))
     }
 
     #[inline]
@@ -2059,7 +2076,7 @@ impl StrPrelude for str {
 
     #[inline]
     fn match_indices<'a>(&'a self, sep: &'a str) -> MatchIndices<'a> {
-        assert!(!sep.is_empty())
+        assert!(!sep.is_empty());
         MatchIndices {
             haystack: self,
             needle: sep,

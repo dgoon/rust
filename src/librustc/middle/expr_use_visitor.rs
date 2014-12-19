@@ -320,14 +320,14 @@ pub struct ExprUseVisitor<'d,'t,'tcx,TYPER:'t> {
 //
 // Note that this macro appears similar to try!(), but, unlike try!(),
 // it does not propagate the error.
-macro_rules! return_if_err(
+macro_rules! return_if_err {
     ($inp: expr) => (
         match $inp {
             Ok(v) => v,
             Err(()) => return
         }
     )
-)
+}
 
 /// Whether the elements of an overloaded operation are passed by value or by reference
 enum PassArgs {
@@ -576,8 +576,14 @@ impl<'d,'t,'tcx,TYPER:mc::Typer<'tcx>> ExprUseVisitor<'d,'t,'tcx,TYPER> {
                 self.walk_block(&**blk);
             }
 
-            ast::ExprUnary(_, ref lhs) => {
-                if !self.walk_overloaded_operator(expr, &**lhs, Vec::new(), PassArgs::ByRef) {
+            ast::ExprUnary(op, ref lhs) => {
+                let pass_args = if ast_util::is_by_value_unop(op) {
+                    PassArgs::ByValue
+                } else {
+                    PassArgs::ByRef
+                };
+
+                if !self.walk_overloaded_operator(expr, &**lhs, Vec::new(), pass_args) {
                     self.consume_expr(&**lhs);
                 }
             }
@@ -937,7 +943,9 @@ impl<'d,'t,'tcx,TYPER:mc::Typer<'tcx>> ExprUseVisitor<'d,'t,'tcx,TYPER> {
         match pass_args {
             PassArgs::ByValue => {
                 self.consume_expr(receiver);
-                self.consume_expr(rhs[0]);
+                for &arg in rhs.iter() {
+                    self.consume_expr(arg);
+                }
 
                 return true;
             },
