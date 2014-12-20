@@ -29,13 +29,11 @@
 //! use std::collections::BinaryHeap;
 //! use std::uint;
 //!
-//! #[deriving(Eq, PartialEq)]
+//! #[deriving(Copy, Eq, PartialEq)]
 //! struct State {
 //!     cost: uint,
 //!     position: uint
 //! }
-//!
-//! impl Copy for State {}
 //!
 //! // The priority queue depends on `Ord`.
 //! // Explicitly implement the trait so the queue becomes a min-heap
@@ -619,10 +617,9 @@ impl<T: Ord> Extend<T> for BinaryHeap<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::prelude::*;
+    use prelude::*;
 
     use super::BinaryHeap;
-    use vec::Vec;
 
     #[test]
     fn test_iterator() {

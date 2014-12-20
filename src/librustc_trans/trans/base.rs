@@ -565,9 +565,8 @@ pub fn maybe_name_value(cx: &CrateContext, v: ValueRef, s: &str) {
 
 
 // Used only for creating scalar comparison glue.
+#[deriving(Copy)]
 pub enum scalar_type { nil_type, signed_int, unsigned_int, floating_point, }
-
-impl Copy for scalar_type {}
 
 pub fn compare_scalar_types<'blk, 'tcx>(cx: Block<'blk, 'tcx>,
                                         lhs: ValueRef,
@@ -1792,13 +1791,11 @@ pub fn build_return_block<'blk, 'tcx>(fcx: &FunctionContext<'blk, 'tcx>,
     }
 }
 
-#[deriving(Clone, Eq, PartialEq)]
+#[deriving(Clone, Copy, Eq, PartialEq)]
 pub enum IsUnboxedClosureFlag {
     NotUnboxedClosure,
     IsUnboxedClosure,
 }
-
-impl Copy for IsUnboxedClosureFlag {}
 
 // trans_closure: Builds an LLVM function out of a source function.
 // If the function closes over its environment a closure will be
@@ -2194,6 +2191,7 @@ pub fn llvm_linkage_by_name(name: &str) -> Option<Linkage> {
 
 
 /// Enum describing the origin of an LLVM `Value`, for linkage purposes.
+#[deriving(Copy)]
 pub enum ValueOrigin {
     /// The LLVM `Value` is in this context because the corresponding item was
     /// assigned to the current compilation unit.
@@ -2203,8 +2201,6 @@ pub enum ValueOrigin {
     /// item is marked `#[inline]`.
     InlinedCopy,
 }
-
-impl Copy for ValueOrigin {}
 
 /// Set the appropriate linkage for an LLVM `ValueRef` (function or global).
 /// If the `llval` is the direct translation of a specific Rust item, `id`
@@ -2942,7 +2938,7 @@ pub fn crate_ctxt_to_encode_parms<'a, 'tcx>(cx: &'a SharedCrateContext<'tcx>,
     encoder::EncodeParams {
         diag: cx.sess().diagnostic(),
         tcx: cx.tcx(),
-        reexports2: cx.exp_map2(),
+        reexports: cx.export_map(),
         item_symbols: cx.item_symbols(),
         link_meta: cx.link_meta(),
         cstore: &cx.sess().cstore,
@@ -3075,7 +3071,7 @@ fn internalize_symbols(cx: &SharedCrateContext, reachable: &HashSet<String>) {
 
 pub fn trans_crate<'tcx>(analysis: ty::CrateAnalysis<'tcx>)
                          -> (ty::ctxt<'tcx>, CrateTranslation) {
-    let ty::CrateAnalysis { ty_cx: tcx, exp_map2, reachable, name, .. } = analysis;
+    let ty::CrateAnalysis { ty_cx: tcx, export_map, reachable, name, .. } = analysis;
     let krate = tcx.map.krate();
 
     // Before we touch LLVM, make sure that multithreading is enabled.
@@ -3102,7 +3098,7 @@ pub fn trans_crate<'tcx>(analysis: ty::CrateAnalysis<'tcx>)
     let shared_ccx = SharedCrateContext::new(link_meta.crate_name.as_slice(),
                                              codegen_units,
                                              tcx,
-                                             exp_map2,
+                                             export_map,
                                              Sha256::new(),
                                              link_meta.clone(),
                                              reachable);

@@ -623,10 +623,10 @@ impl<K: Eq + Hash<S>, V, S, H: Hasher<S>> HashMap<K, V, H> {
     /// Resizes the internal vectors to a new capacity. It's your responsibility to:
     ///   1) Make sure the new capacity is enough for all the elements, accounting
     ///      for the load factor.
-    ///   2) Ensure new_capacity is a power of two.
+    ///   2) Ensure new_capacity is a power of two or zero.
     fn resize(&mut self, new_capacity: uint) {
         assert!(self.table.size() <= new_capacity);
-        assert!(new_capacity.is_power_of_two());
+        assert!(new_capacity.is_power_of_two() || new_capacity == 0);
 
         let mut old_table = replace(&mut self.table, RawTable::new(new_capacity));
         let old_size = old_table.size();
@@ -1428,9 +1428,8 @@ mod test_map {
 
     use super::HashMap;
     use super::{Occupied, Vacant};
-    use cmp::Equiv;
     use hash;
-    use iter::{Iterator,range_inclusive,range_step_inclusive};
+    use iter::{range_inclusive, range_step_inclusive};
     use cell::RefCell;
     use rand::{weak_rng, Rng};
 

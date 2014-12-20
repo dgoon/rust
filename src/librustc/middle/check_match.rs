@@ -22,7 +22,7 @@ use middle::expr_use_visitor as euv;
 use middle::mem_categorization::cmt;
 use middle::pat_util::*;
 use middle::ty::*;
-use middle::ty::{mod, Ty};
+use middle::ty;
 use std::fmt;
 use std::iter::AdditiveIterator;
 use std::iter::range_inclusive;
@@ -127,12 +127,11 @@ enum Usefulness {
     NotUseful
 }
 
+#[deriving(Copy)]
 enum WitnessPreference {
     ConstructWitness,
     LeaveOutWitness
 }
-
-impl Copy for WitnessPreference {}
 
 impl<'a, 'tcx, 'v> Visitor<'v> for MatchCheckCtxt<'a, 'tcx> {
     fn visit_expr(&mut self, ex: &ast::Expr) {

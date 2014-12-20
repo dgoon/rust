@@ -71,7 +71,7 @@ This API is completely unstable and subject to change.
       html_favicon_url = "http://www.rust-lang.org/favicon.ico",
       html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![feature(default_type_params, globs, import_shadowing, macro_rules, phase, quote)]
+#![feature(default_type_params, globs, macro_rules, phase, quote)]
 #![feature(slicing_syntax, unsafe_destructor)]
 #![feature(rustc_diagnostic_macros)]
 #![feature(unboxed_closures)]
@@ -90,7 +90,6 @@ pub use rustc::session;
 pub use rustc::util;
 
 use middle::def;
-use middle::resolve;
 use middle::infer;
 use middle::subst;
 use middle::subst::VecPerParamSpace;
@@ -121,7 +120,7 @@ struct TypeAndSubsts<'tcx> {
 
 struct CrateCtxt<'a, 'tcx: 'a> {
     // A mapping from method call sites to traits that have that method.
-    trait_map: resolve::TraitMap,
+    trait_map: ty::TraitMap,
     tcx: &'a ty::ctxt<'tcx>
 }
 
@@ -316,7 +315,7 @@ fn check_for_entry_fn(ccx: &CrateCtxt) {
     }
 }
 
-pub fn check_crate(tcx: &ty::ctxt, trait_map: resolve::TraitMap) {
+pub fn check_crate(tcx: &ty::ctxt, trait_map: ty::TraitMap) {
     let time_passes = tcx.sess.time_passes();
     let ccx = CrateCtxt {
         trait_map: trait_map,

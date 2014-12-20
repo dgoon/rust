@@ -30,6 +30,7 @@ use default::Default;
 use super::{Hash, Hasher, Writer};
 
 /// `SipState` computes a SipHash 2-4 hash over a stream of bytes.
+#[deriving(Copy)]
 pub struct SipState {
     k0: u64,
     k1: u64,
@@ -41,8 +42,6 @@ pub struct SipState {
     tail: u64, // unprocessed bytes le
     ntail: uint,  // how many bytes in tail are valid
 }
-
-impl Copy for SipState {}
 
 // sadly, these macro definitions can't appear later,
 // because they're needed in the following defs;
@@ -272,13 +271,8 @@ pub fn hash_with_keys<Sized? T: Hash<SipState>>(k0: u64, k1: u64, value: &T) -> 
 #[cfg(test)]
 mod tests {
     use test::Bencher;
-    use std::prelude::*;
+    use prelude::*;
     use std::fmt;
-
-    use str::Str;
-    use string::String;
-    use slice::{AsSlice, SliceExt};
-    use vec::Vec;
 
     use super::super::{Hash, Writer};
     use super::{SipState, hash, hash_with_keys};
