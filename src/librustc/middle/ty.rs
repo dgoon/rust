@@ -77,7 +77,7 @@ use std::mem;
 use std::ops;
 use std::rc::Rc;
 use collections::enum_set::{EnumSet, CLike};
-use std::collections::hash_map::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use syntax::abi;
 use syntax::ast::{CrateNum, DefId, DUMMY_NODE_ID, Ident, ItemTrait, LOCAL_CRATE};
@@ -105,6 +105,7 @@ pub struct CrateAnalysis<'tcx> {
     pub ty_cx: ty::ctxt<'tcx>,
     pub reachable: NodeSet,
     pub name: String,
+    pub glob_map: Option<GlobMap>,
 }
 
 #[deriving(Copy, PartialEq, Eq, Hash)]
@@ -3003,9 +3004,9 @@ pub fn type_contents<'tcx>(cx: &ctxt<'tcx>, ty: Ty<'tcx>) -> TypeContents {
                 // FIXME(#14449): `borrowed_contents` below assumes `&mut`
                 // unboxed closure.
                 let upvars = unboxed_closure_upvars(cx, did, substs);
-                TypeContents::union(upvars[],
-                                    |f| tc_ty(cx, f.ty, cache)) |
-                    borrowed_contents(r, MutMutable)
+                TypeContents::union(upvars.as_slice(),
+                                    |f| tc_ty(cx, f.ty, cache))
+                    | borrowed_contents(r, MutMutable)
             }
 
             ty_tup(ref tys) => {
@@ -6165,12 +6166,22 @@ impl<'tcx> mc::Typer<'tcx> for ty::ctxt<'tcx> {
         self
     }
 
-    fn node_ty(&self, id: ast::NodeId) -> mc::McResult<Ty<'tcx>> {
-        Ok(ty::node_id_to_type(self, id))
+    fn node_ty(&self, id: ast::NodeId) -> Ty<'tcx> {
+        ty::node_id_to_type(self, id)
     }
 
-    fn node_method_ty(&self, method_call: MethodCall) -> Option<Ty<'tcx>> {
+    fn expr_ty_adjusted(&self, expr: &ast::Expr) -> Ty<'tcx> {
+        ty::expr_ty_adjusted(self, expr)
+    }
+
+    fn node_method_ty(&self, method_call: ty::MethodCall) -> Option<Ty<'tcx>> {
         self.method_map.borrow().get(&method_call).map(|method| method.ty)
+    }
+
+    fn node_method_origin(&self, method_call: ty::MethodCall)
+                          -> Option<ty::MethodOrigin<'tcx>>
+    {
+        self.method_map.borrow().get(&method_call).map(|method| method.origin.clone())
     }
 
     fn adjustments<'a>(&'a self) -> &'a RefCell<NodeMap<ty::AutoAdjustment<'tcx>>> {
@@ -6284,6 +6295,10 @@ pub type CaptureModeMap = NodeMap<ast::CaptureClause>;
 
 // Trait method resolution
 pub type TraitMap = NodeMap<Vec<DefId>>;
+
+// Map from the NodeId of a glob import to a list of items which are actually
+// imported.
+pub type GlobMap = HashMap<NodeId, HashSet<Name>>;
 
 pub fn with_freevars<T, F>(tcx: &ty::ctxt, fid: ast::NodeId, f: F) -> T where
     F: FnOnce(&[Freevar]) -> T,
