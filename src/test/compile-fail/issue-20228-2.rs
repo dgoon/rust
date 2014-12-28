@@ -8,10 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![deny(unreachable_code)]
+struct S;
+
+impl S {
+    fn foo(&self) {
+        let _ = move || { self.foo() };  //~error boxed closures can't capture by value
+    }
+}
 
 fn main() {
-    let x: || -> ! = || panic!();
-    x();
-    std::io::println("Foo bar"); //~ ERROR: unreachable statement
 }

@@ -8,10 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![deny(unreachable_code)]
+fn foo(t: &mut int){
+    println!("{}", t);
+}
 
 fn main() {
-    let x: || -> ! = || panic!();
-    x();
-    std::io::println("Foo bar"); //~ ERROR: unreachable statement
+    let test = 10;
+
+    let h = move || {  //~error boxed closures can't capture by value
+        let mut r = &mut test.clone();
+        foo(r);
+    };
+
+    h();
 }

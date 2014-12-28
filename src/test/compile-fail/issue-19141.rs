@@ -8,10 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![deny(unreachable_code)]
-
 fn main() {
-    let x: || -> ! = || panic!();
-    x();
-    std::io::println("Foo bar"); //~ ERROR: unreachable statement
+    let n = 0u;
+
+    let f = move || n += 1;  //~error boxed closures can't capture by value
 }
