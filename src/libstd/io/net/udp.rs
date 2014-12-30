@@ -49,7 +49,7 @@ use sys_common;
 ///     match socket.recv_from(&mut buf) {
 ///         Ok((amt, src)) => {
 ///             // Send a reply to the socket we received data from
-///             let buf = buf[mut ..amt];
+///             let buf = buf.slice_to_mut(amt);
 ///             buf.reverse();
 ///             socket.send_to(buf, src);
 ///         }
@@ -250,9 +250,9 @@ impl Writer for UdpStream {
 mod test {
     use super::*;
     use io::net::ip::*;
-    use io::*;
+    use io::{ShortWrite, IoError, TimedOut, PermissionDenied};
     use io::test::*;
-    use prelude::*;
+    use prelude::{Ok, Err, spawn, range, drop, Some, None, channel, Clone, Reader, Writer};
 
     // FIXME #11530 this fails on android because tests are run as root
     #[cfg_attr(any(windows, target_os = "android"), ignore)]

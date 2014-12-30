@@ -21,12 +21,12 @@ use cmp::{PartialEq, Eq, PartialOrd, Ord, Ordering};
 use hash;
 use io::Writer;
 use iter::{AdditiveIterator, DoubleEndedIteratorExt, Extend};
-use iter::{Iterator, IteratorExt, Map};
+use iter::{Iterator, IteratorExt, Map, repeat};
 use mem;
 use option::Option;
 use option::Option::{Some, None};
 use slice::SliceExt;
-use str::{CharSplits, FromStr, StrVector, StrExt};
+use str::{SplitTerminator, FromStr, StrVector, StrExt};
 use string::{String, ToString};
 use unicode::char::UnicodeChar;
 use vec::Vec;
@@ -38,7 +38,7 @@ use super::{contains_nul, BytesContainer, GenericPath, GenericPathUnsafe};
 /// Each component is yielded as Option<&str> for compatibility with PosixPath, but
 /// every component in WindowsPath is guaranteed to be Some.
 pub type StrComponents<'a> =
-    Map<&'a str, Option<&'a str>, CharSplits<'a, char>, fn(&'a str) -> Option<&'a str>>;
+    Map<&'a str, Option<&'a str>, SplitTerminator<'a, char>, fn(&'a str) -> Option<&'a str>>;
 
 /// Iterator that yields successive components of a Path as &[u8]
 pub type Components<'a> =
@@ -777,7 +777,7 @@ impl Path {
                             }
                         }
                     } else if is_abs && comps.is_empty() {
-                        Some(String::from_char(1, SEP))
+                        Some(repeat(SEP).take(1).collect())
                     } else {
                         let prefix_ = s[0..prefix_len(prefix)];
                         let n = prefix_.len() +
