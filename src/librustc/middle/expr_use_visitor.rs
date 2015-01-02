@@ -1085,7 +1085,7 @@ impl<'d,'t,'tcx,TYPER:mc::Typer<'tcx>> ExprUseVisitor<'d,'t,'tcx,TYPER> {
                         // Note: We declare here that the borrow
                         // occurs upon entering the `[...]`
                         // pattern. This implies that something like
-                        // `[a, ..b]` where `a` is a move is illegal,
+                        // `[a; b]` where `a` is a move is illegal,
                         // because the borrow is already in effect.
                         // In fact such a move would be safe-ish, but
                         // it effectively *requires* that we use the
@@ -1229,7 +1229,7 @@ impl<'d,'t,'tcx,TYPER:mc::Typer<'tcx>> ExprUseVisitor<'d,'t,'tcx,TYPER> {
             // inferred by regionbk
             let upvar_id = ty::UpvarId { var_id: id_var,
                                          closure_expr_id: closure_expr.id };
-            let upvar_borrow = self.typer.upvar_borrow(upvar_id);
+            let upvar_borrow = self.typer.upvar_borrow(upvar_id).unwrap();
 
             self.delegate.borrow(closure_expr.id,
                                  closure_expr.span,

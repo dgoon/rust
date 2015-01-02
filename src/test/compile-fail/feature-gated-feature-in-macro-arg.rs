@@ -8,18 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// error-pattern: too big for the current architecture
+// tests that input to a macro is checked for use of gated features. If this
+// test succeeds due to the acceptance of a feature, pick a new feature to
+// test. Not ideal, but oh well :(
 
-#[cfg(target_word_size = "64")]
 fn main() {
-    let n = 0u;
-    let a = box [&n; 0xF000000000000000u];
-    println!("{}", a[0xFFFFFFu]);
-}
-
-#[cfg(target_word_size = "32")]
-fn main() {
-    let n = 0u;
-    let a = box [&n; 0xFFFFFFFFu];
-    println!("{}", a[0xFFFFFFu]);
+    let a = &[1i32, 2, 3];
+    println!("{}", {
+        extern "rust-intrinsic" { //~ ERROR intrinsics are subject to change
+            fn atomic_fence();
+        }
+        atomic_fence();
+        42
+    });
 }
