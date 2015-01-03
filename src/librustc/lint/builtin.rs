@@ -36,10 +36,11 @@ use util::ppaux::{ty_to_string};
 use util::nodemap::{FnvHashMap, NodeSet};
 use lint::{Context, LintPass, LintArray};
 
-use std::{cmp, slice};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::num::SignedInt;
+use std::{cmp, slice};
 use std::{i8, i16, i32, i64, u8, u16, u32, u64, f32, f64};
+
 use syntax::{abi, ast, ast_map};
 use syntax::ast_util::is_shift_binop;
 use syntax::attr::{mod, AttrMetaMethods};
@@ -551,7 +552,7 @@ impl LintPass for BoxPointers {
 declare_lint! {
     RAW_POINTER_DERIVING,
     Warn,
-    "uses of #[deriving] with raw pointers are rarely correct"
+    "uses of #[derive] with raw pointers are rarely correct"
 }
 
 struct RawPtrDerivingVisitor<'a, 'tcx: 'a> {
@@ -560,7 +561,7 @@ struct RawPtrDerivingVisitor<'a, 'tcx: 'a> {
 
 impl<'a, 'tcx, 'v> Visitor<'v> for RawPtrDerivingVisitor<'a, 'tcx> {
     fn visit_ty(&mut self, ty: &ast::Ty) {
-        static MSG: &'static str = "use of `#[deriving]` with a raw pointer";
+        static MSG: &'static str = "use of `#[derive]` with a raw pointer";
         if let ast::TyPtr(..) = ty.node {
             self.cx.span_lint(RAW_POINTER_DERIVING, ty.span, MSG);
         }
@@ -1611,15 +1612,11 @@ impl LintPass for MissingCopyImplementations {
             }
             _ => return,
         };
-        let parameter_environment = ty::empty_parameter_environment();
-        if !ty::type_moves_by_default(cx.tcx,
-                                      ty,
-                                      &parameter_environment) {
+        let parameter_environment = ty::empty_parameter_environment(cx.tcx);
+        if !ty::type_moves_by_default(&parameter_environment, item.span, ty) {
             return
         }
-        if ty::can_type_implement_copy(cx.tcx,
-                                       ty,
-                                       &parameter_environment).is_ok() {
+        if ty::can_type_implement_copy(&parameter_environment, item.span, ty).is_ok() {
             cx.span_lint(MISSING_COPY_IMPLEMENTATIONS,
                          item.span,
                          "type could implement `Copy`; consider adding `impl \

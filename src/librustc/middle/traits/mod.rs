@@ -15,6 +15,7 @@ pub use self::FulfillmentErrorCode::*;
 pub use self::Vtable::*;
 pub use self::ObligationCauseCode::*;
 
+use middle::mem_categorization::Typer;
 use middle::subst;
 use middle::ty::{mod, Ty};
 use middle::infer::InferCtxt;
@@ -22,27 +23,37 @@ use std::slice::Iter;
 use std::rc::Rc;
 use syntax::ast;
 use syntax::codemap::{Span, DUMMY_SP};
-use util::ppaux::Repr;
+use util::ppaux::{Repr, UserString};
 
 pub use self::error_reporting::report_fulfillment_errors;
+pub use self::error_reporting::suggest_new_overflow_limit;
+pub use self::coherence::orphan_check;
+pub use self::coherence::OrphanCheckErr;
 pub use self::fulfill::{FulfillmentContext, RegionObligation};
 pub use self::project::MismatchedProjectionTypes;
 pub use self::project::normalize;
 pub use self::project::Normalized;
+pub use self::object_safety::is_object_safe;
+pub use self::object_safety::object_safety_violations;
+pub use self::object_safety::ObjectSafetyViolation;
+pub use self::object_safety::MethodViolationCode;
 pub use self::select::SelectionContext;
 pub use self::select::SelectionCache;
 pub use self::select::{MethodMatchResult, MethodMatched, MethodAmbiguous, MethodDidNotMatch};
 pub use self::select::{MethodMatchedData}; // intentionally don't export variants
 pub use self::util::elaborate_predicates;
+pub use self::util::get_vtable_index_of_object_method;
 pub use self::util::trait_ref_for_builtin_bound;
 pub use self::util::supertraits;
 pub use self::util::Supertraits;
 pub use self::util::transitive_bounds;
+pub use self::util::upcast;
 
 mod coherence;
 mod error_reporting;
 mod fulfill;
 mod project;
+mod object_safety;
 mod select;
 mod util;
 
@@ -210,6 +221,9 @@ pub enum Vtable<'tcx, N> {
     /// for some type parameter.
     VtableParam,
 
+    /// Virtual calls through an object
+    VtableObject(VtableObjectData<'tcx>),
+
     /// Successful resolution for a builtin trait.
     VtableBuiltin(VtableBuiltinData<N>),
 
@@ -245,13 +259,11 @@ pub struct VtableBuiltinData<N> {
     pub nested: subst::VecPerParamSpace<N>
 }
 
-/// True if neither the trait nor self type is local. Note that `impl_def_id` must refer to an impl
-/// of a trait, not an inherent impl.
-pub fn is_orphan_impl(tcx: &ty::ctxt,
-                      impl_def_id: ast::DefId)
-                      -> bool
-{
-    !coherence::impl_is_local(tcx, impl_def_id)
+/// A vtable for some object-safe trait `Foo` automatically derived
+/// for the object type `Foo`.
+#[deriving(PartialEq,Eq,Clone)]
+pub struct VtableObjectData<'tcx> {
+    pub object_ty: Ty<'tcx>,
 }
 
 /// True if there exist types that satisfy both of the two given impls.
@@ -278,11 +290,12 @@ pub fn predicates_for_generics<'tcx>(tcx: &ty::ctxt<'tcx>,
 /// `bound` or is not known to meet bound (note that this is
 /// conservative towards *no impl*, which is the opposite of the
 /// `evaluate` methods).
-pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &InferCtxt<'a,'tcx>,
-                                                 param_env: &ty::ParameterEnvironment<'tcx>,
-                                                 ty: Ty<'tcx>,
-                                                 bound: ty::BuiltinBound)
-                                                 -> bool
+pub fn evaluate_builtin_bound<'a,'tcx>(infcx: &InferCtxt<'a,'tcx>,
+                                       typer: &ty::UnboxedClosureTyper<'tcx>,
+                                       ty: Ty<'tcx>,
+                                       bound: ty::BuiltinBound,
+                                       span: Span)
+                                       -> SelectionResult<'tcx, ()>
 {
     debug!("type_known_to_meet_builtin_bound(ty={}, bound={})",
            ty.repr(infcx.tcx),
@@ -290,17 +303,49 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &InferCtxt<'a,'tcx>,
 
     let mut fulfill_cx = FulfillmentContext::new();
 
-    // We can use dummy values here because we won't report any errors
-    // that result nor will we pay any mind to region obligations that arise
-    // (there shouldn't really be any anyhow).
-    let cause = ObligationCause::misc(DUMMY_SP, ast::DUMMY_NODE_ID);
+    // We can use a dummy node-id here because we won't pay any mind
+    // to region obligations that arise (there shouldn't really be any
+    // anyhow).
+    let cause = ObligationCause::misc(span, ast::DUMMY_NODE_ID);
 
     fulfill_cx.register_builtin_bound(infcx, ty, bound, cause);
 
     // Note: we only assume something is `Copy` if we can
     // *definitively* show that it implements `Copy`. Otherwise,
     // assume it is move; linear is always ok.
-    let result = fulfill_cx.select_all_or_error(infcx, param_env, infcx.tcx).is_ok();
+    let result = match fulfill_cx.select_all_or_error(infcx, typer) {
+        Ok(()) => Ok(Some(())), // Success, we know it implements Copy.
+        Err(errors) => {
+            // Check if overflow occurred anywhere and propagate that.
+            if errors.iter().any(
+                |err| match err.code { CodeSelectionError(Overflow) => true, _ => false })
+            {
+                return Err(Overflow);
+            }
+
+            // Otherwise, if there were any hard errors, propagate an
+            // arbitrary one of those. If no hard errors at all,
+            // report ambiguity.
+            let sel_error =
+                errors.iter()
+                      .filter_map(|err| {
+                          match err.code {
+                              CodeAmbiguity => None,
+                              CodeSelectionError(ref e) => Some(e.clone()),
+                              CodeProjectionError(_) => {
+                                  infcx.tcx.sess.span_bug(
+                                      span,
+                                      "projection error while selecting?")
+                              }
+                          }
+                      })
+                      .next();
+            match sel_error {
+                None => { Ok(None) }
+                Some(e) => { Err(e) }
+            }
+        }
+    };
 
     debug!("type_known_to_meet_builtin_bound: ty={} bound={} result={}",
            ty.repr(infcx.tcx),
@@ -308,6 +353,40 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &InferCtxt<'a,'tcx>,
            result);
 
     result
+}
+
+pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &InferCtxt<'a,'tcx>,
+                                                 typer: &ty::UnboxedClosureTyper<'tcx>,
+                                                 ty: Ty<'tcx>,
+                                                 bound: ty::BuiltinBound,
+                                                 span: Span)
+                                                 -> bool
+{
+    match evaluate_builtin_bound(infcx, typer, ty, bound, span) {
+        Ok(Some(())) => {
+            // definitely impl'd
+            true
+        }
+        Ok(None) => {
+            // ambiguous: if coherence check was successful, shouldn't
+            // happen, but we might have reported an error and been
+            // soldering on, so just treat this like not implemented
+            false
+        }
+        Err(Overflow) => {
+            infcx.tcx.sess.span_err(
+                span,
+                format!("overflow evaluating whether `{}` is `{}`",
+                        ty.user_string(infcx.tcx),
+                        bound.user_string(infcx.tcx))[]);
+            suggest_new_overflow_limit(infcx.tcx, span);
+            false
+        }
+        Err(_) => {
+            // other errors: not implemented.
+            false
+        }
+    }
 }
 
 impl<'tcx,O> Obligation<'tcx,O> {
@@ -365,6 +444,7 @@ impl<'tcx, N> Vtable<'tcx, N> {
             VtableFnPointer(..) => (&[]).iter(),
             VtableUnboxedClosure(..) => (&[]).iter(),
             VtableParam => (&[]).iter(),
+            VtableObject(_) => (&[]).iter(),
             VtableBuiltin(ref i) => i.iter_nested(),
         }
     }
@@ -375,6 +455,7 @@ impl<'tcx, N> Vtable<'tcx, N> {
             VtableFnPointer(ref sig) => VtableFnPointer((*sig).clone()),
             VtableUnboxedClosure(d, ref s) => VtableUnboxedClosure(d, s.clone()),
             VtableParam => VtableParam,
+            VtableObject(ref p) => VtableObject(p.clone()),
             VtableBuiltin(ref b) => VtableBuiltin(b.map_nested(op)),
         }
     }
@@ -387,6 +468,7 @@ impl<'tcx, N> Vtable<'tcx, N> {
             VtableFnPointer(sig) => VtableFnPointer(sig),
             VtableUnboxedClosure(d, s) => VtableUnboxedClosure(d, s),
             VtableParam => VtableParam,
+            VtableObject(p) => VtableObject(p),
             VtableBuiltin(no) => VtableBuiltin(no.map_move_nested(op)),
         }
     }
