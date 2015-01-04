@@ -10,7 +10,7 @@
 
 #![allow(missing_docs)]
 
-use std::cmp::Ordering::{mod, Less, Greater, Equal};
+use std::cmp::Ordering::{self, Less, Greater, Equal};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::collections::hash_map;
 use std::fmt::Show;
@@ -127,7 +127,7 @@ pub trait Stats <T: FloatMath + FromPrimitive> for Sized? {
 }
 
 /// Extracted collection of all the summary statistics of a sample set.
-#[deriving(Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 #[allow(missing_docs)]
 pub struct Summary<T> {
     pub sum: T,
@@ -438,7 +438,7 @@ pub fn write_boxplot<W: Writer, T: Float + Show + FromPrimitive>(
 
 /// Returns a HashMap with the number of occurrences of every element in the
 /// sequence that the iterator exposes.
-pub fn freq_count<T: Iterator<U>, U: Eq+Hash>(mut iter: T) -> hash_map::HashMap<U, uint> {
+pub fn freq_count<T: Iterator<Item=U>, U: Eq+Hash>(mut iter: T) -> hash_map::HashMap<U, uint> {
     let mut map: hash_map::HashMap<U,uint> = hash_map::HashMap::new();
     for elem in iter {
         match map.entry(elem) {
@@ -1066,7 +1066,7 @@ mod bench {
     #[bench]
     pub fn sum_many_f64(b: &mut Bencher) {
         let nums = [-1e30f64, 1e60, 1e30, 1.0, -1e60];
-        let v = Vec::from_fn(500, |i| nums[i%5]);
+        let v = range(0, 500).map(|i| nums[i%5]).collect::<Vec<_>>();
 
         b.iter(|| {
             v.as_slice().sum();

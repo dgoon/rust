@@ -11,7 +11,7 @@
 use arena::TypedArena;
 use back::abi;
 use back::link;
-use llvm::{mod, ValueRef, get_param};
+use llvm::{self, ValueRef, get_param};
 use metadata::csearch;
 use middle::subst::{Subst, Substs};
 use middle::subst::VecPerParamSpace;
@@ -30,7 +30,7 @@ use trans::glue;
 use trans::machine;
 use trans::type_::Type;
 use trans::type_of::*;
-use middle::ty::{mod, Ty};
+use middle::ty::{self, Ty};
 use middle::ty::MethodCall;
 use util::ppaux::Repr;
 
@@ -727,7 +727,7 @@ pub fn get_vtable<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
 }
 
 /// Helper function to declare and initialize the vtable.
-pub fn make_vtable<I: Iterator<ValueRef>>(ccx: &CrateContext,
+pub fn make_vtable<I: Iterator<Item=ValueRef>>(ccx: &CrateContext,
                                           drop_glue: ValueRef,
                                           size: ValueRef,
                                           align: ValueRef,

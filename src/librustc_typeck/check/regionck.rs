@@ -91,7 +91,7 @@ use middle::mem_categorization as mc;
 use middle::region::CodeExtent;
 use middle::traits;
 use middle::ty::{ReScope};
-use middle::ty::{mod, Ty, MethodCall};
+use middle::ty::{self, Ty, MethodCall};
 use middle::infer;
 use middle::pat_util;
 use util::ppaux::{ty_to_string, Repr};
@@ -922,11 +922,11 @@ fn constrain_callee(rcx: &mut Rcx,
     }
 }
 
-fn constrain_call<'a, I: Iterator<&'a ast::Expr>>(rcx: &mut Rcx,
-                                                  call_expr: &ast::Expr,
-                                                  receiver: Option<&ast::Expr>,
-                                                  mut arg_exprs: I,
-                                                  implicitly_ref_args: bool) {
+fn constrain_call<'a, I: Iterator<Item=&'a ast::Expr>>(rcx: &mut Rcx,
+                                                       call_expr: &ast::Expr,
+                                                       receiver: Option<&ast::Expr>,
+                                                       mut arg_exprs: I,
+                                                       implicitly_ref_args: bool) {
     //! Invoked on every call site (i.e., normal calls, method calls,
     //! and overloaded operators). Constrains the regions which appear
     //! in the type of the function. Also constrains the regions that

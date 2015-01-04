@@ -124,7 +124,7 @@ struct GapThenFull<K, V, M> {
 
 /// A hash that is not zero, since we use a hash of zero to represent empty
 /// buckets.
-#[deriving(PartialEq, Copy)]
+#[derive(PartialEq, Copy)]
 pub struct SafeHash {
     hash: u64,
 }
@@ -718,7 +718,7 @@ struct RawBuckets<'a, K, V> {
     marker: marker::ContravariantLifetime<'a>,
 }
 
-// FIXME(#19839) Remove in favor of `#[deriving(Clone)]`
+// FIXME(#19839) Remove in favor of `#[derive(Clone)]`
 impl<'a, K, V> Clone for RawBuckets<'a, K, V> {
     fn clone(&self) -> RawBuckets<'a, K, V> {
         RawBuckets {
@@ -730,7 +730,9 @@ impl<'a, K, V> Clone for RawBuckets<'a, K, V> {
 }
 
 
-impl<'a, K, V> Iterator<RawBucket<K, V>> for RawBuckets<'a, K, V> {
+impl<'a, K, V> Iterator for RawBuckets<'a, K, V> {
+    type Item = RawBucket<K, V>;
+
     fn next(&mut self) -> Option<RawBucket<K, V>> {
         while self.raw.hash != self.hashes_end {
             unsafe {
@@ -757,7 +759,9 @@ struct RevMoveBuckets<'a, K, V> {
     marker: marker::ContravariantLifetime<'a>,
 }
 
-impl<'a, K, V> Iterator<(K, V)> for RevMoveBuckets<'a, K, V> {
+impl<'a, K, V> Iterator for RevMoveBuckets<'a, K, V> {
+    type Item = (K, V);
+
     fn next(&mut self) -> Option<(K, V)> {
         if self.elems_left == 0 {
             return None;
@@ -787,7 +791,7 @@ pub struct Iter<'a, K: 'a, V: 'a> {
     elems_left: uint,
 }
 
-// FIXME(#19839) Remove in favor of `#[deriving(Clone)]`
+// FIXME(#19839) Remove in favor of `#[derive(Clone)]`
 impl<'a, K, V> Clone for Iter<'a, K, V> {
     fn clone(&self) -> Iter<'a, K, V> {
         Iter {
@@ -816,7 +820,9 @@ pub struct Drain<'a, K: 'a, V: 'a> {
     iter: RawBuckets<'static, K, V>,
 }
 
-impl<'a, K, V> Iterator<(&'a K, &'a V)> for Iter<'a, K, V> {
+impl<'a, K, V> Iterator for Iter<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
     fn next(&mut self) -> Option<(&'a K, &'a V)> {
         self.iter.next().map(|bucket| {
             self.elems_left -= 1;
@@ -832,7 +838,9 @@ impl<'a, K, V> Iterator<(&'a K, &'a V)> for Iter<'a, K, V> {
     }
 }
 
-impl<'a, K, V> Iterator<(&'a K, &'a mut V)> for IterMut<'a, K, V> {
+impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+
     fn next(&mut self) -> Option<(&'a K, &'a mut V)> {
         self.iter.next().map(|bucket| {
             self.elems_left -= 1;
@@ -848,7 +856,9 @@ impl<'a, K, V> Iterator<(&'a K, &'a mut V)> for IterMut<'a, K, V> {
     }
 }
 
-impl<K, V> Iterator<(SafeHash, K, V)> for IntoIter<K, V> {
+impl<K, V> Iterator for IntoIter<K, V> {
+    type Item = (SafeHash, K, V);
+
     fn next(&mut self) -> Option<(SafeHash, K, V)> {
         self.iter.next().map(|bucket| {
             self.table.size -= 1;
@@ -870,7 +880,9 @@ impl<K, V> Iterator<(SafeHash, K, V)> for IntoIter<K, V> {
     }
 }
 
-impl<'a, K: 'a, V: 'a> Iterator<(SafeHash, K, V)> for Drain<'a, K, V> {
+impl<'a, K: 'a, V: 'a> Iterator for Drain<'a, K, V> {
+    type Item = (SafeHash, K, V);
+
     #[inline]
     fn next(&mut self) -> Option<(SafeHash, K, V)> {
         self.iter.next().map(|bucket| {

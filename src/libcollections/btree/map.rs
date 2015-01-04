@@ -33,9 +33,9 @@ use ring_buf::RingBuf;
 use self::Continuation::{Continue, Finished};
 use self::StackOp::*;
 use super::node::ForceResult::{Leaf, Internal};
-use super::node::TraversalItem::{mod, Elem, Edge};
+use super::node::TraversalItem::{self, Elem, Edge};
 use super::node::{Traversal, MutTraversal, MoveTraversal};
-use super::node::{mod, Node, Found, GoDown};
+use super::node::{self, Node, Found, GoDown};
 
 // FIXME(conventions): implement bounded iterators
 
@@ -81,7 +81,7 @@ use super::node::{mod, Node, Found, GoDown};
 /// force this degenerate behaviour to occur on every operation. While the total amount of work
 /// done on each operation isn't *catastrophic*, and *is* still bounded by O(B log<sub>B</sub>n),
 /// it is certainly much slower when it does.
-#[deriving(Clone)]
+#[derive(Clone)]
 #[stable]
 pub struct BTreeMap<K, V> {
     root: Node<K, V>,
@@ -187,12 +187,6 @@ impl<K: Ord, V> BTreeMap<K, V> {
         for _ in mem::replace(self, BTreeMap::with_b(b)).into_iter() {};
     }
 
-    /// Deprecated: renamed to `get`.
-    #[deprecated = "renamed to `get`"]
-    pub fn find(&self, key: &K) -> Option<&V> {
-        self.get(key)
-    }
-
     // Searching in a B-Tree is pretty straightforward.
     //
     // Start at the root. Try to find the key in the current node. If we find it, return it.
@@ -253,12 +247,6 @@ impl<K: Ord, V> BTreeMap<K, V> {
         self.get(key).is_some()
     }
 
-    /// Deprecated: renamed to `get_mut`.
-    #[deprecated = "renamed to `get_mut`"]
-    pub fn find_mut(&mut self, key: &K) -> Option<&mut V> {
-        self.get_mut(key)
-    }
-
     /// Returns a mutable reference to the value corresponding to the key.
     ///
     /// The key may be any borrowed form of the map's key type, but the ordering
@@ -295,12 +283,6 @@ impl<K: Ord, V> BTreeMap<K, V> {
                 }
             }
         }
-    }
-
-    /// Deprecated: renamed to `insert`.
-    #[deprecated = "renamed to `insert`"]
-    pub fn swap(&mut self, key: K, value: V) -> Option<V> {
-        self.insert(key, value)
     }
 
     // Insertion in a B-Tree is a bit complicated.
@@ -438,12 +420,6 @@ impl<K: Ord, V> BTreeMap<K, V> {
     //      the underflow handling process on the parent. If merging merges the last two children
     //      of the root, then we replace the root with the merged node.
 
-    /// Deprecated: renamed to `remove`.
-    #[deprecated = "renamed to `remove`"]
-    pub fn pop(&mut self, key: &K) -> Option<V> {
-        self.remove(key)
-    }
-
     /// Removes a key from the map, returning the value at the key if the key
     /// was previously in the map.
     ///
@@ -505,7 +481,7 @@ mod stack {
     use core::mem;
     use core::ops::{Deref, DerefMut};
     use super::BTreeMap;
-    use super::super::node::{mod, Node, Fit, Split, Internal, Leaf};
+    use super::super::node::{self, Node, Fit, Split, Internal, Leaf};
     use super::super::node::handle;
     use vec::Vec;
 
@@ -823,7 +799,7 @@ mod stack {
 
 #[stable]
 impl<K: Ord, V> FromIterator<(K, V)> for BTreeMap<K, V> {
-    fn from_iter<T: Iterator<(K, V)>>(iter: T) -> BTreeMap<K, V> {
+    fn from_iter<T: Iterator<Item=(K, V)>>(iter: T) -> BTreeMap<K, V> {
         let mut map = BTreeMap::new();
         map.extend(iter);
         map
@@ -833,7 +809,7 @@ impl<K: Ord, V> FromIterator<(K, V)> for BTreeMap<K, V> {
 #[stable]
 impl<K: Ord, V> Extend<(K, V)> for BTreeMap<K, V> {
     #[inline]
-    fn extend<T: Iterator<(K, V)>>(&mut self, mut iter: T) {
+    fn extend<T: Iterator<Item=(K, V)>>(&mut self, mut iter: T) {
         for (k, v) in iter {
             self.insert(k, v);
         }
@@ -898,6 +874,8 @@ impl<K: Show, V: Show> Show for BTreeMap<K, V> {
     }
 }
 
+// NOTE(stage0): remove impl after a snapshot
+#[cfg(stage0)]
 #[stable]
 impl<K: Ord, Sized? Q, V> Index<Q, V> for BTreeMap<K, V>
     where Q: BorrowFrom<K> + Ord
@@ -907,10 +885,36 @@ impl<K: Ord, Sized? Q, V> Index<Q, V> for BTreeMap<K, V>
     }
 }
 
+#[cfg(not(stage0))]  // NOTE(stage0): remove cfg after a snapshot
+#[stable]
+impl<K: Ord, Sized? Q, V> Index<Q> for BTreeMap<K, V>
+    where Q: BorrowFrom<K> + Ord
+{
+    type Output = V;
+
+    fn index(&self, key: &Q) -> &V {
+        self.get(key).expect("no entry found for key")
+    }
+}
+
+// NOTE(stage0): remove impl after a snapshot
+#[cfg(stage0)]
 #[stable]
 impl<K: Ord, Sized? Q, V> IndexMut<Q, V> for BTreeMap<K, V>
     where Q: BorrowFrom<K> + Ord
 {
+    fn index_mut(&mut self, key: &Q) -> &mut V {
+        self.get_mut(key).expect("no entry found for key")
+    }
+}
+
+#[cfg(not(stage0))]  // NOTE(stage0): remove cfg after a snapshot
+#[stable]
+impl<K: Ord, Sized? Q, V> IndexMut<Q> for BTreeMap<K, V>
+    where Q: BorrowFrom<K> + Ord
+{
+    type Output = V;
+
     fn index_mut(&mut self, key: &Q) -> &mut V {
         self.get_mut(key).expect("no entry found for key")
     }
@@ -949,8 +953,11 @@ enum StackOp<T> {
     Pop,
 }
 
-impl<K, V, E, T: Traverse<E> + DoubleEndedIterator<TraversalItem<K, V, E>>>
-        Iterator<(K, V)> for AbsIter<T> {
+impl<K, V, E, T> Iterator for AbsIter<T> where
+    T: DoubleEndedIterator + Iterator<Item=TraversalItem<K, V, E>> + Traverse<E>,
+{
+    type Item = (K, V);
+
     // This function is pretty long, but only because there's a lot of cases to consider.
     // Our iterator represents two search paths, left and right, to the smallest and largest
     // elements we have yet to yield. lca represents the least common ancestor of these two paths,
@@ -1015,8 +1022,9 @@ impl<K, V, E, T: Traverse<E> + DoubleEndedIterator<TraversalItem<K, V, E>>>
     }
 }
 
-impl<K, V, E, T: Traverse<E> + DoubleEndedIterator<TraversalItem<K, V, E>>>
-        DoubleEndedIterator<(K, V)> for AbsIter<T> {
+impl<K, V, E, T> DoubleEndedIterator for AbsIter<T> where
+    T: DoubleEndedIterator + Iterator<Item=TraversalItem<K, V, E>> + Traverse<E>,
+{
     // next_back is totally symmetric to next
     fn next_back(&mut self) -> Option<(K, V)> {
         loop {
@@ -1054,64 +1062,75 @@ impl<K, V, E, T: Traverse<E> + DoubleEndedIterator<TraversalItem<K, V, E>>>
 }
 
 #[stable]
-impl<'a, K, V> Iterator<(&'a K, &'a V)> for Iter<'a, K, V> {
+impl<'a, K, V> Iterator for Iter<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
     fn next(&mut self) -> Option<(&'a K, &'a V)> { self.inner.next() }
     fn size_hint(&self) -> (uint, Option<uint>) { self.inner.size_hint() }
 }
 #[stable]
-impl<'a, K, V> DoubleEndedIterator<(&'a K, &'a V)> for Iter<'a, K, V> {
+impl<'a, K, V> DoubleEndedIterator for Iter<'a, K, V> {
     fn next_back(&mut self) -> Option<(&'a K, &'a V)> { self.inner.next_back() }
 }
 #[stable]
-impl<'a, K, V> ExactSizeIterator<(&'a K, &'a V)> for Iter<'a, K, V> {}
+impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {}
 
 #[stable]
-impl<'a, K, V> Iterator<(&'a K, &'a mut V)> for IterMut<'a, K, V> {
+impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+
     fn next(&mut self) -> Option<(&'a K, &'a mut V)> { self.inner.next() }
     fn size_hint(&self) -> (uint, Option<uint>) { self.inner.size_hint() }
 }
 #[stable]
-impl<'a, K, V> DoubleEndedIterator<(&'a K, &'a mut V)> for IterMut<'a, K, V> {
+impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
     fn next_back(&mut self) -> Option<(&'a K, &'a mut V)> { self.inner.next_back() }
 }
 #[stable]
-impl<'a, K, V> ExactSizeIterator<(&'a K, &'a mut V)> for IterMut<'a, K, V> {}
+impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {}
 
 #[stable]
-impl<K, V> Iterator<(K, V)> for IntoIter<K, V> {
+impl<K, V> Iterator for IntoIter<K, V> {
+    type Item = (K, V);
+
     fn next(&mut self) -> Option<(K, V)> { self.inner.next() }
     fn size_hint(&self) -> (uint, Option<uint>) { self.inner.size_hint() }
 }
 #[stable]
-impl<K, V> DoubleEndedIterator<(K, V)> for IntoIter<K, V> {
+impl<K, V> DoubleEndedIterator for IntoIter<K, V> {
     fn next_back(&mut self) -> Option<(K, V)> { self.inner.next_back() }
 }
 #[stable]
-impl<K, V> ExactSizeIterator<(K, V)> for IntoIter<K, V> {}
+impl<K, V> ExactSizeIterator for IntoIter<K, V> {}
 
 #[stable]
-impl<'a, K, V> Iterator<&'a K> for Keys<'a, K, V> {
+impl<'a, K, V> Iterator for Keys<'a, K, V> {
+    type Item = &'a K;
+
     fn next(&mut self) -> Option<(&'a K)> { self.inner.next() }
     fn size_hint(&self) -> (uint, Option<uint>) { self.inner.size_hint() }
 }
 #[stable]
-impl<'a, K, V> DoubleEndedIterator<&'a K> for Keys<'a, K, V> {
+impl<'a, K, V> DoubleEndedIterator for Keys<'a, K, V> {
     fn next_back(&mut self) -> Option<(&'a K)> { self.inner.next_back() }
 }
 #[stable]
-impl<'a, K, V> ExactSizeIterator<&'a K> for Keys<'a, K, V> {}
+impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> {}
+
 
 #[stable]
-impl<'a, K, V> Iterator<&'a V> for Values<'a, K, V> {
+impl<'a, K, V> Iterator for Values<'a, K, V> {
+    type Item = &'a V;
+
     fn next(&mut self) -> Option<(&'a V)> { self.inner.next() }
     fn size_hint(&self) -> (uint, Option<uint>) { self.inner.size_hint() }
 }
 #[stable]
-impl<'a, K, V> DoubleEndedIterator<&'a V> for Values<'a, K, V> {
+impl<'a, K, V> DoubleEndedIterator for Values<'a, K, V> {
     fn next_back(&mut self) -> Option<(&'a V)> { self.inner.next_back() }
 }
 #[stable]
-impl<'a, K, V> ExactSizeIterator<&'a V> for Values<'a, K, V> {}
+impl<'a, K, V> ExactSizeIterator for Values<'a, K, V> {}
 
 
 impl<'a, K: Ord, V> VacantEntry<'a, K, V> {
@@ -1463,7 +1482,7 @@ mod test {
         let size = 10000u;
 
         // Forwards
-        let mut map: BTreeMap<uint, uint> = Vec::from_fn(size, |i| (i, i)).into_iter().collect();
+        let mut map: BTreeMap<uint, uint> = range(0, size).map(|i| (i, i)).collect();
 
         {
             let mut iter = map.iter();
@@ -1502,7 +1521,7 @@ mod test {
         let size = 10000u;
 
         // Forwards
-        let mut map: BTreeMap<uint, uint> = Vec::from_fn(size, |i| (i, i)).into_iter().collect();
+        let mut map: BTreeMap<uint, uint> = range(0, size).map(|i| (i, i)).collect();
 
         {
             let mut iter = map.iter().rev();
