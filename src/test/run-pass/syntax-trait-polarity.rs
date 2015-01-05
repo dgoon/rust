@@ -8,23 +8,24 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate serialize;
+#![feature(optin_builtin_traits)]
 
-use std::fmt;
-use serialize::{Encodable, Encoder};
+use std::kinds::Send;
 
-pub fn buffer_encode<'a,
-                     T:Encodable<serialize::json::Encoder<'a>,fmt::Error>>(
-                     to_encode_object: &T)
-                     -> String {
-    let mut m = String::new();
-    {
-        let mut encoder =
-            serialize::json::Encoder::new(&mut m);
-        //~^ ERROR `m` does not live long enough
-        to_encode_object.encode(&mut encoder);
-    }
-    m
-}
+struct TestType;
+
+impl TestType {}
+
+trait TestTrait {}
+
+unsafe impl !Send for TestType {}
+impl !TestTrait for TestType {}
+
+struct TestType2<T>;
+
+impl<T> TestType2<T> {}
+
+unsafe impl<T> !Send for TestType2<T> {}
+impl<T> !TestTrait for TestType2<T> {}
 
 fn main() {}
