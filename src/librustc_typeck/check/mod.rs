@@ -1850,7 +1850,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                        span: Span,
                                        adj: &ty::AutoAdjustment<'tcx>) {
         match *adj {
-            ty::AdjustAddEnv(..) |
             ty::AdjustReifyFnPointer(..) => {
             }
             ty::AdjustDerefRef(ref d_r) => {
@@ -4555,7 +4554,7 @@ impl<'tcx> Repr<'tcx> for Expectation<'tcx> {
 pub fn check_decl_initializer(fcx: &FnCtxt,
                               nid: ast::NodeId,
                               init: &ast::Expr)
-                            {
+{
     let local_ty = fcx.local_ty(init.span, nid);
     check_expr_coercable_to_type(fcx, init, local_ty)
 }
@@ -4939,7 +4938,7 @@ pub fn check_enum_variants(ccx: &CrateCtxt,
                 Some(i) => {
                     span_err!(ccx.tcx.sess, v.span, E0081,
                         "discriminant value `{}` already exists", disr_vals[i]);
-                    span_note!(ccx.tcx.sess, ccx.tcx().map.span(variants[i].id.node),
+                    span_note!(ccx.tcx.sess, ccx.tcx.map.span(variants[i].id.node),
                         "conflicting discriminant here")
                 }
                 None => {}
