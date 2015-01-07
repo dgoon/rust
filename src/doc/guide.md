@@ -90,7 +90,7 @@ $ rustc --version
 You should see some output that looks something like this:
 
 ```bash
-rustc 0.12.0-nightly (b7aa03a3c 2014-09-28 11:38:01 +0000)
+rustc 1.0.0-nightly (f11f3e7ba 2015-01-04 20:02:14 +0000)
 ```
 
 If you did, Rust has been installed successfully! Congrats!
@@ -1377,7 +1377,7 @@ As you can see, `enum` and `match` used together are quite useful!
 
 `match` is also an expression, which means we can use it on the right-hand
 side of a `let` binding or directly where an expression is used. We could
-also implement the previous line like this:
+also implement the previous example like this:
 
 ```{rust}
 use std::cmp::Ordering;
@@ -1653,7 +1653,7 @@ for e in a.iter() {
 You can access a particular element of an array with **subscript notation**:
 
 ```{rust}
-let names = ["Graydon", "Brian", "Niko"]; // names: [&str, 3]
+let names = ["Graydon", "Brian", "Niko"]; // names: [&str; 3]
 
 println!("The second name is: {}", names[1]);
 ```
@@ -4789,7 +4789,7 @@ of `Option`, we need to provide a concrete type in place of the type
 parameter. For example, if we wanted something like our `OptionalInt`, we would
 need to instantiate an `Option<i32>`. Inside the declaration of our enum,
 wherever we see a `T`, we replace it with the type specified (or inferred by the
-the compiler).
+compiler).
 
 ```{rust}
 let x: Option<i32> = Some(5);
