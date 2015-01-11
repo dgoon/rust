@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,16 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![allow(unknown_features)]
-#![feature(box_syntax)]
 
-use std::thread::Thread;
+// Test that the `Fn` traits require `()` form without a feature gate.
 
-fn f() {
-    let _a = box 0i;
-    panic!();
+fn bar1(x: &Fn<(),()>) {
+    //~^ ERROR angle-bracket notation is not stable when used with the `Fn` family
 }
 
-pub fn main() {
-    let _t = Thread::scoped(f);
+fn bar2<T>(x: &T) where T: Fn<(),()> {
+    //~^ ERROR angle-bracket notation is not stable when used with the `Fn` family
 }
+
+fn main() { }
+
