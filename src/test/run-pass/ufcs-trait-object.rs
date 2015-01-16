@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn main() {
-    let x = [1is, 2, 3];
-    match x {
-        [a, b, ..c] => {    //~ ERROR obsolete syntax
-            assert_eq!(a, 1);
-            assert_eq!(b, 2);
-            let expected: &[_] = &[3];
-            assert_eq!(c, expected);
-        }
-    }
+// Test that when you use ufcs form to invoke a trait method (on a
+// trait object) everything works fine.
+
+trait Foo {
+    fn test(&self) -> i32;
 }
 
+impl Foo for i32 {
+    fn test(&self) -> i32 { *self }
+}
+
+fn main() {
+    let a: &Foo = &22_i32;
+    assert_eq!(Foo::test(a), 22);
+}

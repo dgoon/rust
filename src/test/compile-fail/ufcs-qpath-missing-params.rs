@@ -1,4 +1,4 @@
-// Copyright 2013-2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,21 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
-// min-lldb-version: 310
-
-// compile-flags:-g
-
-struct Peekable<I> where I: Iterator {
-    _iter: I,
-    _next: Option<<I as Iterator>::Item>,
-}
+use std::borrow::IntoCow;
 
 fn main() {
-    let mut iter = Vec::<i32>::new().into_iter();
-    let next = iter.next();
-    let _v = Peekable {
-        _iter: iter,
-        _next : next,
-    };
+    <String as IntoCow>::into_cow("foo".to_string());
+    //~^ ERROR wrong number of type arguments: expected 2, found 0
 }
+

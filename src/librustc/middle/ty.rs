@@ -1891,7 +1891,7 @@ pub type PolyTypeOutlivesPredicate<'tcx> = PolyOutlivesPredicate<Ty<'tcx>, ty::R
 /// normal trait predicate (`T : TraitRef<...>`) and one of these
 /// predicates. Form #2 is a broader form in that it also permits
 /// equality between arbitrary types. Processing an instance of Form
-/// \#2 eventually yields one of these `ProjectionPredicate`
+/// #2 eventually yields one of these `ProjectionPredicate`
 /// instances to normalize the LHS.
 #[derive(Clone, PartialEq, Eq, Hash, Show)]
 pub struct ProjectionPredicate<'tcx> {
@@ -2605,12 +2605,17 @@ impl FlagComputation {
 
             &ty_projection(ref data) => {
                 self.add_flags(HAS_PROJECTION);
-                self.add_substs(data.trait_ref.substs);
+                self.add_projection_ty(data);
             }
 
             &ty_trait(box TyTrait { ref principal, ref bounds }) => {
                 let mut computation = FlagComputation::new();
                 computation.add_substs(principal.0.substs);
+                for projection_bound in bounds.projection_bounds.iter() {
+                    let mut proj_computation = FlagComputation::new();
+                    proj_computation.add_projection_predicate(&projection_bound.0);
+                    computation.add_bound_computation(&proj_computation);
+                }
                 self.add_bound_computation(&computation);
 
                 self.add_bounds(bounds);
@@ -2672,6 +2677,15 @@ impl FlagComputation {
             }
             _ => { }
         }
+    }
+
+    fn add_projection_predicate(&mut self, projection_predicate: &ProjectionPredicate) {
+        self.add_projection_ty(&projection_predicate.projection_ty);
+        self.add_ty(projection_predicate.ty);
+    }
+
+    fn add_projection_ty(&mut self, projection_ty: &ProjectionTy) {
+        self.add_substs(projection_ty.trait_ref.substs);
     }
 
     fn add_substs(&mut self, substs: &Substs) {
@@ -4133,12 +4147,8 @@ pub fn node_id_to_trait_ref<'tcx>(cx: &ctxt<'tcx>, id: ast::NodeId)
     }
 }
 
-pub fn try_node_id_to_type<'tcx>(cx: &ctxt<'tcx>, id: ast::NodeId) -> Option<Ty<'tcx>> {
-    cx.node_types.borrow().get(&id).cloned()
-}
-
 pub fn node_id_to_type<'tcx>(cx: &ctxt<'tcx>, id: ast::NodeId) -> Ty<'tcx> {
-    match try_node_id_to_type(cx, id) {
+    match node_id_to_type_opt(cx, id) {
        Some(ty) => ty,
        None => cx.sess.bug(
            &format!("node_id_to_type: no type for node `{}`",
@@ -4515,7 +4525,7 @@ pub fn expr_kind(tcx: &ctxt, expr: &ast::Expr) -> ExprKind {
     }
 
     match expr.node {
-        ast::ExprPath(..) => {
+        ast::ExprPath(_) | ast::ExprQPath(_) => {
             match resolve_expr(tcx, expr) {
                 def::DefVariant(tid, vid, _) => {
                     let variant_info = enum_variant_with_id(tcx, tid, vid);
@@ -5023,6 +5033,23 @@ pub fn trait_items<'tcx>(cx: &ctxt<'tcx>, trait_did: ast::DefId)
             items
         }
     }
+}
+
+pub fn trait_impl_polarity<'tcx>(cx: &ctxt<'tcx>, id: ast::DefId)
+                            -> Option<ast::ImplPolarity> {
+     if id.krate == ast::LOCAL_CRATE {
+         match cx.map.find(id.node) {
+             Some(ast_map::NodeItem(item)) => {
+                 match item.node {
+                     ast::ItemImpl(_, polarity, _, _, _, _) => Some(polarity),
+                     _ => None
+                 }
+             }
+             _ => None
+         }
+     } else {
+         csearch::get_impl_polarity(cx, id)
+     }
 }
 
 pub fn impl_or_trait_item<'tcx>(cx: &ctxt<'tcx>, id: ast::DefId)
@@ -5974,6 +6001,7 @@ pub fn item_variances(tcx: &ctxt, item_id: ast::DefId) -> Rc<ItemVariances> {
 pub fn record_trait_implementation(tcx: &ctxt,
                                    trait_def_id: DefId,
                                    impl_def_id: DefId) {
+
     match tcx.trait_impls.borrow().get(&trait_def_id) {
         Some(impls_for_trait) => {
             impls_for_trait.borrow_mut().push(impl_def_id);
@@ -5981,6 +6009,7 @@ pub fn record_trait_implementation(tcx: &ctxt,
         }
         None => {}
     }
+
     tcx.trait_impls.borrow_mut().insert(trait_def_id, Rc::new(RefCell::new(vec!(impl_def_id))));
 }
 
