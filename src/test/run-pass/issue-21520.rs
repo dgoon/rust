@@ -1,4 +1,4 @@
-// Copyright 2013-2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,23 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_type = "lib"]
-// compile-flags:-g
+// Test that the requirement (in `Bar`) that `T::Bar : 'static` does
+// not wind up propagating to `T`.
 
-pub use private::P;
+pub trait Foo {
+    type Bar;
 
-#[derive(Copy)]
-pub struct S {
-    p: P,
+    fn foo(&self) -> Self;
 }
 
-mod private {
-    #[derive(Copy)]
-    pub struct P {
-        p: i32,
-    }
-    pub const THREE: P = P { p: 3 };
+pub struct Static<T:'static>(T);
+
+struct Bar<T:Foo>
+    where T::Bar : 'static
+{
+    x: Static<Option<T::Bar>>
 }
 
-pub static A: S = S { p: private::THREE };
+fn main() { }
 

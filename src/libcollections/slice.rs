@@ -1,4 +1,4 @@
-// Copyright 2012-2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2012-2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -179,7 +179,7 @@ pub trait SliceExt {
     /// Deprecated: use `&s[start..]` notation instead.
     #[unstable(feature = "collections",
                reason = "will be replaced by slice syntax")]
-    #[deprecated(since = "1.0.0", reason = "use &s[start..] isntead")]
+    #[deprecated(since = "1.0.0", reason = "use &s[start..] instead")]
     fn slice_from(&self, start: uint) -> &[Self::Item];
 
     /// Deprecated: use `&s[..end]` notation instead.
@@ -195,15 +195,36 @@ pub trait SliceExt {
     /// indices from `[mid, len)` (excluding the index `len` itself).
     ///
     /// Panics if `mid > len`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = [10, 40, 30, 20, 50];
+    /// let (v1, v2) = v.split_at(2);
+    /// assert_eq!([10, 40], v1);
+    /// assert_eq!([30, 20, 50], v2);
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn split_at(&self, mid: uint) -> (&[Self::Item], &[Self::Item]);
 
-    /// Returns an iterator over the slice
+    /// Returns an iterator over the slice.
     #[stable(feature = "rust1", since = "1.0.0")]
     fn iter(&self) -> Iter<Self::Item>;
 
     /// Returns an iterator over subslices separated by elements that match
     /// `pred`.  The matched element is not contained in the subslices.
+    ///
+    /// # Examples
+    ///
+    /// Print the slice split by numbers divisible by 3 (i.e. `[10, 40]`,
+    /// `[20]`, `[50]`):
+    ///
+    /// ```
+    /// let v = [10, 40, 30, 20, 60, 50];
+    /// for group in v.split(|num| *num % 3 == 0) {
+    ///     println!("{:?}", group);
+    /// }
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn split<F>(&self, pred: F) -> Split<Self::Item, F>
                 where F: FnMut(&Self::Item) -> bool;
@@ -211,6 +232,18 @@ pub trait SliceExt {
     /// Returns an iterator over subslices separated by elements that match
     /// `pred`, limited to splitting at most `n` times.  The matched element is
     /// not contained in the subslices.
+    ///
+    /// # Examples
+    ///
+    /// Print the slice split once by numbers divisible by 3 (i.e. `[10, 40]`,
+    /// `[20, 60, 50]`):
+    ///
+    /// ```
+    /// let v = [10, 40, 30, 20, 60, 50];
+    /// for group in v.splitn(1, |num| *num % 3 == 0) {
+    ///     println!("{:?}", group);
+    /// }
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn splitn<F>(&self, n: uint, pred: F) -> SplitN<Self::Item, F>
                  where F: FnMut(&Self::Item) -> bool;
@@ -219,6 +252,18 @@ pub trait SliceExt {
     /// `pred` limited to splitting at most `n` times. This starts at the end of
     /// the slice and works backwards.  The matched element is not contained in
     /// the subslices.
+    ///
+    /// # Examples
+    ///
+    /// Print the slice split once, starting from the end, by numbers divisible
+    /// by 3 (i.e. `[50]`, `[10, 40, 30, 20]`):
+    ///
+    /// ```
+    /// let v = [10, 40, 30, 20, 60, 50];
+    /// for group in v.rsplitn(1, |num| *num % 3 == 0) {
+    ///     println!("{:?}", group);
+    /// }
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn rsplitn<F>(&self, n: uint, pred: F) -> RSplitN<Self::Item, F>
                   where F: FnMut(&Self::Item) -> bool;
@@ -270,10 +315,28 @@ pub trait SliceExt {
 
     /// Returns the element of a slice at the given index, or `None` if the
     /// index is out of bounds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = [10, 40, 30];
+    /// assert_eq!(Some(&40), v.get(1));
+    /// assert_eq!(None, v.get(3));
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn get(&self, index: uint) -> Option<&Self::Item>;
 
     /// Returns the first element of a slice, or `None` if it is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = [10, 40, 30];
+    /// assert_eq!(Some(&10), v.first());
+    ///
+    /// let w: &[i32] = &[];
+    /// assert_eq!(None, w.first());
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn first(&self) -> Option<&Self::Item>;
 
@@ -286,6 +349,16 @@ pub trait SliceExt {
     fn init(&self) -> &[Self::Item];
 
     /// Returns the last element of a slice, or `None` if it is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = [10, 40, 30];
+    /// assert_eq!(Some(&30), v.last());
+    ///
+    /// let w: &[i32] = &[];
+    /// assert_eq!(None, w.last());
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn last(&self) -> Option<&Self::Item>;
 
@@ -676,15 +749,43 @@ pub trait SliceExt {
     #[unstable(feature = "collections")]
     fn rposition_elem(&self, t: &Self::Item) -> Option<uint> where Self::Item: PartialEq;
 
-    /// Return true if the slice contains an element with the given value.
+    /// Returns true if the slice contains an element with the given value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = [10, 40, 30];
+    /// assert!(v.contains(&30));
+    /// assert!(!v.contains(&50));
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn contains(&self, x: &Self::Item) -> bool where Self::Item: PartialEq;
 
     /// Returns true if `needle` is a prefix of the slice.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = [10, 40, 30];
+    /// assert!(v.starts_with(&[10]));
+    /// assert!(v.starts_with(&[10, 40]));
+    /// assert!(!v.starts_with(&[50]));
+    /// assert!(!v.starts_with(&[10, 50]));
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn starts_with(&self, needle: &[Self::Item]) -> bool where Self::Item: PartialEq;
 
     /// Returns true if `needle` is a suffix of the slice.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let v = [10, 40, 30];
+    /// assert!(v.ends_with(&[30]));
+    /// assert!(v.ends_with(&[40, 30]));
+    /// assert!(!v.ends_with(&[50]));
+    /// assert!(!v.ends_with(&[50, 30]));
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn ends_with(&self, needle: &[Self::Item]) -> bool where Self::Item: PartialEq;
 
@@ -1493,21 +1594,21 @@ mod tests {
     #[test]
     fn test_get() {
         let mut a = vec![11i];
-        assert_eq!(a.as_slice().get(1), None);
+        assert_eq!(a.get(1), None);
         a = vec![11i, 12];
-        assert_eq!(a.as_slice().get(1).unwrap(), &12);
+        assert_eq!(a.get(1).unwrap(), &12);
         a = vec![11i, 12, 13];
-        assert_eq!(a.as_slice().get(1).unwrap(), &12);
+        assert_eq!(a.get(1).unwrap(), &12);
     }
 
     #[test]
     fn test_first() {
         let mut a = vec![];
-        assert_eq!(a.as_slice().first(), None);
+        assert_eq!(a.first(), None);
         a = vec![11i];
-        assert_eq!(a.as_slice().first().unwrap(), &11);
+        assert_eq!(a.first().unwrap(), &11);
         a = vec![11i, 12];
-        assert_eq!(a.as_slice().first().unwrap(), &11);
+        assert_eq!(a.first().unwrap(), &11);
     }
 
     #[test]
@@ -1591,11 +1692,11 @@ mod tests {
     #[test]
     fn test_last() {
         let mut a = vec![];
-        assert_eq!(a.as_slice().last(), None);
+        assert_eq!(a.last(), None);
         a = vec![11i];
-        assert_eq!(a.as_slice().last().unwrap(), &11);
+        assert_eq!(a.last().unwrap(), &11);
         a = vec![11i, 12];
-        assert_eq!(a.as_slice().last().unwrap(), &12);
+        assert_eq!(a.last().unwrap(), &12);
     }
 
     #[test]
@@ -1816,7 +1917,7 @@ mod tests {
             let (min_size, max_opt) = it.size_hint();
             assert_eq!(min_size, 1);
             assert_eq!(max_opt.unwrap(), 1);
-            assert_eq!(it.next(), Some(v.as_slice().to_vec()));
+            assert_eq!(it.next(), Some(v.to_vec()));
             assert_eq!(it.next(), None);
         }
         {
@@ -1825,7 +1926,7 @@ mod tests {
             let (min_size, max_opt) = it.size_hint();
             assert_eq!(min_size, 1);
             assert_eq!(max_opt.unwrap(), 1);
-            assert_eq!(it.next(), Some(v.as_slice().to_vec()));
+            assert_eq!(it.next(), Some(v.to_vec()));
             assert_eq!(it.next(), None);
         }
         {
@@ -1929,10 +2030,10 @@ mod tests {
         assert!([].position_elem(&1i).is_none());
 
         let v1 = vec![1i, 2, 3, 3, 2, 5];
-        assert_eq!(v1.as_slice().position_elem(&1), Some(0u));
-        assert_eq!(v1.as_slice().position_elem(&2), Some(1u));
-        assert_eq!(v1.as_slice().position_elem(&5), Some(5u));
-        assert!(v1.as_slice().position_elem(&4).is_none());
+        assert_eq!(v1.position_elem(&1), Some(0u));
+        assert_eq!(v1.position_elem(&2), Some(1u));
+        assert_eq!(v1.position_elem(&5), Some(5u));
+        assert!(v1.position_elem(&4).is_none());
     }
 
     #[test]
@@ -2003,13 +2104,13 @@ mod tests {
                 let mut v1 = v.clone();
 
                 v.sort();
-                assert!(v.as_slice().windows(2).all(|w| w[0] <= w[1]));
+                assert!(v.windows(2).all(|w| w[0] <= w[1]));
 
                 v1.sort_by(|a, b| a.cmp(b));
-                assert!(v1.as_slice().windows(2).all(|w| w[0] <= w[1]));
+                assert!(v1.windows(2).all(|w| w[0] <= w[1]));
 
                 v1.sort_by(|a, b| b.cmp(a));
-                assert!(v1.as_slice().windows(2).all(|w| w[0] >= w[1]));
+                assert!(v1.windows(2).all(|w| w[0] >= w[1]));
             }
         }
 
@@ -2048,7 +2149,7 @@ mod tests {
                 // will need to be ordered with increasing
                 // counts... i.e. exactly asserting that this sort is
                 // stable.
-                assert!(v.as_slice().windows(2).all(|w| w[0] <= w[1]));
+                assert!(v.windows(2).all(|w| w[0] <= w[1]));
             }
         }
     }
@@ -2469,14 +2570,14 @@ mod tests {
         assert!(a == [7i,2,3,4]);
         let mut a = [1i,2,3,4,5];
         let b = vec![5i,6,7,8,9,0];
-        assert_eq!(a.slice_mut(2, 4).move_from(b,1,6), 2);
+        assert_eq!(a[2..4].move_from(b,1,6), 2);
         assert!(a == [1i,2,6,7,5]);
     }
 
     #[test]
     fn test_reverse_part() {
         let mut values = [1i,2,3,4,5];
-        values.slice_mut(1, 4).reverse();
+        values[1..4].reverse();
         assert!(values == [1,4,3,2,5]);
     }
 
@@ -2523,9 +2624,9 @@ mod tests {
     fn test_bytes_set_memory() {
         use slice::bytes::MutableByteVector;
         let mut values = [1u8,2,3,4,5];
-        values.slice_mut(0, 5).set_memory(0xAB);
+        values[0..5].set_memory(0xAB);
         assert!(values == [0xAB, 0xAB, 0xAB, 0xAB, 0xAB]);
-        values.slice_mut(2, 4).set_memory(0xFF);
+        values[2..4].set_memory(0xFF);
         assert!(values == [0xAB, 0xAB, 0xFF, 0xFF, 0xAB]);
     }
 
@@ -2783,7 +2884,7 @@ mod bench {
         let xss: Vec<Vec<uint>> =
             range(0, 100u).map(|i| range(0, i).collect()).collect();
         b.iter(|| {
-            xss.as_slice().concat();
+            xss.concat();
         });
     }
 
@@ -2792,7 +2893,7 @@ mod bench {
         let xss: Vec<Vec<uint>> =
             range(0, 100u).map(|i| range(0, i).collect()).collect();
         b.iter(|| {
-            xss.as_slice().connect(&0)
+            xss.connect(&0)
         });
     }
 
@@ -2809,7 +2910,7 @@ mod bench {
     fn starts_with_same_vector(b: &mut Bencher) {
         let vec: Vec<uint> = range(0, 100).collect();
         b.iter(|| {
-            vec.as_slice().starts_with(vec.as_slice())
+            vec.starts_with(vec.as_slice())
         })
     }
 
@@ -2817,7 +2918,7 @@ mod bench {
     fn starts_with_single_element(b: &mut Bencher) {
         let vec: Vec<uint> = vec![0];
         b.iter(|| {
-            vec.as_slice().starts_with(vec.as_slice())
+            vec.starts_with(vec.as_slice())
         })
     }
 
@@ -2827,7 +2928,7 @@ mod bench {
         let mut match_vec: Vec<uint> = range(0, 99).collect();
         match_vec.push(0);
         b.iter(|| {
-            vec.as_slice().starts_with(match_vec.as_slice())
+            vec.starts_with(match_vec.as_slice())
         })
     }
 
@@ -2835,7 +2936,7 @@ mod bench {
     fn ends_with_same_vector(b: &mut Bencher) {
         let vec: Vec<uint> = range(0, 100).collect();
         b.iter(|| {
-            vec.as_slice().ends_with(vec.as_slice())
+            vec.ends_with(vec.as_slice())
         })
     }
 
@@ -2843,7 +2944,7 @@ mod bench {
     fn ends_with_single_element(b: &mut Bencher) {
         let vec: Vec<uint> = vec![0];
         b.iter(|| {
-            vec.as_slice().ends_with(vec.as_slice())
+            vec.ends_with(vec.as_slice())
         })
     }
 
@@ -2853,7 +2954,7 @@ mod bench {
         let mut match_vec: Vec<uint> = range(0, 100).collect();
         match_vec.as_mut_slice()[0] = 200;
         b.iter(|| {
-            vec.as_slice().starts_with(match_vec.as_slice())
+            vec.starts_with(match_vec.as_slice())
         })
     }
 

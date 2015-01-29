@@ -50,7 +50,7 @@ fn rotate(x: &mut [i32]) {
 
 fn next_permutation(perm: &mut [i32], count: &mut [i32]) {
     for i in range(1, perm.len()) {
-        rotate(perm.slice_to_mut(i + 1));
+        rotate(&mut perm[..i + 1]);
         let count_i = &mut count[i];
         if *count_i >= i as i32 {
             *count_i = 0;
@@ -61,12 +61,12 @@ fn next_permutation(perm: &mut [i32], count: &mut [i32]) {
     }
 }
 
+#[derive(Copy)]
 struct P {
     p: [i32; 16],
 }
 
-impl Copy for P {}
-
+#[derive(Copy)]
 struct Perm {
     cnt: [i32; 16],
     fact: [u32; 16],
@@ -74,8 +74,6 @@ struct Perm {
     permcount: u32,
     perm: P,
 }
-
-impl Copy for Perm {}
 
 impl Perm {
     fn new(n: u32) -> Perm {
@@ -129,7 +127,7 @@ impl Perm {
 
 
 fn reverse(tperm: &mut [i32], k: uint) {
-    tperm.slice_to_mut(k).reverse()
+    tperm[..k].reverse()
 }
 
 fn work(mut perm: Perm, n: uint, max: uint) -> (i32, i32) {
