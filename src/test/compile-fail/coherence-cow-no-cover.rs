@@ -10,10 +10,14 @@
 
 // aux-build:coherence-lib.rs
 
-extern crate "coherence-lib" as lib;
-use lib::Remote1;
+// Test that it's not ok for U to appear uncovered
 
-impl<T> Remote1<T> for isize { }
-//~^ ERROR E0210
+extern crate "coherence-lib" as lib;
+use lib::{Remote,Pair};
+
+pub struct Cover<T>(T);
+
+impl<T,U> Remote for Pair<Cover<T>,U> { }
+//~^ ERROR type parameter `U` is not constrained by any local type
 
 fn main() { }

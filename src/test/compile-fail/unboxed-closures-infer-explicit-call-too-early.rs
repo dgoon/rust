@@ -8,12 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:coherence-lib.rs
+#![feature(unboxed_closures)]
 
-extern crate "coherence-lib" as lib;
-use lib::Remote1;
+fn main() {
+    let mut zero = || {};
+    let () = zero.call_mut(());
+    //~^ ERROR we have not yet inferred what kind of closure it is
+}
 
-impl<T> Remote1<T> for isize { }
-//~^ ERROR E0210
-
-fn main() { }

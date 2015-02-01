@@ -8,12 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:coherence-lib.rs
+// Regression test for HashMap only impl'ing Send/Sync if its contents do
 
-extern crate "coherence-lib" as lib;
-use lib::Remote1;
+use std::collections::HashMap;
+use std::rc::Rc;
 
-impl<T> Remote1<T> for isize { }
-//~^ ERROR E0210
+fn foo<T: Send>() {}
 
-fn main() { }
+fn main() {
+    foo::<HashMap<Rc<()>, Rc<()>>>();
+    //~^ ERROR: the trait `core::marker::Send` is not implemented for the type `alloc::rc::Rc<()>`
+}

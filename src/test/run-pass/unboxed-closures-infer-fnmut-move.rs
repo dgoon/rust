@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:coherence-lib.rs
+// Test that we are able to infer a suitable kind for this `move`
+// closure that is just called (`FnMut`).
 
-extern crate "coherence-lib" as lib;
-use lib::Remote1;
+fn main() {
+    let mut counter = 0;
 
-impl<T> Remote1<T> for isize { }
-//~^ ERROR E0210
+    let v = {
+        let mut tick = move || { counter += 1; counter };
+        tick();
+        tick()
+    };
 
-fn main() { }
+    assert_eq!(counter, 0);
+    assert_eq!(v, 2);
+}
