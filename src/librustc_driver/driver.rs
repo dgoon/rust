@@ -214,7 +214,7 @@ impl<'a> PhaseController<'a> {
     pub fn basic() -> PhaseController<'a> {
         PhaseController {
             stop: false,
-            callback: box |&: _| {},
+            callback: box |_| {},
         }
     }
 }
@@ -350,7 +350,7 @@ pub fn phase_1_parse_input(sess: &Session, cfg: ast::CrateConfig, input: &Input)
     }
 
     if let Some(ref s) = sess.opts.show_span {
-        syntax::show_span::run(sess.diagnostic(), s.as_slice(), &krate);
+        syntax::show_span::run(sess.diagnostic(), s, &krate);
     }
 
     krate
@@ -794,7 +794,7 @@ fn write_out_deps(sess: &Session,
         _ => return,
     };
 
-    let result = (|&:| -> old_io::IoResult<()> {
+    let result = (|| -> old_io::IoResult<()> {
         // Build a list of files used to compile the output and
         // write Makefile-compatible dependency rules
         let files: Vec<String> = sess.codemap().files.borrow()
