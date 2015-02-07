@@ -112,13 +112,13 @@ impl fmt::Display for Ident {
 impl fmt::Debug for Name {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Name(nm) = *self;
-        write!(f, "{:?}({})", token::get_name(*self).get(), nm)
+        write!(f, "{:?}({})", token::get_name(*self), nm)
     }
 }
 
 impl fmt::Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Display::fmt(token::get_name(*self).get(), f)
+        fmt::Display::fmt(&token::get_name(*self), f)
     }
 }
 
@@ -174,7 +174,7 @@ impl Name {
     pub fn as_str<'a>(&'a self) -> &'a str {
         unsafe {
             // FIXME #12938: can't use copy_lifetime since &str isn't a &T
-            ::std::mem::transmute::<&str,&str>(token::get_name(*self).get())
+            ::std::mem::transmute::<&str,&str>(&token::get_name(*self))
         }
     }
 
@@ -193,7 +193,7 @@ pub type Mrk = u32;
 
 impl Encodable for Ident {
     fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.emit_str(token::get_ident(*self).get())
+        s.emit_str(&token::get_ident(*self))
     }
 }
 
@@ -924,13 +924,13 @@ impl TokenTree {
                 let v = [TtToken(sp, token::Dollar),
                          TtToken(sp, token::Ident(token::str_to_ident(var.as_str()),
                                                   token::Plain))];
-                v[index]
+                v[index].clone()
             }
             (&TtToken(sp, token::MatchNt(name, kind, name_st, kind_st)), _) => {
                 let v = [TtToken(sp, token::SubstNt(name, name_st)),
                          TtToken(sp, token::Colon),
                          TtToken(sp, token::Ident(kind, kind_st))];
-                v[index]
+                v[index].clone()
             }
             (&TtSequence(_, ref seq), _) => {
                 seq.tts[index].clone()

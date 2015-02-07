@@ -1591,10 +1591,10 @@ pub fn region_existential_bound<'tcx>(r: ty::Region) -> ExistentialBounds<'tcx> 
 }
 
 impl CLike for BuiltinBound {
-    fn to_uint(&self) -> uint {
+    fn to_usize(&self) -> uint {
         *self as uint
     }
-    fn from_uint(v: uint) -> BuiltinBound {
+    fn from_usize(v: uint) -> BuiltinBound {
         unsafe { mem::transmute(v) }
     }
 }
@@ -2520,7 +2520,7 @@ impl FlagComputation {
     fn add_bound_computation(&mut self, computation: &FlagComputation) {
         self.add_flags(computation.flags);
 
-        // The types that contributed to `computation` occured within
+        // The types that contributed to `computation` occurred within
         // a region binder, so subtract one from the region depth
         // within when adding the depth to `self`.
         let depth = computation.depth;
@@ -4644,7 +4644,7 @@ pub fn field_idx_strict(tcx: &ctxt, name: ast::Name, fields: &[field])
         "no field named `{}` found in the list of fields `{:?}`",
         token::get_name(name),
         fields.iter()
-              .map(|f| token::get_name(f.name).get().to_string())
+              .map(|f| token::get_name(f.name).to_string())
               .collect::<Vec<String>>())[]);
 }
 
