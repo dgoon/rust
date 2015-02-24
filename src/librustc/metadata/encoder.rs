@@ -861,7 +861,7 @@ fn encode_info_for_method<'a, 'tcx>(ecx: &EncodeContext<'a, 'tcx>,
             encode_attributes(rbml_w, &ast_method.attrs);
             let scheme = ty::lookup_item_type(ecx.tcx, m.def_id);
             let any_types = !scheme.generics.types.is_empty();
-            if any_types || is_default_impl || should_inline(&ast_method.attrs) {
+            if any_types || is_default_impl || attr::requests_inline(&ast_method.attrs) {
                 encode_inlined_item(ecx, rbml_w, IIImplItemRef(local_def(parent_id),
                                                                ast_item_opt.unwrap()));
             }
@@ -953,14 +953,6 @@ fn encode_inlined_item(ecx: &EncodeContext,
 const FN_FAMILY: char = 'f';
 const STATIC_METHOD_FAMILY: char = 'F';
 const METHOD_FAMILY: char = 'h';
-
-fn should_inline(attrs: &[ast::Attribute]) -> bool {
-    use syntax::attr::*;
-    match find_inline_attr(attrs) {
-        InlineNone | InlineNever  => false,
-        InlineHint | InlineAlways => true
-    }
-}
 
 // Encodes the inherent implementations of a structure, enumeration, or trait.
 fn encode_inherent_implementations(ecx: &EncodeContext,
@@ -1067,7 +1059,7 @@ fn encode_info_for_item(ecx: &EncodeContext,
         encode_name(rbml_w, item.ident.name);
         encode_path(rbml_w, path);
         encode_attributes(rbml_w, &item.attrs);
-        if tps_len > 0 || should_inline(&item.attrs) {
+        if tps_len > 0 || attr::requests_inline(&item.attrs) {
             encode_inlined_item(ecx, rbml_w, IIItemRef(item));
         }
         if tps_len == 0 {
@@ -1200,6 +1192,18 @@ fn encode_info_for_item(ecx: &EncodeContext,
             }
             None => {}
         }
+      }
+      ast::ItemDefaultImpl(unsafety, ref ast_trait_ref) => {
+          add_to_index(item, rbml_w, index);
+          rbml_w.start_tag(tag_items_data_item);
+          encode_def_id(rbml_w, def_id);
+          encode_family(rbml_w, 'd');
+          encode_name(rbml_w, item.ident.name);
+          encode_unsafety(rbml_w, unsafety);
+
+          let trait_ref = ty::node_id_to_trait_ref(tcx, ast_trait_ref.ref_id);
+          encode_trait_ref(rbml_w, ecx, &*trait_ref, tag_item_trait_ref);
+          rbml_w.end_tag();
       }
       ast::ItemImpl(unsafety, polarity, _, ref opt_trait, ref ty, ref ast_items) => {
         // We need to encode information about the default methods we

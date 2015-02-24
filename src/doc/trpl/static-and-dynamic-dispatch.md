@@ -79,10 +79,11 @@ fn main() {
 }
 ```
 
-This has some upsides: static dispatching of any method calls, allowing for
-inlining and hence usually higher performance. It also has some downsides:
-causing code bloat due to many copies of the same function existing in the
-binary, one for each type.
+This has a great upside: static dispatch allows function calls to be
+inlined because the callee is known at compile time, and inlining is
+the key to good optimization. Static dispatch is fast, but it comes at
+a tradeoff: 'code bloat', due to many copies of the same function
+existing in the binary, one for each type.
 
 Furthermore, compilers aren’t perfect and may “optimize” code to become slower.
 For example, functions inlined too eagerly will bloat the instruction cache
@@ -92,8 +93,8 @@ dynamic dispatch is sometimes more efficient.
 
 However, the common case is that it is more efficient to use static dispatch,
 and one can always have a thin statically-dispatched wrapper function that does
-a dynamic, but not vice versa, meaning static calls are more flexible. The
-standard library tries to be statically dispatched where possible for this
+a dynamic dispatch, but not vice versa, meaning static calls are more flexible.
+The standard library tries to be statically dispatched where possible for this
 reason. 
 
 ## Dynamic dispatch

@@ -295,7 +295,7 @@ impl<'tcx> PartialEq for LoanPath<'tcx> {
 
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub enum LoanPathKind<'tcx> {
-    LpVar(ast::NodeId),                         // `x` in doc.rs
+    LpVar(ast::NodeId),                         // `x` in README.md
     LpUpvar(ty::UpvarId),                       // `x` captured by-value into closure
     LpDowncast(Rc<LoanPath<'tcx>>, ast::DefId), // `x` downcast to particular enum variant
     LpExtend(Rc<LoanPath<'tcx>>, mc::MutabilityCategory, LoanPathElem)
@@ -336,8 +336,8 @@ impl ToInteriorKind for mc::InteriorKind {
 
 #[derive(Copy, PartialEq, Eq, Hash, Debug)]
 pub enum LoanPathElem {
-    LpDeref(mc::PointerKind),    // `*LV` in doc.rs
-    LpInterior(InteriorKind),    // `LV.f` in doc.rs
+    LpDeref(mc::PointerKind),    // `*LV` in README.md
+    LpInterior(InteriorKind),    // `LV.f` in README.md
 }
 
 pub fn closure_to_block(closure_id: ast::NodeId,
@@ -612,13 +612,26 @@ impl<'a, 'tcx> BorrowckCtxt<'a, 'tcx> {
                 };
                 let (suggestion, _) =
                     move_suggestion(param_env, expr_span, expr_ty, ("moved by default", ""));
-                self.tcx.sess.span_note(
-                    expr_span,
-                    &format!("`{}` moved here{} because it has type `{}`, which is {}",
-                            ol,
-                            moved_lp_msg,
-                            expr_ty.user_string(self.tcx),
-                            suggestion));
+                // If the two spans are the same, it's because the expression will be evaluated
+                // multiple times. Avoid printing the same span and adjust the wording so it makes
+                // more sense that it's from multiple evalutations.
+                if expr_span == use_span {
+                    self.tcx.sess.note(
+                        &format!("`{}` was previously moved here{} because it has type `{}`, \
+                                  which is {}",
+                                 ol,
+                                 moved_lp_msg,
+                                 expr_ty.user_string(self.tcx),
+                                 suggestion));
+                } else {
+                    self.tcx.sess.span_note(
+                        expr_span,
+                        &format!("`{}` moved here{} because it has type `{}`, which is {}",
+                                 ol,
+                                 moved_lp_msg,
+                                 expr_ty.user_string(self.tcx),
+                                 suggestion));
+                }
             }
 
             move_data::MovePat => {

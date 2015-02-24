@@ -1619,7 +1619,6 @@ impl<'tcx> Clean<Type> for ty::Ty<'tcx> {
             ty::ty_closure(..) => Tuple(vec![]), // FIXME(pcwalton)
 
             ty::ty_infer(..) => panic!("ty_infer"),
-            ty::ty_open(..) => panic!("ty_open"),
             ty::ty_err => panic!("ty_err"),
         }
     }
@@ -2431,7 +2430,7 @@ fn register_def(cx: &DocContext, def: def::Def) -> ast::DefId {
         def::DefFn(i, _) => (i, TypeFunction),
         def::DefTy(i, false) => (i, TypeTypedef),
         def::DefTy(i, true) => (i, TypeEnum),
-        def::DefTrait(i) => (i, TypeTrait),
+        def::DefaultImpl(i) => (i, TypeTrait),
         def::DefStruct(i) => (i, TypeStruct),
         def::DefMod(i) => (i, TypeModule),
         def::DefStatic(i, _) => (i, TypeStatic),

@@ -476,6 +476,7 @@ impl<'a, 'tcx, 'v> Visitor<'v> for TermsContext<'a, 'tcx> {
 
             ast::ItemExternCrate(_) |
             ast::ItemUse(_) |
+            ast::ItemDefaultImpl(..) |
             ast::ItemImpl(..) |
             ast::ItemStatic(..) |
             ast::ItemConst(..) |
@@ -626,6 +627,7 @@ impl<'a, 'tcx, 'v> Visitor<'v> for ConstraintContext<'a, 'tcx> {
             ast::ItemForeignMod(..) |
             ast::ItemTy(..) |
             ast::ItemImpl(..) |
+            ast::ItemDefaultImpl(..) |
             ast::ItemMac(..) => {
             }
         }
@@ -847,7 +849,7 @@ impl<'a, 'tcx> ConstraintContext<'a, 'tcx> {
                 self.add_constraints_from_mt(generics, mt, variance);
             }
 
-            ty::ty_uniq(typ) | ty::ty_vec(typ, _) | ty::ty_open(typ) => {
+            ty::ty_uniq(typ) | ty::ty_vec(typ, _) => {
                 self.add_constraints_from_ty(generics, typ, variance);
             }
 

@@ -305,9 +305,9 @@ fn create_region_substs<'tcx>(
             rscope.anon_regions(span, expected_num_region_params);
 
         if supplied_num_region_params != 0 || anon_regions.is_err() {
-            span_err!(tcx.sess, span, E0107,
-                      "wrong number of lifetime parameters: expected {}, found {}",
-                      expected_num_region_params, supplied_num_region_params);
+            report_lifetime_number_error(tcx, span,
+                                         supplied_num_region_params,
+                                         expected_num_region_params);
         }
 
         match anon_regions {
@@ -355,31 +355,14 @@ fn create_substs_for_ast_path<'tcx>(
                                                .count();
 
     let mut type_substs = types_provided;
+    check_type_argument_count(this.tcx(), span, supplied_ty_param_count,
+                              required_ty_param_count, formal_ty_param_count);
+
     if supplied_ty_param_count < required_ty_param_count {
-        let expected = if required_ty_param_count < formal_ty_param_count {
-            "expected at least"
-        } else {
-            "expected"
-        };
-        span_err!(this.tcx().sess, span, E0243,
-                  "wrong number of type arguments: {} {}, found {}",
-                  expected,
-                  required_ty_param_count,
-                  supplied_ty_param_count);
         while type_substs.len() < required_ty_param_count {
             type_substs.push(tcx.types.err);
         }
     } else if supplied_ty_param_count > formal_ty_param_count {
-        let expected = if required_ty_param_count < formal_ty_param_count {
-            "expected at most"
-        } else {
-            "expected"
-        };
-        span_err!(this.tcx().sess, span, E0244,
-                  "wrong number of type arguments: {} {}, found {}",
-                  expected,
-                  formal_ty_param_count,
-                  supplied_ty_param_count);
         type_substs.truncate(formal_ty_param_count);
     }
     assert!(type_substs.len() >= required_ty_param_count &&
@@ -617,7 +600,7 @@ pub fn instantiate_trait_ref<'tcx>(
     -> Rc<ty::TraitRef<'tcx>>
 {
     match ::lookup_def_tcx(this.tcx(), ast_trait_ref.path.span, ast_trait_ref.ref_id) {
-        def::DefTrait(trait_def_id) => {
+        def::DefaultImpl(trait_def_id) => {
             let trait_ref = ast_path_to_trait_ref(this,
                                                   rscope,
                                                   trait_def_id,
@@ -931,7 +914,7 @@ fn ast_ty_to_trait_ref<'tcx>(this: &AstConv<'tcx>,
     match ty.node {
         ast::TyPath(ref path, id) => {
             match this.tcx().def_map.borrow().get(&id) {
-                Some(&def::DefTrait(trait_def_id)) => {
+                Some(&def::DefaultImpl(trait_def_id)) => {
                     let mut projection_bounds = Vec::new();
                     let trait_ref = object_path_to_poly_trait_ref(this,
                                                                   rscope,
@@ -1211,7 +1194,7 @@ pub fn ast_ty_to_ty<'tcx>(this: &AstConv<'tcx>,
                     Some(&d) => d
                 };
                 match a_def {
-                    def::DefTrait(trait_def_id) => {
+                    def::DefaultImpl(trait_def_id) => {
                         // N.B. this case overlaps somewhat with
                         // TyObjectSum, see that fn for details
                         let mut projection_bounds = Vec::new();
@@ -1821,7 +1804,7 @@ pub fn partition_bounds<'a>(tcx: &ty::ctxt,
         match *ast_bound {
             ast::TraitTyParamBound(ref b, ast::TraitBoundModifier::None) => {
                 match ::lookup_def_tcx(tcx, b.trait_ref.path.span, b.trait_ref.ref_id) {
-                    def::DefTrait(trait_did) => {
+                    def::DefaultImpl(trait_did) => {
                         match trait_def_ids.get(&trait_did) {
                             // Already seen this trait. We forbid
                             // duplicates in the list (for some
@@ -1847,7 +1830,16 @@ pub fn partition_bounds<'a>(tcx: &ty::ctxt,
                         if ty::try_add_builtin_trait(tcx,
                                                      trait_did,
                                                      &mut builtin_bounds) {
-                            // FIXME(#20302) -- we should check for things like Copy<T>
+                            let segments = &b.trait_ref.path.segments;
+                            let parameters = &segments[segments.len() - 1].parameters;
+                            if parameters.types().len() > 0 {
+                                check_type_argument_count(tcx, b.trait_ref.path.span,
+                                                          parameters.types().len(), 0, 0);
+                            }
+                            if parameters.lifetimes().len() > 0{
+                                report_lifetime_number_error(tcx, b.trait_ref.path.span,
+                                                             parameters.lifetimes().len(), 0);
+                            }
                             continue; // success
                         }
                     }
@@ -1879,4 +1871,35 @@ fn prohibit_projections<'tcx>(tcx: &ty::ctxt<'tcx>,
         span_err!(tcx.sess, binding.span, E0229,
             "associated type bindings are not allowed here");
     }
+}
+
+fn check_type_argument_count(tcx: &ty::ctxt, span: Span, supplied: usize,
+                             required: usize, accepted: usize) {
+    if supplied < required {
+        let expected = if required < accepted {
+            "expected at least"
+        } else {
+            "expected"
+        };
+        span_err!(tcx.sess, span, E0243,
+                  "wrong number of type arguments: {} {}, found {}",
+                  expected, required, supplied);
+    } else if supplied > accepted {
+        let expected = if required < accepted {
+            "expected at most"
+        } else {
+            "expected"
+        };
+        span_err!(tcx.sess, span, E0244,
+                  "wrong number of type arguments: {} {}, found {}",
+                  expected,
+                  accepted,
+                  supplied);
+    }
+}
+
+fn report_lifetime_number_error(tcx: &ty::ctxt, span: Span, number: usize, expected: usize) {
+    span_err!(tcx.sess, span, E0107,
+              "wrong number of lifetime parameters: expected {}, found {}",
+              expected, number);
 }
