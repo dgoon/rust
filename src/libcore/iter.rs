@@ -171,8 +171,7 @@ pub trait IteratorExt: Iterator + Sized {
         self.fold(0, |cnt, _x| cnt + 1)
     }
 
-    /// Loops through the entire iterator, returning the last element of the
-    /// iterator.
+    /// Loops through the entire iterator, returning the last element.
     ///
     /// # Examples
     ///
@@ -637,8 +636,8 @@ pub trait IteratorExt: Iterator + Sized {
     /// ```
     #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
-    fn all<F>(self, mut f: F) -> bool where F: FnMut(Self::Item) -> bool {
-        for x in self { if !f(x) { return false; } }
+    fn all<F>(&mut self, mut f: F) -> bool where F: FnMut(Self::Item) -> bool {
+        for x in self.by_ref() { if !f(x) { return false; } }
         true
     }
 
@@ -1637,8 +1636,6 @@ impl<I: Iterator, P> Iterator for Filter<I, P> where P: FnMut(&I::Item) -> bool 
         for x in self.iter.by_ref() {
             if (self.predicate)(&x) {
                 return Some(x);
-            } else {
-                continue
             }
         }
         None
@@ -2877,10 +2874,10 @@ pub mod order {
     use super::Iterator;
 
     /// Compare `a` and `b` for equality using `Eq`
-    pub fn equals<A, T, S>(mut a: T, mut b: S) -> bool where
+    pub fn equals<A, L, R>(mut a: L, mut b: R) -> bool where
         A: Eq,
-        T: Iterator<Item=A>,
-        S: Iterator<Item=A>,
+        L: Iterator<Item=A>,
+        R: Iterator<Item=A>,
     {
         loop {
             match (a.next(), b.next()) {
@@ -2892,10 +2889,10 @@ pub mod order {
     }
 
     /// Order `a` and `b` lexicographically using `Ord`
-    pub fn cmp<A, T, S>(mut a: T, mut b: S) -> cmp::Ordering where
+    pub fn cmp<A, L, R>(mut a: L, mut b: R) -> cmp::Ordering where
         A: Ord,
-        T: Iterator<Item=A>,
-        S: Iterator<Item=A>,
+        L: Iterator<Item=A>,
+        R: Iterator<Item=A>,
     {
         loop {
             match (a.next(), b.next()) {
@@ -2911,10 +2908,8 @@ pub mod order {
     }
 
     /// Order `a` and `b` lexicographically using `PartialOrd`
-    pub fn partial_cmp<A, T, S>(mut a: T, mut b: S) -> Option<cmp::Ordering> where
-        A: PartialOrd,
-        T: Iterator<Item=A>,
-        S: Iterator<Item=A>,
+    pub fn partial_cmp<L: Iterator, R: Iterator>(mut a: L, mut b: R) -> Option<cmp::Ordering> where
+        L::Item: PartialOrd<R::Item>
     {
         loop {
             match (a.next(), b.next()) {
@@ -2930,10 +2925,8 @@ pub mod order {
     }
 
     /// Compare `a` and `b` for equality (Using partial equality, `PartialEq`)
-    pub fn eq<A, B, L, R>(mut a: L, mut b: R) -> bool where
-        A: PartialEq<B>,
-        L: Iterator<Item=A>,
-        R: Iterator<Item=B>,
+    pub fn eq<L: Iterator, R: Iterator>(mut a: L, mut b: R) -> bool where
+        L::Item: PartialEq<R::Item>,
     {
         loop {
             match (a.next(), b.next()) {
@@ -2945,10 +2938,8 @@ pub mod order {
     }
 
     /// Compare `a` and `b` for nonequality (Using partial equality, `PartialEq`)
-    pub fn ne<A, B, L, R>(mut a: L, mut b: R) -> bool where
-        A: PartialEq<B>,
-        L: Iterator<Item=A>,
-        R: Iterator<Item=B>,
+    pub fn ne<L: Iterator, R: Iterator>(mut a: L, mut b: R) -> bool where
+        L::Item: PartialEq<R::Item>,
     {
         loop {
             match (a.next(), b.next()) {
@@ -2960,10 +2951,8 @@ pub mod order {
     }
 
     /// Return `a` < `b` lexicographically (Using partial order, `PartialOrd`)
-    pub fn lt<A, T, S>(mut a: T, mut b: S) -> bool where
-        A: PartialOrd,
-        T: Iterator<Item=A>,
-        S: Iterator<Item=A>,
+    pub fn lt<R: Iterator, L: Iterator>(mut a: L, mut b: R) -> bool where
+        L::Item: PartialOrd<R::Item>,
     {
         loop {
             match (a.next(), b.next()) {
@@ -2976,10 +2965,8 @@ pub mod order {
     }
 
     /// Return `a` <= `b` lexicographically (Using partial order, `PartialOrd`)
-    pub fn le<A, T, S>(mut a: T, mut b: S) -> bool where
-        A: PartialOrd,
-        T: Iterator<Item=A>,
-        S: Iterator<Item=A>,
+    pub fn le<L: Iterator, R: Iterator>(mut a: L, mut b: R) -> bool where
+        L::Item: PartialOrd<R::Item>,
     {
         loop {
             match (a.next(), b.next()) {
@@ -2992,10 +2979,8 @@ pub mod order {
     }
 
     /// Return `a` > `b` lexicographically (Using partial order, `PartialOrd`)
-    pub fn gt<A, T, S>(mut a: T, mut b: S) -> bool where
-        A: PartialOrd,
-        T: Iterator<Item=A>,
-        S: Iterator<Item=A>,
+    pub fn gt<L: Iterator, R: Iterator>(mut a: L, mut b: R) -> bool where
+        L::Item: PartialOrd<R::Item>,
     {
         loop {
             match (a.next(), b.next()) {
@@ -3008,10 +2993,8 @@ pub mod order {
     }
 
     /// Return `a` >= `b` lexicographically (Using partial order, `PartialOrd`)
-    pub fn ge<A, T, S>(mut a: T, mut b: S) -> bool where
-        A: PartialOrd,
-        T: Iterator<Item=A>,
-        S: Iterator<Item=A>,
+    pub fn ge<L: Iterator, R: Iterator>(mut a: L, mut b: R) -> bool where
+        L::Item: PartialOrd<R::Item>,
     {
         loop {
             match (a.next(), b.next()) {

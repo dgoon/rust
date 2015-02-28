@@ -302,7 +302,7 @@ nonzero_dec: '1' | '2' | '3' | '4'
 
 A _character literal_ is a single Unicode character enclosed within two
 `U+0027` (single-quote) characters, with the exception of `U+0027` itself,
-which must be _escaped_ by a preceding U+005C character (`\`).
+which must be _escaped_ by a preceding `U+005C` character (`\`).
 
 ##### String literals
 
@@ -310,6 +310,19 @@ A _string literal_ is a sequence of any Unicode characters enclosed within two
 `U+0022` (double-quote) characters, with the exception of `U+0022` itself,
 which must be _escaped_ by a preceding `U+005C` character (`\`), or a _raw
 string literal_.
+
+A multi-line string literal may be defined by terminating each line with a
+`U+005C` character (`\`) immediately before the newline. This causes the
+`U+005C` character, the newline, and all whitespace at the beginning of the
+next line to be ignored.
+
+```rust
+let a = "foobar";
+let b = "foo\
+         bar";
+
+assert_eq!(a,b);
+```
 
 ##### Character escapes
 
@@ -3752,9 +3765,9 @@ An example of creating and calling a closure:
 ```rust
 let captured_var = 10;
 
-let closure_no_args = |&:| println!("captured_var={}", captured_var);
+let closure_no_args = || println!("captured_var={}", captured_var);
 
-let closure_args = |&: arg: i32| -> i32 {
+let closure_args = |arg: i32| -> i32 {
   println!("captured_var={}, arg={}", captured_var, arg);
   arg // Note lack of semicolon after 'arg'
 };
