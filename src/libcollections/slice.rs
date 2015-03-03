@@ -96,6 +96,7 @@ use core::iter::{range_step, MultiplicativeIterator};
 use core::marker::Sized;
 use core::mem::size_of;
 use core::mem;
+use core::num::wrapping::WrappingOps;
 use core::ops::FnMut;
 use core::option::Option::{self, Some, None};
 use core::ptr::PtrExt;
@@ -1209,10 +1210,14 @@ struct SizeDirection {
 impl Iterator for ElementSwaps {
     type Item = (usize, usize);
 
-    #[inline]
+    // #[inline]
     fn next(&mut self) -> Option<(usize, usize)> {
+        fn new_pos_wrapping(i: usize, s: Direction) -> usize {
+            i.wrapping_add(match s { Pos => 1, Neg => -1 })
+        }
+
         fn new_pos(i: usize, s: Direction) -> usize {
-            i + match s { Pos => 1, Neg => -1 }
+            match s { Pos => i + 1, Neg => i - 1 }
         }
 
         // Find the index of the largest mobile element:
@@ -1220,7 +1225,7 @@ impl Iterator for ElementSwaps {
         // swap should be with a smaller `size` element.
         let max = self.sdir.iter().cloned().enumerate()
                            .filter(|&(i, sd)|
-                                new_pos(i, sd.dir) < self.sdir.len() &&
+                                new_pos_wrapping(i, sd.dir) < self.sdir.len() &&
                                 self.sdir[new_pos(i, sd.dir)].size < sd.size)
                            .max_by(|&(_, sd)| sd.size);
         match max {
@@ -1343,8 +1348,8 @@ fn insertion_sort<T, F>(v: &mut [T], mut compare: F) where F: FnMut(&T, &T) -> O
 
 fn merge_sort<T, F>(v: &mut [T], mut compare: F) where F: FnMut(&T, &T) -> Ordering {
     // warning: this wildly uses unsafe.
-    static BASE_INSERTION: usize = 32;
-    static LARGE_INSERTION: usize = 16;
+    const BASE_INSERTION: usize = 32;
+    const LARGE_INSERTION: usize = 16;
 
     // FIXME #12092: smaller insertion runs seems to make sorting
     // vectors of large elements a little faster on some platforms,

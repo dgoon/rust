@@ -728,10 +728,11 @@ pub trait IteratorExt: Iterator + Sized {
         P: FnMut(Self::Item) -> bool,
         Self: ExactSizeIterator + DoubleEndedIterator
     {
-        let mut i = self.len() - 1;
+        let mut i = self.len();
+
         while let Some(v) = self.next_back() {
             if predicate(v) {
-                return Some(i);
+                return Some(i - 1);
             }
             i -= 1;
         }
@@ -1129,7 +1130,11 @@ impl<I> RandomAccessIterator for Rev<I> where I: DoubleEndedIterator + RandomAcc
     #[inline]
     fn idx(&mut self, index: usize) -> Option<<I as Iterator>::Item> {
         let amt = self.indexable();
-        self.iter.idx(amt - index - 1)
+        if amt > index {
+            self.iter.idx(amt - index - 1)
+        } else {
+            None
+        }
     }
 }
 
@@ -2061,6 +2066,7 @@ pub struct Scan<I, St, F> {
     f: F,
 
     /// The current internal state to be passed to the closure next.
+    #[unstable(feature = "core")]
     pub state: St,
 }
 
@@ -2338,6 +2344,7 @@ impl<I: RandomAccessIterator, F> RandomAccessIterator for Inspect<I, F>
 pub struct Unfold<St, F> {
     f: F,
     /// Internal state that will be passed to the closure on the next iteration
+    #[unstable(feature = "core")]
     pub state: St,
 }
 
@@ -2467,7 +2474,7 @@ impl<A: Int + ToPrimitive> Iterator for Range<A> {
             Some(a) => {
                 let sz = self.stop.to_i64().map(|b| b.checked_sub(a));
                 match sz {
-                    Some(Some(bound)) => bound.to_uint(),
+                    Some(Some(bound)) => bound.to_usize(),
                     _ => None,
                 }
             },
@@ -2475,7 +2482,7 @@ impl<A: Int + ToPrimitive> Iterator for Range<A> {
                 Some(a) => {
                     let sz = self.stop.to_u64().map(|b| b.checked_sub(a));
                     match sz {
-                        Some(Some(bound)) => bound.to_uint(),
+                        Some(Some(bound)) => bound.to_usize(),
                         _ => None
                     }
                 },
@@ -2741,7 +2748,7 @@ impl<A: Int> Iterator for ::ops::Range<A> {
         if self.start >= self.end {
             (0, Some(0))
         } else {
-            let length = (self.end - self.start).to_uint();
+            let length = (self.end - self.start).to_usize();
             (length.unwrap_or(0), length)
         }
     }

@@ -291,7 +291,7 @@ pub fn decl_rust_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
         ty::ty_bare_fn(_, ref f) => {
             (&f.sig, f.abi, None)
         }
-        ty::ty_closure(closure_did, _, substs) => {
+        ty::ty_closure(closure_did, substs) => {
             let typer = common::NormalizingClosureTyper::new(ccx.tcx());
             function_type = typer.closure_type(closure_did, substs);
             let self_type = self_type_for_closure(ccx, closure_did, fn_ty);
@@ -685,7 +685,7 @@ pub fn iter_structural_ty<'blk, 'tcx, F>(cx: Block<'blk, 'tcx>,
               }
           })
       }
-      ty::ty_closure(def_id, _, substs) => {
+      ty::ty_closure(def_id, substs) => {
           let repr = adt::represent_type(cx.ccx(), t);
           let typer = common::NormalizingClosureTyper::new(cx.tcx());
           let upvars = typer.closure_upvars(def_id, substs).unwrap();
@@ -1203,21 +1203,6 @@ pub fn alloca_no_lifetime(cx: Block, ty: Type, name: &str) -> ValueRef {
     Alloca(cx, ty, name)
 }
 
-pub fn alloca_zeroed<'blk, 'tcx>(cx: Block<'blk, 'tcx>, ty: Ty<'tcx>,
-                                 name: &str) -> ValueRef {
-    let llty = type_of::type_of(cx.ccx(), ty);
-    if cx.unreachable.get() {
-        unsafe {
-            return llvm::LLVMGetUndef(llty.ptr_to().to_ref());
-        }
-    }
-    let p = alloca_no_lifetime(cx, llty, name);
-    let b = cx.fcx.ccx.builder();
-    b.position_before(cx.fcx.alloca_insert_pt.get().unwrap());
-    memzero(&b, p, ty);
-    p
-}
-
 // Creates the alloca slot which holds the pointer to the slot for the final return value
 pub fn make_return_slot_pointer<'a, 'tcx>(fcx: &FunctionContext<'a, 'tcx>,
                                           output_type: Ty<'tcx>) -> ValueRef {
@@ -1547,7 +1532,6 @@ fn create_datums_for_fn_args_under_call_abi<'blk, 'tcx>(
                                   datum::lvalue_scratch_datum(bcx,
                                                               arg_ty,
                                                               "tupled_args",
-                                                              false,
                                                               tuple_args_scope_id,
                                                               (),
                                                               |(),
@@ -2437,7 +2421,7 @@ pub fn get_fn_llvm_attributes<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, fn_ty: Ty<
     let function_type;
     let (fn_sig, abi, env_ty) = match fn_ty.sty {
         ty::ty_bare_fn(_, ref f) => (&f.sig, f.abi, None),
-        ty::ty_closure(closure_did, _, substs) => {
+        ty::ty_closure(closure_did, substs) => {
             let typer = common::NormalizingClosureTyper::new(ccx.tcx());
             function_type = typer.closure_type(closure_did, substs);
             let self_type = self_type_for_closure(ccx, closure_did, fn_ty);
@@ -2454,7 +2438,7 @@ pub fn get_fn_llvm_attributes<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, fn_ty: Ty<
     // These have an odd calling convention, so we need to manually
     // unpack the input ty's
     let input_tys = match fn_ty.sty {
-        ty::ty_closure(_, _, _) => {
+        ty::ty_closure(..) => {
             assert!(abi == RustCall);
 
             match fn_sig.inputs[0].sty {
@@ -3102,6 +3086,12 @@ pub fn trans_crate<'tcx>(analysis: ty::CrateAnalysis<'tcx>)
     let ty::CrateAnalysis { ty_cx: tcx, export_map, reachable, name, .. } = analysis;
     let krate = tcx.map.krate();
 
+    let check_overflow = if let Some(v) = tcx.sess.opts.debugging_opts.force_overflow_checks {
+        v
+    } else {
+        !attr::contains_name(&krate.config, "ndebug")
+    };
+
     // Before we touch LLVM, make sure that multithreading is enabled.
     unsafe {
         use std::sync::{Once, ONCE_INIT};
@@ -3129,7 +3119,8 @@ pub fn trans_crate<'tcx>(analysis: ty::CrateAnalysis<'tcx>)
                                              export_map,
                                              Sha256::new(),
                                              link_meta.clone(),
-                                             reachable);
+                                             reachable,
+                                             check_overflow);
 
     {
         let ccx = shared_ccx.get_ccx(0);
