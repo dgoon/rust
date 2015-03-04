@@ -73,7 +73,6 @@
 #![feature(unboxed_closures)]
 #![feature(unsafe_no_drop_flag)]
 #![feature(core)]
-#![feature(unique)]
 #![cfg_attr(test, feature(test, alloc, rustc_private))]
 #![cfg_attr(all(not(feature = "external_funcs"), not(feature = "external_crate")),
             feature(libc))]
@@ -96,8 +95,14 @@ pub mod heap;
 
 // Primitive types using the heaps above
 
+// Need to conditionally define the mod from `boxed.rs` to avoid
+// duplicating the lang-items when building in test cfg; but also need
+// to allow code to have `use boxed::HEAP;`
+// and `use boxed::Box;` declarations.
 #[cfg(not(test))]
 pub mod boxed;
+#[cfg(test)]
+mod boxed { pub use std::boxed::{Box, HEAP}; }
 #[cfg(test)]
 mod boxed_test;
 pub mod arc;
