@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,8 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait Foo {}
-
-fn foo<T: Foo + Foo>() {} //~ ERROR `Foo` already appears in the list of bounds
+#[allow_internal_unstable] //~ ERROR allow_internal_unstable side-steps
+macro_rules! foo {
+    () => {}
+}
 
 fn main() {}
