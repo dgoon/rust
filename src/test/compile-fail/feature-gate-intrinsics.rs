@@ -8,11 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-windows
-// ignore-freebsd
-// ignore-openbsd
+extern "rust-intrinsic" {   //~ ERROR intrinsics are subject to change
+    fn bar();
+}
 
-#[path = "../compile-fail"]
-mod foo; //~ ERROR: a directory
+extern "rust-intrinsic" fn baz() {  //~ ERROR intrinsics are subject to change
+}
 
-fn main() {}
+fn main() {
+}
