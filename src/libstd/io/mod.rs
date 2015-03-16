@@ -9,10 +9,6 @@
 // except according to those terms.
 
 //! Traits, helpers, and type definitions for core I/O functionality.
-//!
-//! > **NOTE**: This module is very much a work in progress and is under active
-//! > development. At this time it is still recommended to use the `old_io`
-//! > module while the details of this module shake out.
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
@@ -37,10 +33,10 @@ pub use self::buffered::IntoInnerError;
 pub use self::cursor::Cursor;
 pub use self::error::{Result, Error, ErrorKind};
 pub use self::util::{copy, sink, Sink, empty, Empty, repeat, Repeat};
-pub use self::stdio::{stdin, stdout, stderr, Stdin, Stdout, Stderr};
+pub use self::stdio::{stdin, stdout, stderr, _print, Stdin, Stdout, Stderr};
 pub use self::stdio::{StdoutLock, StderrLock, StdinLock};
 #[doc(no_inline, hidden)]
-pub use self::stdio::set_panic;
+pub use self::stdio::{set_panic, set_print};
 
 #[macro_use] mod lazy;
 

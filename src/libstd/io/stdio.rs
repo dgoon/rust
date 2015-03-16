@@ -11,6 +11,7 @@
 use prelude::v1::*;
 use io::prelude::*;
 
+use cell::RefCell;
 use cmp;
 use fmt;
 use io::lazy::Lazy;
@@ -18,23 +19,30 @@ use io::{self, BufReader, LineWriter};
 use sync::{Arc, Mutex, MutexGuard};
 use sys::stdio;
 
+/// Stdout used by print! and println! macroses
+thread_local! {
+    static LOCAL_STDOUT: RefCell<Option<Box<Write + Send>>> = {
+        RefCell::new(None)
+    }
+}
+
 /// A handle to a raw instance of the standard input stream of this process.
 ///
 /// This handle is not synchronized or buffered in any fashion. Constructed via
-/// the `std::io::stdin_raw` function.
-pub struct StdinRaw(stdio::Stdin);
+/// the `std::io::stdio::stdin_raw` function.
+struct StdinRaw(stdio::Stdin);
 
 /// A handle to a raw instance of the standard output stream of this process.
 ///
 /// This handle is not synchronized or buffered in any fashion. Constructed via
-/// the `std::io::stdout_raw` function.
-pub struct StdoutRaw(stdio::Stdout);
+/// the `std::io::stdio::stdout_raw` function.
+struct StdoutRaw(stdio::Stdout);
 
 /// A handle to a raw instance of the standard output stream of this process.
 ///
 /// This handle is not synchronized or buffered in any fashion. Constructed via
-/// the `std::io::stderr_raw` function.
-pub struct StderrRaw(stdio::Stderr);
+/// the `std::io::stdio::stderr_raw` function.
+struct StderrRaw(stdio::Stderr);
 
 /// Construct a new raw handle to the standard input of this process.
 ///
@@ -43,7 +51,7 @@ pub struct StderrRaw(stdio::Stderr);
 /// handles is **not** available to raw handles returned from this function.
 ///
 /// The returned handle has no external synchronization or buffering.
-pub fn stdin_raw() -> StdinRaw { StdinRaw(stdio::Stdin::new()) }
+fn stdin_raw() -> StdinRaw { StdinRaw(stdio::Stdin::new()) }
 
 /// Construct a new raw handle to the standard input stream of this process.
 ///
@@ -54,7 +62,7 @@ pub fn stdin_raw() -> StdinRaw { StdinRaw(stdio::Stdin::new()) }
 ///
 /// The returned handle has no external synchronization or buffering layered on
 /// top.
-pub fn stdout_raw() -> StdoutRaw { StdoutRaw(stdio::Stdout::new()) }
+fn stdout_raw() -> StdoutRaw { StdoutRaw(stdio::Stdout::new()) }
 
 /// Construct a new raw handle to the standard input stream of this process.
 ///
@@ -63,7 +71,7 @@ pub fn stdout_raw() -> StdoutRaw { StdoutRaw(stdio::Stdout::new()) }
 ///
 /// The returned handle has no external synchronization or buffering layered on
 /// top.
-pub fn stderr_raw() -> StderrRaw { StderrRaw(stdio::Stderr::new()) }
+fn stderr_raw() -> StderrRaw { StderrRaw(stdio::Stderr::new()) }
 
 impl Read for StdinRaw {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> { self.0.read(buf) }
@@ -109,9 +117,6 @@ pub struct StdinLock<'a> {
 /// The `Read` trait is implemented for the returned value but the `BufRead`
 /// trait is not due to the global nature of the standard input stream. The
 /// locked version, `StdinLock`, implements both `Read` and `BufRead`, however.
-///
-/// To avoid locking and buffering altogether, it is recommended to use the
-/// `stdin_raw` constructor.
 #[stable(feature = "rust1", since = "1.0.0")]
 pub fn stdin() -> Stdin {
     static INSTANCE: Lazy<Mutex<BufReader<StdinRaw>>> = lazy_init!(stdin_init);
@@ -224,9 +229,6 @@ pub struct StdoutLock<'a> {
 /// provided via the `lock` method.
 ///
 /// The returned handle implements the `Write` trait.
-///
-/// To avoid locking and buffering altogether, it is recommended to use the
-/// `stdout_raw` constructor.
 #[stable(feature = "rust1", since = "1.0.0")]
 pub fn stdout() -> Stdout {
     static INSTANCE: Lazy<Mutex<LineWriter<StdoutRaw>>> = lazy_init!(stdout_init);
@@ -297,9 +299,6 @@ pub struct StderrLock<'a> {
 /// this function. No handles are buffered, however.
 ///
 /// The returned handle implements the `Write` trait.
-///
-/// To avoid locking altogether, it is recommended to use the `stderr_raw`
-/// constructor.
 #[stable(feature = "rust1", since = "1.0.0")]
 pub fn stderr() -> Stderr {
     static INSTANCE: Lazy<Mutex<StderrRaw>> = lazy_init!(stderr_init);
@@ -347,15 +346,15 @@ impl<'a> Write for StderrLock<'a> {
     fn flush(&mut self) -> io::Result<()> { self.inner.flush() }
 }
 
-/// Resets the task-local stdout handle to the specified writer
+/// Resets the task-local stderr handle to the specified writer
 ///
-/// This will replace the current task's stdout handle, returning the old
-/// handle. All future calls to `print` and friends will emit their output to
+/// This will replace the current task's stderr handle, returning the old
+/// handle. All future calls to `panic!` and friends will emit their output to
 /// this specified handle.
 ///
 /// Note that this does not need to be called for all new tasks; the default
-/// output handle is to the process's stdout stream.
-#[unstable(feature = "set_panic",
+/// output handle is to the process's stderr stream.
+#[unstable(feature = "set_stdio",
            reason = "this function may disappear completely or be replaced \
                      with a more general mechanism")]
 #[doc(hidden)]
@@ -368,4 +367,38 @@ pub fn set_panic(sink: Box<Write + Send>) -> Option<Box<Write + Send>> {
         let _ = s.flush();
         Some(s)
     })
+}
+
+/// Resets the task-local stdout handle to the specified writer
+///
+/// This will replace the current task's stdout handle, returning the old
+/// handle. All future calls to `print!` and friends will emit their output to
+/// this specified handle.
+///
+/// Note that this does not need to be called for all new tasks; the default
+/// output handle is to the process's stdout stream.
+#[unstable(feature = "set_stdio",
+           reason = "this function may disappear completely or be replaced \
+                     with a more general mechanism")]
+#[doc(hidden)]
+pub fn set_print(sink: Box<Write + Send>) -> Option<Box<Write + Send>> {
+    use mem;
+    LOCAL_STDOUT.with(move |slot| {
+        mem::replace(&mut *slot.borrow_mut(), Some(sink))
+    }).and_then(|mut s| {
+        let _ = s.flush();
+        Some(s)
+    })
+}
+
+#[unstable(feature = "print",
+           reason = "implementation detail which may disappear or be replaced at any time")]
+#[doc(hidden)]
+pub fn _print(args: fmt::Arguments) {
+    if let Err(e) = LOCAL_STDOUT.with(|s| match s.borrow_mut().as_mut() {
+        Some(w) => w.write_fmt(args),
+        None => stdout().write_fmt(args)
+    }) {
+        panic!("failed printing to stdout: {}", e);
+    }
 }
