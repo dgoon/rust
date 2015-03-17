@@ -49,6 +49,7 @@ use option::Option::{None, Some};
 use result::Result;
 use result::Result::{Ok, Err};
 use ptr;
+#[cfg(stage0)]
 use ptr::PtrExt;
 use mem;
 use mem::size_of;
@@ -1448,7 +1449,7 @@ pub fn mut_ref_slice<'a, A>(s: &'a mut A) -> &'a mut [A] {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// use std::slice;
 ///
 /// // manifest a slice out of thin air!
@@ -1491,7 +1492,7 @@ pub unsafe fn from_raw_parts_mut<'a, T>(p: *mut T, len: usize) -> &'a mut [T] {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// use std::slice;
 ///
 /// // manifest a slice out of thin air!

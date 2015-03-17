@@ -20,12 +20,19 @@ use iter::Iterator;
 use marker::Sized;
 use ops::{Drop, FnOnce};
 use option::Option::{self, Some, None};
+#[cfg(stage0)]
 use ptr::PtrExt;
 use result::Result::{Ok, Err};
 use result;
+#[cfg(stage0)]
 use slice::{self, SliceExt};
+#[cfg(not(stage0))]
+use slice;
 use string::String;
+#[cfg(stage0)]
 use str::{self, StrExt};
+#[cfg(not(stage0))]
+use str;
 use vec::Vec;
 
 pub use self::buffered::{BufReader, BufWriter, BufStream, LineWriter};
@@ -356,7 +363,7 @@ pub trait Write {
     ///
     /// It is considered an error if not all bytes could be written due to
     /// I/O errors or EOF being reached.
-    #[unstable(feature = "io", reason = "waiting for RFC 950")]
+    #[stable(feature = "rust1", since = "1.0.0")]
     fn flush(&mut self) -> Result<()>;
 
     /// Attempts to write an entire buffer into this write.

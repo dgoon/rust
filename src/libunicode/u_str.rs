@@ -26,6 +26,7 @@ use core::num::Int;
 use core::slice;
 use core::str::Split;
 
+#[cfg(stage0)]
 use char::CharExt as UCharExt; // conflicts with core::prelude::CharExt
 use tables::grapheme::GraphemeCat;
 
@@ -481,7 +482,7 @@ impl<'a> Iterator for Utf16Items<'a> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// use unicode::str::Utf16Item::{ScalarValue, LoneSurrogate};
 ///
 /// // 𝄞mus<invalid>ic<invalid>

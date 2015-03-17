@@ -292,7 +292,8 @@ pub enum UnsizeKind<'tcx> {
     // An unsize coercion applied to the tail field of a struct.
     // The uint is the index of the type parameter which is unsized.
     UnsizeStruct(Box<UnsizeKind<'tcx>>, uint),
-    UnsizeVtable(TyTrait<'tcx>, /* the self type of the trait */ Ty<'tcx>)
+    UnsizeVtable(TyTrait<'tcx>, /* the self type of the trait */ Ty<'tcx>),
+    UnsizeUpcast(Ty<'tcx>),
 }
 
 #[derive(Clone, Debug)]
@@ -787,6 +788,9 @@ pub struct ctxt<'tcx> {
     /// The set of external traits whose implementations have been read. This
     /// is used for lazy resolution of traits.
     pub populated_external_traits: RefCell<DefIdSet>,
+
+    /// The set of external primitive inherent implementations that have been read.
+    pub populated_external_primitive_impls: RefCell<DefIdSet>,
 
     /// Borrows
     pub upvar_capture_map: RefCell<UpvarCaptureMap>,
@@ -2599,6 +2603,7 @@ pub fn mk_ctxt<'tcx>(s: Session,
         used_mut_nodes: RefCell::new(NodeSet()),
         populated_external_types: RefCell::new(DefIdSet()),
         populated_external_traits: RefCell::new(DefIdSet()),
+        populated_external_primitive_impls: RefCell::new(DefIdSet()),
         upvar_capture_map: RefCell::new(FnvHashMap()),
         extern_const_statics: RefCell::new(DefIdMap()),
         extern_const_variants: RefCell::new(DefIdMap()),
@@ -4627,6 +4632,9 @@ pub fn unsize_ty<'tcx>(cx: &ctxt<'tcx>,
         &UnsizeVtable(TyTrait { ref principal, ref bounds }, _) => {
             mk_trait(cx, principal.clone(), bounds.clone())
         }
+        &UnsizeUpcast(target_ty) => {
+            target_ty
+        }
     }
 }
 
@@ -5988,6 +5996,25 @@ pub fn record_trait_implementation(tcx: &ctxt,
     tcx.trait_impls.borrow_mut().insert(trait_def_id, Rc::new(RefCell::new(vec!(impl_def_id))));
 }
 
+/// Load primitive inherent implementations if necessary
+pub fn populate_implementations_for_primitive_if_necessary(tcx: &ctxt, lang_def_id: ast::DefId) {
+    if lang_def_id.krate == LOCAL_CRATE {
+        return
+    }
+    if tcx.populated_external_primitive_impls.borrow().contains(&lang_def_id) {
+        return
+    }
+
+    debug!("populate_implementations_for_primitive_if_necessary: searching for {:?}", lang_def_id);
+
+    let impl_items = csearch::get_impl_items(&tcx.sess.cstore, lang_def_id);
+
+    // Store the implementation info.
+    tcx.impl_items.borrow_mut().insert(lang_def_id, impl_items);
+
+    tcx.populated_external_primitive_impls.borrow_mut().insert(lang_def_id);
+}
+
 /// Populates the type context with all the implementations for the given type
 /// if necessary.
 pub fn populate_implementations_for_type_if_necessary(tcx: &ctxt,
@@ -6830,6 +6857,7 @@ impl<'tcx> Repr<'tcx> for UnsizeKind<'tcx> {
             UnsizeLength(n) => format!("UnsizeLength({})", n),
             UnsizeStruct(ref k, n) => format!("UnsizeStruct({},{})", k.repr(tcx), n),
             UnsizeVtable(ref a, ref b) => format!("UnsizeVtable({},{})", a.repr(tcx), b.repr(tcx)),
+            UnsizeUpcast(ref a) => format!("UnsizeUpcast({})", a.repr(tcx)),
         }
     }
 }

@@ -422,7 +422,7 @@ use string;
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// use std::fmt;
 ///
 /// let s = fmt::format(format_args!("Hello, {}!", "world"));
@@ -433,16 +433,4 @@ pub fn format(args: Arguments) -> string::String {
     let mut output = string::String::new();
     let _ = write!(&mut output, "{}", args);
     output
-}
-
-#[cfg(test)]
-mod tests {
-    use prelude::*;
-    use fmt;
-
-    #[test]
-    fn test_format() {
-        let s = fmt::format(format_args!("Hello, {}!", "world"));
-        assert_eq!(s.as_slice(), "Hello, world!");
-    }
 }
