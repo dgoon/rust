@@ -195,7 +195,7 @@ type DeferredCallResolutionHandler<'tcx> = Box<DeferredCallResolution<'tcx>+'tcx
 /// When type-checking an expression, we propagate downward
 /// whatever type hint we are able in the form of an `Expectation`.
 #[derive(Copy)]
-enum Expectation<'tcx> {
+pub enum Expectation<'tcx> {
     /// We know nothing about what type this expression should have.
     NoExpectation,
 
@@ -1532,8 +1532,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                        span: Span,
                                        adj: &ty::AutoAdjustment<'tcx>) {
         match *adj {
-            ty::AdjustReifyFnPointer(..) => {
-            }
+            ty::AdjustReifyFnPointer(..) => { }
+            ty::AdjustUnsafeFnPointer => { }
             ty::AdjustDerefRef(ref d_r) => {
                 match d_r.autoref {
                     Some(ref a_r) => {
@@ -2505,10 +2505,11 @@ fn check_lit<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 
     match lit.node {
         ast::LitStr(..) => ty::mk_str_slice(tcx, tcx.mk_region(ty::ReStatic), ast::MutImmutable),
-        ast::LitBinary(..) => {
-            ty::mk_slice(tcx,
-                         tcx.mk_region(ty::ReStatic),
-                         ty::mt{ ty: tcx.types.u8, mutbl: ast::MutImmutable })
+        ast::LitBinary(ref v) => {
+            ty::mk_rptr(tcx, tcx.mk_region(ty::ReStatic), ty::mt {
+                ty: ty::mk_vec(tcx, tcx.types.u8, Some(v.len())),
+                mutbl: ast::MutImmutable,
+            })
         }
         ast::LitByte(_) => tcx.types.u8,
         ast::LitChar(_) => tcx.types.char,
@@ -5347,17 +5348,8 @@ pub fn check_intrinsic_type(ccx: &CrateCtxt, it: &ast::ForeignItem) {
             "needs_drop" => (1, Vec::new(), ccx.tcx.types.bool),
             "owns_managed" => (1, Vec::new(), ccx.tcx.types.bool),
 
-            "get_tydesc" => {
-              let tydesc_ty = match ty::get_tydesc_ty(ccx.tcx) {
-                  Ok(t) => t,
-                  Err(s) => { span_fatal!(tcx.sess, it.span, E0240, "{}", &s[..]); }
-              };
-              let td_ptr = ty::mk_ptr(ccx.tcx, ty::mt {
-                  ty: tydesc_ty,
-                  mutbl: ast::MutImmutable
-              });
-              (1, Vec::new(), td_ptr)
-            }
+            "type_name" => (1, Vec::new(), ty::mk_str_slice(tcx, tcx.mk_region(ty::ReStatic),
+                                                             ast::MutImmutable)),
             "type_id" => (1, Vec::new(), ccx.tcx.types.u64),
             "offset" => {
               (1,

@@ -8,16 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// Check that safe fns are not a subtype of unsafe fns.
 
-use std::intrinsics::type_name;
-
-struct Foo<T> {
-    x: T
+fn foo(x: Option<fn(i32)>) -> Option<unsafe fn(i32)> {
+    x //~ ERROR mismatched types
 }
 
-pub fn main() {
-    unsafe {
-        assert_eq!(type_name::<int>(), "isize");
-        assert_eq!(type_name::<Foo<uint>>(), "Foo<usize>");
-    }
+fn bar(x: fn(i32)) -> unsafe fn(i32) {
+    x // OK, coercion!
 }
+
+fn main() { }

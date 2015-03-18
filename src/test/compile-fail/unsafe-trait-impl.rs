@@ -8,16 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// Check that safe fns are not a subtype of unsafe fns.
 
-use std::intrinsics::type_name;
-
-struct Foo<T> {
-    x: T
+trait Foo {
+    unsafe fn len(&self) -> u32;
 }
 
-pub fn main() {
-    unsafe {
-        assert_eq!(type_name::<int>(), "isize");
-        assert_eq!(type_name::<Foo<uint>>(), "Foo<usize>");
-    }
+impl Foo for u32 {
+    fn len(&self) -> u32 { *self }
+    //~^ ERROR incompatible type for trait: expected unsafe fn, found normal fn
 }
+
+fn main() { }

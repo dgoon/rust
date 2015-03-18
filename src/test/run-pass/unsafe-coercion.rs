@@ -8,16 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// Check that safe fns are not a subtype of unsafe fns.
 
-use std::intrinsics::type_name;
-
-struct Foo<T> {
-    x: T
+fn foo(x: i32) -> i32 {
+    x * 22
 }
 
-pub fn main() {
-    unsafe {
-        assert_eq!(type_name::<int>(), "isize");
-        assert_eq!(type_name::<Foo<uint>>(), "Foo<usize>");
-    }
+fn bar(x: fn(i32) -> i32) -> unsafe fn(i32) -> i32 {
+    x // OK, coercion!
+}
+
+fn main() {
+    let f = bar(foo);
+    let x = unsafe { f(2) };
+    assert_eq!(x, 44);
 }
