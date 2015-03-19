@@ -378,6 +378,7 @@ pub trait CharExt {
 #[cfg(stage0)]
 #[stable(feature = "rust1", since = "1.0.0")]
 impl CharExt for char {
+    #[inline]
     fn is_digit(self, radix: u32) -> bool { C::is_digit(self, radix) }
     fn to_digit(self, radix: u32) -> Option<u32> { C::to_digit(self, radix) }
     fn escape_unicode(self) -> EscapeUnicode { C::escape_unicode(self) }
@@ -387,6 +388,7 @@ impl CharExt for char {
     fn encode_utf8(self, dst: &mut [u8]) -> Option<usize> { C::encode_utf8(self, dst) }
     fn encode_utf16(self, dst: &mut [u16]) -> Option<usize> { C::encode_utf16(self, dst) }
 
+    #[inline]
     fn is_alphabetic(self) -> bool {
         match self {
             'a' ... 'z' | 'A' ... 'Z' => true,
@@ -395,10 +397,13 @@ impl CharExt for char {
         }
     }
 
+    #[inline]
     fn is_xid_start(self) -> bool { derived_property::XID_Start(self) }
 
+    #[inline]
     fn is_xid_continue(self) -> bool { derived_property::XID_Continue(self) }
 
+    #[inline]
     fn is_lowercase(self) -> bool {
         match self {
             'a' ... 'z' => true,
@@ -407,6 +412,7 @@ impl CharExt for char {
         }
     }
 
+    #[inline]
     fn is_uppercase(self) -> bool {
         match self {
             'A' ... 'Z' => true,
@@ -415,6 +421,7 @@ impl CharExt for char {
         }
     }
 
+    #[inline]
     fn is_whitespace(self) -> bool {
         match self {
             ' ' | '\x09' ... '\x0d' => true,
@@ -423,12 +430,15 @@ impl CharExt for char {
         }
     }
 
+    #[inline]
     fn is_alphanumeric(self) -> bool {
         self.is_alphabetic() || self.is_numeric()
     }
 
+    #[inline]
     fn is_control(self) -> bool { general_category::Cc(self) }
 
+    #[inline]
     fn is_numeric(self) -> bool {
         match self {
             '0' ... '9' => true,
@@ -437,14 +447,17 @@ impl CharExt for char {
         }
     }
 
+    #[inline]
     fn to_lowercase(self) -> ToLowercase {
         ToLowercase(Some(conversions::to_lower(self)))
     }
 
+    #[inline]
     fn to_uppercase(self) -> ToUppercase {
         ToUppercase(Some(conversions::to_upper(self)))
     }
 
+    #[inline]
     fn width(self, is_cjk: bool) -> Option<usize> { charwidth::width(self, is_cjk) }
 }
 
@@ -470,7 +483,6 @@ impl Iterator for ToUppercase {
     fn next(&mut self) -> Option<char> { self.0.take() }
 }
 
-#[cfg(not(stage0))]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[lang = "char"]
 impl char {
@@ -498,6 +510,7 @@ impl char {
     /// assert!('f'.is_digit(16));
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn is_digit(self, radix: u32) -> bool { C::is_digit(self, radix) }
 
     /// Converts a character to the corresponding digit.
@@ -693,6 +706,7 @@ impl char {
     /// Returns whether the specified character is considered a Unicode
     /// alphabetic code point.
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn is_alphabetic(self) -> bool {
         match self {
             'a' ... 'z' | 'A' ... 'Z' => true,
@@ -709,6 +723,7 @@ impl char {
     /// mostly similar to ID_Start but modified for closure under NFKx.
     #[unstable(feature = "unicode",
                reason = "mainly needed for compiler internals")]
+    #[inline]
     pub fn is_xid_start(self) -> bool { derived_property::XID_Start(self) }
 
     /// Returns whether the specified `char` satisfies the 'XID_Continue'
@@ -719,6 +734,7 @@ impl char {
     /// mostly similar to 'ID_Continue' but modified for closure under NFKx.
     #[unstable(feature = "unicode",
                reason = "mainly needed for compiler internals")]
+    #[inline]
     pub fn is_xid_continue(self) -> bool { derived_property::XID_Continue(self) }
 
     /// Indicates whether a character is in lowercase.
@@ -726,6 +742,7 @@ impl char {
     /// This is defined according to the terms of the Unicode Derived Core
     /// Property `Lowercase`.
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn is_lowercase(self) -> bool {
         match self {
             'a' ... 'z' => true,
@@ -739,6 +756,7 @@ impl char {
     /// This is defined according to the terms of the Unicode Derived Core
     /// Property `Uppercase`.
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn is_uppercase(self) -> bool {
         match self {
             'A' ... 'Z' => true,
@@ -751,6 +769,7 @@ impl char {
     ///
     /// Whitespace is defined in terms of the Unicode Property `White_Space`.
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn is_whitespace(self) -> bool {
         match self {
             ' ' | '\x09' ... '\x0d' => true,
@@ -764,6 +783,7 @@ impl char {
     /// Alphanumericness is defined in terms of the Unicode General Categories
     /// 'Nd', 'Nl', 'No' and the Derived Core Property 'Alphabetic'.
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn is_alphanumeric(self) -> bool {
         self.is_alphabetic() || self.is_numeric()
     }
@@ -773,10 +793,12 @@ impl char {
     /// Control code points are defined in terms of the Unicode General
     /// Category `Cc`.
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn is_control(self) -> bool { general_category::Cc(self) }
 
     /// Indicates whether the character is numeric (Nd, Nl, or No).
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn is_numeric(self) -> bool {
         match self {
             '0' ... '9' => true,
@@ -796,6 +818,7 @@ impl char {
     /// lowercase equivalent of the character. If no conversion is possible then
     /// the input character is returned.
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn to_lowercase(self) -> ToLowercase {
         ToLowercase(Some(conversions::to_lower(self)))
     }
@@ -822,6 +845,7 @@ impl char {
     ///
     /// [2]: http://www.unicode.org/versions/Unicode4.0.0/ch03.pdf#G33992
     #[stable(feature = "rust1", since = "1.0.0")]
+    #[inline]
     pub fn to_uppercase(self) -> ToUppercase {
         ToUppercase(Some(conversions::to_upper(self)))
     }

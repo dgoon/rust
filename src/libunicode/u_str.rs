@@ -26,8 +26,6 @@ use core::num::Int;
 use core::slice;
 use core::str::Split;
 
-#[cfg(stage0)]
-use char::CharExt as UCharExt; // conflicts with core::prelude::CharExt
 use tables::grapheme::GraphemeCat;
 
 /// An iterator over the words of a string, separated by a sequence of whitespace
@@ -244,7 +242,7 @@ impl<'a> Iterator for Graphemes<'a> {
         }
 
         self.cat = if take_curr {
-            idx = self.string.char_range_at(idx).next;
+            idx = idx + self.string.char_at(idx).len_utf8();
             None
         } else {
             Some(cat)

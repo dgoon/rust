@@ -18,6 +18,7 @@
 
 use self::OldSearcher::{TwoWay, TwoWayLong};
 
+use char::CharExt;
 use clone::Clone;
 use cmp::{self, Eq};
 use default::Default;
@@ -30,8 +31,6 @@ use mem;
 use num::Int;
 use ops::{Fn, FnMut};
 use option::Option::{self, None, Some};
-#[cfg(stage0)]
-use ptr::PtrExt;
 use raw::{Repr, Slice};
 use result::Result::{self, Ok, Err};
 use slice::{self, SliceExt};
@@ -1112,8 +1111,10 @@ static UTF8_CHAR_WIDTH: [u8; 256] = [
 /// the next `char` in a string.  This can be used as a data structure
 /// for iterating over the UTF-8 bytes of a string.
 #[derive(Copy)]
-#[unstable(feature = "core",
-           reason = "naming is uncertain with container conventions")]
+#[unstable(feature = "str_char",
+           reason = "existence of this struct is uncertain as it is frequently \
+                     able to be replaced with char.len_utf8() and/or \
+                     char/char_indices iterators")]
 pub struct CharRange {
     /// Current `char`
     pub ch: char,
@@ -1646,8 +1647,8 @@ impl StrExt for str {
         if self.is_empty() {
             None
         } else {
-            let CharRange {ch, next} = self.char_range_at(0);
-            let next_s = unsafe { self.slice_unchecked(next, self.len()) };
+            let ch = self.char_at(0);
+            let next_s = unsafe { self.slice_unchecked(ch.len_utf8(), self.len()) };
             Some((ch, next_s))
         }
     }

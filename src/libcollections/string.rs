@@ -29,7 +29,7 @@ use unicode::str as unicode_str;
 use unicode::str::Utf16Item;
 
 use borrow::{Cow, IntoCow};
-use str::{self, CharRange, FromStr, Utf8Error};
+use str::{self, FromStr, Utf8Error};
 use vec::{DerefVec, Vec, as_vec};
 
 /// A growable string stored as a UTF-8 encoded buffer.
@@ -85,23 +85,6 @@ impl String {
         }
     }
 
-    #[cfg(stage0)]
-    /// Creates a new string buffer from the given string.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let s = String::from_str("hello");
-    /// assert_eq!(s.as_slice(), "hello");
-    /// ```
-    #[inline]
-    #[unstable(feature = "collections",
-               reason = "needs investigation to see if to_string() can match perf")]
-    pub fn from_str(string: &str) -> String {
-        String { vec: ::slice::SliceExt::to_vec(string.as_bytes()) }
-    }
-
-    #[cfg(not(stage0))]
     /// Creates a new string buffer from the given string.
     ///
     /// # Examples
@@ -118,9 +101,9 @@ impl String {
         String { vec: <[_]>::to_vec(string.as_bytes()) }
     }
 
-    // HACK(japaric): with cfg(test) the inherent `[T]::to_vec` method, which is required for this
-    // method definition, is not available. Since we don't require this method for testing
-    // purposes, I'll just stub it
+    // HACK(japaric): with cfg(test) the inherent `[T]::to_vec` method, which is
+    // required for this method definition, is not available. Since we don't
+    // require this method for testing purposes, I'll just stub it
     // NB see the slice::hack module in slice.rs for more information
     #[inline]
     #[cfg(test)]
@@ -561,9 +544,9 @@ impl String {
             return None
         }
 
-        let CharRange {ch, next} = self.char_range_at_reverse(len);
+        let ch = self.char_at_reverse(len);
         unsafe {
-            self.vec.set_len(next);
+            self.vec.set_len(len - ch.len_utf8());
         }
         Some(ch)
     }
@@ -595,7 +578,8 @@ impl String {
         let len = self.len();
         assert!(idx <= len);
 
-        let CharRange { ch, next } = self.char_range_at(idx);
+        let ch = self.char_at(idx);
+        let next = idx + ch.len_utf8();
         unsafe {
             ptr::copy(self.vec.as_mut_ptr().offset(idx as isize),
                       self.vec.as_ptr().offset(next as isize),
