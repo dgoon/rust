@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Regression test for issue #152.
-pub fn main() {
-    let mut b: uint = 1_usize;
-    while b < std::mem::size_of::<usize>() {
-        0_usize << b;
-        b <<= 1_usize;
-        println!("{}", b);
-    }
+// Test that patterns including the box syntax are gated by `box_patterns` feature gate.
+
+fn main() {
+    let x = Box::new(1);
+
+    match x {
+        box 1 => (),
+        //~^ box pattern syntax is experimental
+        //~| add #![feature(box_patterns)] to the crate attributes to enable
+        _     => ()
+    };
 }
