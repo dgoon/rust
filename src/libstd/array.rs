@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,8 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Tests that the proper help is displayed in the error message
+//! The fixed-size array type (`[T; n]`).
 
-extern crate foo as bar;
-//~^ ERROR expected `;`, found `as`
-//~^^ HELP perhaps you meant to enclose the crate name `foo` in a string?
+#![doc(primitive = "array")]

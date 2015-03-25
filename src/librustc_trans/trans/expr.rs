@@ -126,7 +126,7 @@ pub fn trans_into<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
         return datum.store_to_dest(bcx, dest, expr.id);
     }
 
-    let qualif = bcx.tcx().const_qualif_map.borrow()[expr.id];
+    let qualif = *bcx.tcx().const_qualif_map.borrow().get(&expr.id).unwrap();
     if !qualif.intersects(check_const::NOT_CONST | check_const::NEEDS_DROP) {
         if !qualif.intersects(check_const::PREFER_IN_PLACE) {
             if let SaveIn(lldest) = dest {
@@ -209,7 +209,7 @@ pub fn trans<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
 
     let mut bcx = bcx;
     let fcx = bcx.fcx;
-    let qualif = bcx.tcx().const_qualif_map.borrow()[expr.id];
+    let qualif = *bcx.tcx().const_qualif_map.borrow().get(&expr.id).unwrap();
     let adjusted_global = !qualif.intersects(check_const::NON_STATIC_BORROWS);
     let global = if !qualif.intersects(check_const::NOT_CONST | check_const::NEEDS_DROP) {
         let global = consts::get_const_expr_as_global(bcx.ccx(), expr, qualif,
@@ -843,7 +843,7 @@ fn trans_index<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
                                                base_datum,
                                                vec![(ix_datum, idx.id)],
                                                Some(SaveIn(scratch.val)),
-                                               true));
+                                               false));
             let datum = scratch.to_expr_datum();
             if type_is_sized(bcx.tcx(), elt_ty) {
                 Datum::new(datum.to_llscalarish(bcx), elt_ty, LvalueExpr)
@@ -1227,22 +1227,9 @@ fn trans_rvalue_dps_unadjusted<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
             trans_overloaded_op(bcx, expr, MethodCall::expr(expr.id), base,
                                 vec![(idx_datum, idx.id)], Some(dest), true).bcx
         }
-        ast::ExprCast(ref val, _) => {
-            // DPS output mode means this is a trait cast:
-            if ty::type_is_trait(node_id_type(bcx, expr.id)) {
-                let trait_ref =
-                    bcx.tcx().object_cast_map.borrow()
-                                             .get(&expr.id)
-                                             .cloned()
-                                             .unwrap();
-                let trait_ref = bcx.monomorphize(&trait_ref);
-                let datum = unpack_datum!(bcx, trans(bcx, &**val));
-                meth::trans_trait_cast(bcx, datum, expr.id,
-                                       trait_ref, dest)
-            } else {
-                bcx.tcx().sess.span_bug(expr.span,
-                                        "expr_cast of non-trait");
-            }
+        ast::ExprCast(..) => {
+            // Trait casts used to come this way, now they should be coercions.
+            bcx.tcx().sess.span_bug(expr.span, "DPS expr_cast (residual trait cast?)")
         }
         ast::ExprAssignOp(op, ref dst, ref src) => {
             trans_assign_op(bcx, expr, op, &**dst, &**src)
@@ -1405,7 +1392,7 @@ pub fn with_field_tys<'tcx, R, F>(tcx: &ty::ctxt<'tcx>,
                         ty.repr(tcx)));
                 }
                 Some(node_id) => {
-                    let def = tcx.def_map.borrow()[node_id].full_def();
+                    let def = tcx.def_map.borrow().get(&node_id).unwrap().full_def();
                     match def {
                         def::DefVariant(enum_id, variant_id, _) => {
                             let variant_info = ty::enum_variant_with_id(tcx, enum_id, variant_id);
@@ -1779,6 +1766,8 @@ fn trans_eager_binop<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
       ast::BiAdd => {
         if is_float {
             FAdd(bcx, lhs, rhs, binop_debug_loc)
+        } else if is_simd {
+            Add(bcx, lhs, rhs, binop_debug_loc)
         } else {
             let (newbcx, res) = with_overflow_check(
                 bcx, OverflowOp::Add, info, lhs_t, lhs, rhs, binop_debug_loc);
@@ -1789,6 +1778,8 @@ fn trans_eager_binop<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
       ast::BiSub => {
         if is_float {
             FSub(bcx, lhs, rhs, binop_debug_loc)
+        } else if is_simd {
+            Sub(bcx, lhs, rhs, binop_debug_loc)
         } else {
             let (newbcx, res) = with_overflow_check(
                 bcx, OverflowOp::Sub, info, lhs_t, lhs, rhs, binop_debug_loc);
@@ -1799,6 +1790,8 @@ fn trans_eager_binop<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
       ast::BiMul => {
         if is_float {
             FMul(bcx, lhs, rhs, binop_debug_loc)
+        } else if is_simd {
+            Mul(bcx, lhs, rhs, binop_debug_loc)
         } else {
             let (newbcx, res) = with_overflow_check(
                 bcx, OverflowOp::Mul, info, lhs_t, lhs, rhs, binop_debug_loc);
@@ -1964,7 +1957,7 @@ fn trans_overloaded_op<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
                                    dest: Option<Dest>,
                                    autoref: bool)
                                    -> Result<'blk, 'tcx> {
-    let method_ty = (*bcx.tcx().method_map.borrow())[method_call].ty;
+    let method_ty = bcx.tcx().method_map.borrow().get(&method_call).unwrap().ty;
     callee::trans_call_inner(bcx,
                              expr.debug_loc(),
                              monomorphize_type(bcx, method_ty),
@@ -1985,10 +1978,12 @@ fn trans_overloaded_call<'a, 'blk, 'tcx>(mut bcx: Block<'blk, 'tcx>,
                                          dest: Option<Dest>)
                                          -> Block<'blk, 'tcx> {
     let method_call = MethodCall::expr(expr.id);
-    let method_type = (*bcx.tcx()
-                           .method_map
-                           .borrow())[method_call]
-                           .ty;
+    let method_type = bcx.tcx()
+                         .method_map
+                         .borrow()
+                         .get(&method_call)
+                         .unwrap()
+                         .ty;
     let mut all_args = vec!(callee);
     all_args.extend(args.iter().map(|e| &**e));
     unpack_result!(bcx,
@@ -2089,7 +2084,7 @@ fn trans_imm_cast<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
     let mut bcx = bcx;
     let ccx = bcx.ccx();
 
-    let t_in = expr_ty(bcx, expr);
+    let t_in = expr_ty_adjusted(bcx, expr);
     let t_out = node_id_type(bcx, id);
     let k_in = cast_type_kind(bcx.tcx(), t_in);
     let k_out = cast_type_kind(bcx.tcx(), t_out);
@@ -2101,7 +2096,8 @@ fn trans_imm_cast<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
     // by-value as appropriate given its type:
     let mut datum = unpack_datum!(bcx, trans(bcx, expr));
 
-    if cast_is_noop(datum.ty, t_out) {
+    let datum_ty = monomorphize_type(bcx, datum.ty);
+    if cast_is_noop(datum_ty, t_out) {
         datum.ty = t_out;
         return DatumBlock::new(bcx, datum);
     }

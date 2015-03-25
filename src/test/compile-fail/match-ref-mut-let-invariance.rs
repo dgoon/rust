@@ -8,12 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait Foo { fn foo(&self) {} }
-impl Foo for u8 {}
+// Check that when making a ref mut binding with type `&mut T`, the
+// type `T` must match precisely the type `U` of the value being
+// matched, and in particular cannot be some supertype of `U`. Issue
+// #23116. This test focuses on a `let`.
 
-fn main() {
-    // FIXME (#22405): Replace `Box::new` with `box` here when/if possible.
-    let r: Box<Foo> = Box::new(5);
-    let _m: Box<Foo> = r as Box<Foo>;
-    //~^ ERROR `core::marker::Sized` is not implemented for the type `Foo`
+#![allow(dead_code)]
+struct S<'b>(&'b i32);
+impl<'b> S<'b> {
+    fn bar<'a>(&'a mut self) -> &'a mut &'a i32 {
+        let ref mut x = self.0;
+        x //~ ERROR mismatched types
+    }
 }
+
+fn main() {}

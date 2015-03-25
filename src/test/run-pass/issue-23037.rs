@@ -8,10 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Test that we generate obsolete syntax errors around usages of `for Sized?`
+#![feature(core)]
 
-trait Foo for Sized? {} //~ ERROR obsolete syntax: for Sized?
-
-trait Bar for ?Sized {} //~ ERROR obsolete syntax: for Sized?
-
-fn main() { }
+use std::simd::i32x4;
+fn main() {
+    let foo = i32x4(1,2,3,4);
+    let bar = i32x4(40,30,20,10);
+    let baz = foo + bar;
+    assert!(baz.0 == 41 && baz.1 == 32 && baz.2 == 23 && baz.3 == 14);
+}

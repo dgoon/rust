@@ -1017,7 +1017,7 @@ fn compile_submatch<'a, 'p, 'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
         None => {
             let data = &m[0].data;
             for &(ref ident, ref value_ptr) in &m[0].bound_ptrs {
-                let binfo = data.bindings_map[*ident];
+                let binfo = *data.bindings_map.get(ident).unwrap();
                 call_lifetime_start(bcx, binfo.llmatch);
                 if binfo.trmode == TrByRef && type_is_fat_ptr(bcx.tcx(), binfo.ty) {
                     expr::copy_fat_ptr(bcx, *value_ptr, binfo.llmatch);
@@ -1352,12 +1352,12 @@ impl<'tcx> euv::Delegate<'tcx> for ReassignmentChecker {
     fn mutate(&mut self, _: ast::NodeId, _: Span, cmt: mc::cmt, _: euv::MutateMode) {
         match cmt.cat {
             mc::cat_upvar(mc::Upvar { id: ty::UpvarId { var_id: vid, .. }, .. }) |
-            mc::cat_local(vid) => self.reassigned = self.node == vid,
+            mc::cat_local(vid) => self.reassigned |= self.node == vid,
             mc::cat_interior(ref base_cmt, mc::InteriorField(field)) => {
                 match base_cmt.cat {
                     mc::cat_upvar(mc::Upvar { id: ty::UpvarId { var_id: vid, .. }, .. }) |
                     mc::cat_local(vid) => {
-                        self.reassigned = self.node == vid && Some(field) == self.field
+                        self.reassigned |= self.node == vid && Some(field) == self.field
                     },
                     _ => {}
                 }
