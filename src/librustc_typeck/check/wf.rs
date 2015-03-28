@@ -22,7 +22,7 @@ use util::ppaux::{Repr, UserString};
 
 use std::collections::HashSet;
 use syntax::ast;
-use syntax::ast_util::{local_def};
+use syntax::ast_util::local_def;
 use syntax::attr;
 use syntax::codemap::Span;
 use syntax::parse::token::{self, special_idents};
@@ -528,7 +528,7 @@ pub struct BoundsChecker<'cx,'tcx:'cx> {
     // has left it as a NodeId rather than porting to CodeExtent.
     scope: ast::NodeId,
 
-    binding_count: uint,
+    binding_count: usize,
     cache: Option<&'cx mut HashSet<Ty<'tcx>>>,
 }
 

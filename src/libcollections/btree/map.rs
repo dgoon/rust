@@ -24,7 +24,7 @@ use core::default::Default;
 use core::fmt::Debug;
 use core::hash::{Hash, Hasher};
 use core::iter::{Map, FromIterator, IntoIterator};
-use core::ops::{Index};
+use core::ops::Index;
 use core::{iter, fmt, mem, usize};
 use Bound::{self, Included, Excluded, Unbounded};
 
@@ -915,20 +915,6 @@ impl<K: Debug, V: Debug> Debug for BTreeMap<K, V> {
     }
 }
 
-#[cfg(stage0)]
-#[stable(feature = "rust1", since = "1.0.0")]
-impl<K: Ord, Q: ?Sized, V> Index<Q> for BTreeMap<K, V>
-    where K: Borrow<Q>, Q: Ord
-{
-    type Output = V;
-
-    #[inline]
-    fn index(&self, key: &Q) -> &V {
-        self.get(key).expect("no entry found for key")
-    }
-}
-
-#[cfg(not(stage0))]
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, K: Ord, Q: ?Sized, V> Index<&'a Q> for BTreeMap<K, V>
     where K: Borrow<Q>, Q: Ord
