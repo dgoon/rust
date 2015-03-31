@@ -50,9 +50,9 @@ parameter, of which there are three variants: `self`, `&self`, and `&mut self`.
 You can think of this first parameter as being the `x` in `x.foo()`. The three
 variants correspond to the three kinds of thing `x` could be: `self` if it's
 just a value on the stack, `&self` if it's a reference, and `&mut self` if it's
-a mutable reference. We should default to using `&self`, as it's the most
-common, as Rustaceans prefer borrowing over taking ownership, and references 
-over mutable references. Here's an example of all three variants:
+a mutable reference. We should default to using `&self`, as you should prefer
+borrowing over taking ownership, as well as taking immutable references
+over mutable ones. Here's an example of all three variants:
 
 ```rust
 struct Circle {
@@ -181,17 +181,23 @@ impl Circle {
 }
 
 struct CircleBuilder {
-    coordinate: f64,
+    x: f64,
+    y: f64,
     radius: f64,
 }
 
 impl CircleBuilder {
     fn new() -> CircleBuilder {
-        CircleBuilder { coordinate: 0.0, radius: 0.0, }
+        CircleBuilder { x: 0.0, y: 0.0, radius: 0.0, }
     }
 
-    fn coordinate(&mut self, coordinate: f64) -> &mut CircleBuilder {
-        self.coordinate = coordinate;
+    fn x(&mut self, coordinate: f64) -> &mut CircleBuilder {
+        self.x = coordinate;
+        self
+    }
+
+    fn y(&mut self, coordinate: f64) -> &mut CircleBuilder {
+        self.x = coordinate;
         self
     }
 
@@ -201,18 +207,20 @@ impl CircleBuilder {
     }
 
     fn finalize(&self) -> Circle {
-        Circle { x: self.coordinate, y: self.coordinate, radius: self.radius }
+        Circle { x: self.x, y: self.y, radius: self.radius }
     }
 }
 
 fn main() {
     let c = CircleBuilder::new()
-                .coordinate(10.0)
-                .radius(5.0)
+                .x(1.0)
+                .y(2.0)
+                .radius(2.0)
                 .finalize();
 
-
     println!("area: {}", c.area());
+    println!("x: {}", c.x);
+    println!("y: {}", c.y);
 }
 ```
 
