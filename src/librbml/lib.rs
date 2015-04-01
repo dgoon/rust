@@ -123,7 +123,6 @@
        html_root_url = "http://doc.rust-lang.org/nightly/",
        html_playground_url = "http://play.rust-lang.org/")]
 
-#![feature(io)]
 #![feature(core)]
 #![feature(rustc_private)]
 #![feature(staged_api)]
@@ -241,7 +240,6 @@ pub mod reader {
 
     use std::isize;
     use std::mem::transmute;
-    use std::num::Int;
     use std::slice::bytes;
 
     use serialize;
@@ -346,7 +344,7 @@ pub mod reader {
 
         unsafe {
             let ptr = data.as_ptr().offset(start as isize) as *const u32;
-            let val = Int::from_be(*ptr);
+            let val = u32::from_be(*ptr);
 
             let i = (val >> 28) as usize;
             let (shift, mask) = SHIFT_MASK_TABLE[i];
@@ -835,7 +833,6 @@ pub mod reader {
 
 pub mod writer {
     use std::mem;
-    use std::num::Int;
     use std::io::prelude::*;
     use std::io::{self, SeekFrom, Cursor};
     use std::slice::bytes;
@@ -864,8 +861,8 @@ pub mod writer {
         } else if 0x100 <= n && n < NUM_TAGS {
             w.write_all(&[0xf0 | (n >> 8) as u8, n as u8])
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "invalid tag",
-                               Some(n.to_string())))
+            Err(io::Error::new(io::ErrorKind::Other,
+                               &format!("invalid tag: {}", n)[..]))
         }
     }
 
@@ -878,7 +875,7 @@ pub mod writer {
             4 => w.write_all(&[0x10 | ((n >> 24) as u8), (n >> 16) as u8,
                             (n >> 8) as u8, n as u8]),
             _ => Err(io::Error::new(io::ErrorKind::Other,
-                                    "isize too big", Some(n.to_string())))
+                                    &format!("isize too big: {}", n)[..]))
         }
     }
 
@@ -887,8 +884,8 @@ pub mod writer {
         if n < 0x4000 { return write_sized_vuint(w, n, 2); }
         if n < 0x200000 { return write_sized_vuint(w, n, 3); }
         if n < 0x10000000 { return write_sized_vuint(w, n, 4); }
-        Err(io::Error::new(io::ErrorKind::Other, "isize too big",
-                           Some(n.to_string())))
+        Err(io::Error::new(io::ErrorKind::Other,
+                           &format!("isize too big: {}", n)[..]))
     }
 
     impl<'a> Encoder<'a> {
@@ -1079,8 +1076,8 @@ pub mod writer {
                 self.wr_tagged_raw_u32(EsSub32 as usize, v)
             } else {
                 Err(io::Error::new(io::ErrorKind::Other,
-                                   "length or variant id too big",
-                                   Some(v.to_string())))
+                                   &format!("length or variant id too big: {}",
+                                            v)[..]))
             }
         }
 
