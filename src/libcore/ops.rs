@@ -165,7 +165,7 @@ macro_rules! forward_ref_binop {
 /// ```
 /// use std::ops::Add;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl Add for Foo {
@@ -219,7 +219,7 @@ add_impl! { usize u8 u16 u32 u64 isize i8 i16 i32 i64 f32 f64 }
 /// ```
 /// use std::ops::Sub;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl Sub for Foo {
@@ -273,7 +273,7 @@ sub_impl! { usize u8 u16 u32 u64 isize i8 i16 i32 i64 f32 f64 }
 /// ```
 /// use std::ops::Mul;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl Mul for Foo {
@@ -327,7 +327,7 @@ mul_impl! { usize u8 u16 u32 u64 isize i8 i16 i32 i64 f32 f64 }
 /// ```
 /// use std::ops::Div;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl Div for Foo {
@@ -381,7 +381,7 @@ div_impl! { usize u8 u16 u32 u64 isize i8 i16 i32 i64 f32 f64 }
 /// ```
 /// use std::ops::Rem;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl Rem for Foo {
@@ -454,7 +454,7 @@ rem_float_impl! { f64, fmod }
 /// ```
 /// use std::ops::Neg;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl Neg for Foo {
@@ -482,8 +482,10 @@ pub trait Neg {
     fn neg(self) -> Self::Output;
 }
 
-macro_rules! neg_impl {
-    ($($t:ty)*) => ($(
+
+
+macro_rules! neg_impl_core {
+    ($id:ident => $body:expr, $($t:ty)*) => ($(
         #[stable(feature = "rust1", since = "1.0.0")]
         #[allow(unsigned_negation)]
         impl Neg for $t {
@@ -492,14 +494,28 @@ macro_rules! neg_impl {
 
             #[inline]
             #[stable(feature = "rust1", since = "1.0.0")]
-            fn neg(self) -> $t { -self }
+            fn neg(self) -> $t { let $id = self; $body }
         }
 
         forward_ref_unop! { impl Neg, neg for $t }
     )*)
 }
 
-neg_impl! { usize u8 u16 u32 u64 isize i8 i16 i32 i64 f32 f64 }
+macro_rules! neg_impl_numeric {
+    ($($t:ty)*) => { neg_impl_core!{ x => -x, $($t)*} }
+}
+
+macro_rules! neg_impl_unsigned {
+    ($($t:ty)*) => {
+        neg_impl_core!{ x => {
+            #[cfg(stage0)]
+            use ::num::wrapping::WrappingOps;
+            !x.wrapping_add(1)
+        }, $($t)*} }
+}
+
+// neg_impl_unsigned! { usize u8 u16 u32 u64 }
+neg_impl_numeric! { isize i8 i16 i32 i64 f32 f64 }
 
 /// The `Not` trait is used to specify the functionality of unary `!`.
 ///
@@ -511,7 +527,7 @@ neg_impl! { usize u8 u16 u32 u64 isize i8 i16 i32 i64 f32 f64 }
 /// ```
 /// use std::ops::Not;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl Not for Foo {
@@ -565,7 +581,7 @@ not_impl! { bool usize u8 u16 u32 u64 isize i8 i16 i32 i64 }
 /// ```
 /// use std::ops::BitAnd;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl BitAnd for Foo {
@@ -619,7 +635,7 @@ bitand_impl! { bool usize u8 u16 u32 u64 isize i8 i16 i32 i64 }
 /// ```
 /// use std::ops::BitOr;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl BitOr for Foo {
@@ -673,7 +689,7 @@ bitor_impl! { bool usize u8 u16 u32 u64 isize i8 i16 i32 i64 }
 /// ```
 /// use std::ops::BitXor;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl BitXor for Foo {
@@ -727,7 +743,7 @@ bitxor_impl! { bool usize u8 u16 u32 u64 isize i8 i16 i32 i64 }
 /// ```
 /// use std::ops::Shl;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl Shl<Foo> for Foo {
@@ -799,7 +815,7 @@ shl_impl_all! { u8 u16 u32 u64 usize i8 i16 i32 i64 isize }
 /// ```
 /// use std::ops::Shr;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 ///
 /// impl Shr<Foo> for Foo {
@@ -871,7 +887,7 @@ shr_impl_all! { u8 u16 u32 u64 usize i8 i16 i32 i64 isize }
 /// ```
 /// use std::ops::Index;
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 /// struct Bar;
 ///
@@ -912,7 +928,7 @@ pub trait Index<Idx: ?Sized> {
 /// ```
 /// use std::ops::{Index, IndexMut};
 ///
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct Foo;
 /// struct Bar;
 ///
@@ -1117,6 +1133,7 @@ impl<'a, T: ?Sized> DerefMut for &'a mut T {
 #[lang="fn"]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_paren_sugar]
+#[fundamental] // so that regex can rely that `&str: !FnMut`
 pub trait Fn<Args> : FnMut<Args> {
     /// This is called when the call operator is used.
     extern "rust-call" fn call(&self, args: Args) -> Self::Output;
@@ -1126,6 +1143,7 @@ pub trait Fn<Args> : FnMut<Args> {
 #[lang="fn_mut"]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_paren_sugar]
+#[fundamental] // so that regex can rely that `&str: !FnMut`
 pub trait FnMut<Args> : FnOnce<Args> {
     /// This is called when the call operator is used.
     extern "rust-call" fn call_mut(&mut self, args: Args) -> Self::Output;
@@ -1135,10 +1153,60 @@ pub trait FnMut<Args> : FnOnce<Args> {
 #[lang="fn_once"]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[rustc_paren_sugar]
+#[fundamental] // so that regex can rely that `&str: !FnMut`
 pub trait FnOnce<Args> {
     /// The returned type after the call operator is used.
     type Output;
 
     /// This is called when the call operator is used.
     extern "rust-call" fn call_once(self, args: Args) -> Self::Output;
+}
+
+#[cfg(not(stage0))]
+mod impls {
+    use marker::Sized;
+    use super::{Fn, FnMut, FnOnce};
+
+    impl<'a,A,F:?Sized> Fn<A> for &'a F
+        where F : Fn<A>
+    {
+        extern "rust-call" fn call(&self, args: A) -> F::Output {
+            (**self).call(args)
+        }
+    }
+
+    impl<'a,A,F:?Sized> FnMut<A> for &'a F
+        where F : Fn<A>
+    {
+        extern "rust-call" fn call_mut(&mut self, args: A) -> F::Output {
+            (**self).call(args)
+        }
+    }
+
+    impl<'a,A,F:?Sized> FnOnce<A> for &'a F
+        where F : Fn<A>
+    {
+        type Output = F::Output;
+
+        extern "rust-call" fn call_once(self, args: A) -> F::Output {
+            (*self).call(args)
+        }
+    }
+
+    impl<'a,A,F:?Sized> FnMut<A> for &'a mut F
+        where F : FnMut<A>
+    {
+        extern "rust-call" fn call_mut(&mut self, args: A) -> F::Output {
+            (*self).call_mut(args)
+        }
+    }
+
+    impl<'a,A,F:?Sized> FnOnce<A> for &'a mut F
+        where F : FnMut<A>
+    {
+        type Output = F::Output;
+        extern "rust-call" fn call_once(mut self, args: A) -> F::Output {
+            (*self).call_mut(args)
+        }
+    }
 }

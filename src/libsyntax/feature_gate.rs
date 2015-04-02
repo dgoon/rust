@@ -25,7 +25,7 @@
 use self::Status::*;
 use self::AttributeType::*;
 
-use abi::RustIntrinsic;
+use abi::Abi;
 use ast::NodeId;
 use ast;
 use attr;
@@ -91,6 +91,8 @@ const KNOWN_FEATURES: &'static [(&'static str, &'static str, Status)] = &[
     ("start", "1.0.0", Active),
     ("main", "1.0.0", Active),
 
+    ("fundamental", "1.0.0", Active),
+
     // Deprecate after snapshot
     // SNAP 5520801
     ("unsafe_destructor", "1.0.0", Active),
@@ -150,6 +152,9 @@ const KNOWN_FEATURES: &'static [(&'static str, &'static str, Status)] = &[
 
     // #23121. Array patterns have some hazards yet.
     ("slice_patterns", "1.0.0", Active),
+
+    // Allows use of unary negate on unsigned integers, e.g. -e for e: u8
+    ("negate_unsigned", "1.0.0", Active),
 ];
 // (changing above list without updating src/doc/reference.md makes @cmr sad)
 
@@ -237,6 +242,10 @@ pub const KNOWN_ATTRIBUTES: &'static [(&'static str, AttributeType)] = &[
     ("allow_internal_unstable", Gated("allow_internal_unstable",
                                       EXPLAIN_ALLOW_INTERNAL_UNSTABLE)),
 
+    ("fundamental", Gated("fundamental",
+                          "the `#[fundamental]` attribute \
+                           is an experimental feature")),
+
     // FIXME: #14408 whitelist docs since rustdoc looks at them
     ("doc", Whitelisted),
 
@@ -286,7 +295,7 @@ pub const KNOWN_ATTRIBUTES: &'static [(&'static str, AttributeType)] = &[
     ("recursion_limit", CrateLevel),
 ];
 
-#[derive(PartialEq, Copy, Debug)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 pub enum AttributeType {
     /// Normal, builtin attribute that is consumed
     /// by the compiler before the unused_attribute check
@@ -319,6 +328,7 @@ pub struct Features {
     pub allow_custom_derive: bool,
     pub simd_ffi: bool,
     pub unmarked_api: bool,
+    pub negate_unsigned: bool,
     /// spans of #![feature] attrs for stable language features. for error reporting
     pub declared_stable_lang_features: Vec<Span>,
     /// #![feature] attrs for non-language (library) features
@@ -340,6 +350,7 @@ impl Features {
             allow_custom_derive: false,
             simd_ffi: false,
             unmarked_api: false,
+            negate_unsigned: false,
             declared_stable_lang_features: Vec::new(),
             declared_lib_features: Vec::new()
         }
@@ -511,7 +522,7 @@ impl<'a, 'v> Visitor<'v> for PostExpansionVisitor<'a> {
                                        across platforms, it is recommended to \
                                        use `#[link(name = \"foo\")]` instead")
                 }
-                if foreign_module.abi == RustIntrinsic {
+                if foreign_module.abi == Abi::RustIntrinsic {
                     self.gate_feature("intrinsics",
                                       i.span,
                                       "intrinsics are subject to change")
@@ -627,10 +638,16 @@ impl<'a, 'v> Visitor<'v> for PostExpansionVisitor<'a> {
                 span: Span,
                 _node_id: NodeId) {
         match fn_kind {
-            visit::FkItemFn(_, _, _, abi) if abi == RustIntrinsic => {
+            visit::FkItemFn(_, _, _, abi) if abi == Abi::RustIntrinsic => {
                 self.gate_feature("intrinsics",
                                   span,
                                   "intrinsics are subject to change")
+            }
+            visit::FkItemFn(_, _, _, abi) |
+            visit::FkMethod(_, &ast::MethodSig { abi, .. }) if abi == Abi::RustCall => {
+                self.gate_feature("unboxed_closures",
+                                  span,
+                                  "rust-call ABI is subject to change")
             }
             _ => {}
         }
@@ -712,6 +729,7 @@ fn check_crate_inner<F>(cm: &CodeMap, span_handler: &SpanHandler,
         allow_custom_derive: cx.has_feature("custom_derive"),
         simd_ffi: cx.has_feature("simd_ffi"),
         unmarked_api: cx.has_feature("unmarked_api"),
+        negate_unsigned: cx.has_feature("negate_unsigned"),
         declared_stable_lang_features: accepted_features,
         declared_lib_features: unknown_features
     }

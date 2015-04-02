@@ -28,7 +28,7 @@ use syntax::visit;
 use syntax::print::{pp, pprust};
 use util::nodemap::NodeMap;
 
-#[derive(Copy, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum EntryOrExit {
     Entry,
     Exit,
@@ -108,7 +108,7 @@ impl<'a, 'tcx, O:DataFlowOperator> pprust::PpAnn for DataFlowContext<'a, 'tcx, O
             pprust::NodeIdent(_) | pprust::NodeName(_) => 0,
             pprust::NodeExpr(expr) => expr.id,
             pprust::NodeBlock(blk) => blk.id,
-            pprust::NodeItem(_) => 0,
+            pprust::NodeItem(_) | pprust::NodeSubItem(_) => 0,
             pprust::NodePat(pat) => pat.id
         };
 

@@ -58,7 +58,7 @@ use middle::subst::{self, ParamSpace, Subst, Substs, VecPerParamSpace};
 use middle::traits;
 use middle::ty;
 use middle::ty_fold::{self, TypeFoldable, TypeFolder};
-use middle::ty_walk::TypeWalker;
+use middle::ty_walk::{self, TypeWalker};
 use util::ppaux::{note_and_explain_region, bound_region_ptr_to_string};
 use util::ppaux::ty_to_string;
 use util::ppaux::{Repr, UserString};
@@ -89,7 +89,8 @@ use syntax::codemap::Span;
 use syntax::parse::token::{self, InternedString, special_idents};
 use syntax::print::pprust;
 use syntax::ptr::P;
-use syntax::{ast, ast_map};
+use syntax::ast;
+use syntax::ast_map::{self, LinkedPath};
 
 pub type Disr = u64;
 
@@ -261,7 +262,7 @@ pub struct field_ty {
 
 // Contains information needed to resolve types and (in the future) look up
 // the types of AST nodes.
-#[derive(Copy, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct creader_cache_key {
     pub cnum: CrateNum,
     pub pos: usize,
@@ -595,7 +596,7 @@ pub type ObjectCastMap<'tcx> = RefCell<NodeMap<ty::PolyTraitRef<'tcx>>>;
 /// will push one or more such restriction into the
 /// `transmute_restrictions` vector during `intrinsicck`. They are
 /// then checked during `trans` by the fn `check_intrinsics`.
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct TransmuteRestriction<'tcx> {
     /// The span whence the restriction comes.
     pub span: Span,
@@ -885,7 +886,7 @@ macro_rules! sty_debug_print {
         // variable names.
         mod inner {
             use middle::ty;
-            #[derive(Copy)]
+            #[derive(Copy, Clone)]
             struct DebugStat {
                 total: usize,
                 region_infer: usize,
@@ -3167,21 +3168,11 @@ impl<'tcx> TyS<'tcx> {
         TypeWalker::new(self)
     }
 
-    /// Iterator that walks types reachable from `self`, in
-    /// depth-first order. Note that this is a shallow walk. For
-    /// example:
-    ///
-    /// ```notrust
-    /// isize => { }
-    /// Foo<Bar<isize>> => { Bar<isize>, isize }
-    /// [isize] => { isize }
-    /// ```
-    pub fn walk_children(&'tcx self) -> TypeWalker<'tcx> {
-        // Walks type reachable from `self` but not `self
-        let mut walker = self.walk();
-        let r = walker.next();
-        assert_eq!(r, Some(self));
-        walker
+    /// Iterator that walks the immediate children of `self`.  Hence
+    /// `Foo<Bar<i32>, u32>` yields the sequence `[Bar<i32>, u32]`
+    /// (but not `i32`, like `walk`).
+    pub fn walk_shallow(&'tcx self) -> IntoIter<Ty<'tcx>> {
+        ty_walk::walk_shallow(self)
     }
 
     pub fn as_opt_param_ty(&self) -> Option<ty::ParamTy> {
@@ -4012,7 +4003,7 @@ pub fn is_instantiable<'tcx>(cx: &ctxt<'tcx>, r_ty: Ty<'tcx>) -> bool {
 ///
 /// The ordering of the cases is significant. They are sorted so that cmp::max
 /// will keep the "more erroneous" of two values.
-#[derive(Copy, PartialOrd, Ord, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Debug)]
 pub enum Representability {
     Representable,
     ContainsRecursive,
@@ -4743,7 +4734,7 @@ pub fn expr_is_lval(tcx: &ctxt, e: &ast::Expr) -> bool {
 /// two kinds of rvalues is an artifact of trans which reflects how we will
 /// generate code for that kind of expression.  See trans/expr.rs for more
 /// information.
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub enum ExprKind {
     LvalueExpr,
     RvalueDpsExpr,
@@ -5439,7 +5430,7 @@ pub fn item_path_str(cx: &ctxt, id: ast::DefId) -> String {
     with_path(cx, id, |path| ast_map::path_to_string(path)).to_string()
 }
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub enum DtorKind {
     NoDtor,
     TraitDtor(DefId, bool)
@@ -5484,7 +5475,7 @@ pub fn with_path<T, F>(cx: &ctxt, id: ast::DefId, f: F) -> T where
     if id.krate == ast::LOCAL_CRATE {
         cx.map.with_path(id.node, f)
     } else {
-        f(csearch::get_item_path(cx, id).iter().cloned().chain(None))
+        f(csearch::get_item_path(cx, id).iter().cloned().chain(LinkedPath::empty()))
     }
 }
 
@@ -7163,7 +7154,7 @@ pub fn make_substs_for_receiver_types<'tcx>(tcx: &ty::ctxt<'tcx>,
     trait_ref.substs.clone().with_method(meth_tps, meth_regions)
 }
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub enum CopyImplementationError {
     FieldDoesNotImplementCopy(ast::Name),
     VariantDoesNotImplementCopy(ast::Name),

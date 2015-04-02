@@ -120,6 +120,7 @@ use syntax::attr::AttrMetaMethods;
 use syntax::ast::{self, DefId, Visibility};
 use syntax::ast_util::{self, local_def};
 use syntax::codemap::{self, Span};
+use syntax::feature_gate;
 use syntax::owned_slice::OwnedSlice;
 use syntax::parse::token;
 use syntax::print::pprust;
@@ -204,7 +205,7 @@ struct CastCheck<'tcx> {
 
 /// When type-checking an expression, we propagate downward
 /// whatever type hint we are able in the form of an `Expectation`.
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub enum Expectation<'tcx> {
     /// We know nothing about what type this expression should have.
     NoExpectation,
@@ -1951,14 +1952,14 @@ impl<'a, 'tcx> RegionScope for FnCtxt<'a, 'tcx> {
     }
 }
 
-#[derive(Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LvaluePreference {
     PreferMutLvalue,
     NoPreference
 }
 
 /// Whether `autoderef` requires types to resolve.
-#[derive(Copy, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum UnresolvedTypeAction {
     /// Produce an error and return `ty_err` whenever a type cannot
     /// be resolved (i.e. it is `ty_infer`).
@@ -3258,6 +3259,15 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
                                                       tcx.lang_items.neg_trait(),
                                                       expr, &**oprnd, oprnd_t, unop);
                     }
+                    if let ty::ty_uint(_) = oprnd_t.sty {
+                        if !tcx.sess.features.borrow().negate_unsigned {
+                            feature_gate::emit_feature_err(
+                                &tcx.sess.parse_sess.span_diagnostic,
+                                "negate_unsigned",
+                                expr.span,
+                                "unary negation of unsigned integers may be removed in the future");
+                        }
+                    }
                 }
             }
         }
@@ -3329,7 +3339,7 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
                                 &format!("unbound path {}", expr.repr(tcx)))
           };
 
-          let mut def = path_res.base_def;
+          let def = path_res.base_def;
           if path_res.depth == 0 {
               let (scheme, predicates) =
                   type_scheme_and_predicates_for_def(fcx, expr.span, def);
@@ -3339,9 +3349,11 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
           } else {
               let ty_segments = path.segments.init();
               let base_ty_end = path.segments.len() - path_res.depth;
-              let ty = astconv::finish_resolving_def_to_ty(fcx, fcx, expr.span,
+              let ty = astconv::finish_resolving_def_to_ty(fcx,
+                                                           fcx,
+                                                           expr.span,
                                                            PathParamMode::Optional,
-                                                           &mut def,
+                                                           &def,
                                                            opt_self_ty,
                                                            &ty_segments[..base_ty_end],
                                                            &ty_segments[base_ty_end..]);

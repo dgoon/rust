@@ -62,6 +62,7 @@ use self::OutputLocation::*;
 use stats::Stats;
 use getopts::{OptGroup, optflag, optopt};
 use serialize::Encodable;
+use std::boxed::FnBox;
 use term::Terminal;
 use term::color::{Color, RED, YELLOW, GREEN, CYAN};
 
@@ -79,7 +80,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::thunk::{Thunk, Invoke};
+use std::thunk::Thunk;
 use std::time::Duration;
 
 // to be used by rustc to compile tests in libtest
@@ -158,7 +159,7 @@ pub enum TestFn {
     StaticBenchFn(fn(&mut Bencher)),
     StaticMetricFn(fn(&mut MetricMap)),
     DynTestFn(Thunk<'static>),
-    DynMetricFn(Box<for<'a> Invoke<&'a mut MetricMap>+'static>),
+    DynMetricFn(Box<FnBox(&mut MetricMap)+Send>),
     DynBenchFn(Box<TDynBenchFn+'static>)
 }
 
@@ -193,7 +194,7 @@ impl fmt::Debug for TestFn {
 /// This is fed into functions marked with `#[bench]` to allow for
 /// set-up & tear-down before running a piece of code repeatedly via a
 /// call to `iter`.
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct Bencher {
     iterations: u64,
     dur: Duration,
@@ -280,7 +281,7 @@ pub fn test_main_static(args: env::Args, tests: &[TestDescAndFn]) {
     test_main(&args, owned_tests)
 }
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub enum ColorConfig {
     AutoColor,
     AlwaysColor,
@@ -756,7 +757,7 @@ fn stdout_isatty() -> bool {
 }
 #[cfg(windows)]
 fn stdout_isatty() -> bool {
-    const STD_OUTPUT_HANDLE: libc::DWORD = -11;
+    const STD_OUTPUT_HANDLE: libc::DWORD = -11i32 as libc::DWORD;
     extern "system" {
         fn GetStdHandle(which: libc::DWORD) -> libc::HANDLE;
         fn GetConsoleMode(hConsoleHandle: libc::HANDLE,
@@ -936,7 +937,7 @@ pub fn run_test(opts: &TestOpts,
                     io::set_print(box Sink(data2.clone()));
                     io::set_panic(box Sink(data2));
                 }
-                testfn.invoke(())
+                testfn()
             }).unwrap();
             let test_result = calc_result(&desc, result_guard.join());
             let stdout = data.lock().unwrap().to_vec();
@@ -957,7 +958,7 @@ pub fn run_test(opts: &TestOpts,
         }
         DynMetricFn(f) => {
             let mut mm = MetricMap::new();
-            f.invoke(&mut mm);
+            f.call_box((&mut mm,));
             monitor_ch.send((desc, TrMetrics(mm), Vec::new())).unwrap();
             return;
         }
@@ -969,7 +970,7 @@ pub fn run_test(opts: &TestOpts,
         }
         DynTestFn(f) => run_test_inner(desc, monitor_ch, opts.nocapture, f),
         StaticTestFn(f) => run_test_inner(desc, monitor_ch, opts.nocapture,
-                                          Thunk::new(move|| f()))
+                                          Box::new(move|| f()))
     }
 }
 
@@ -1185,7 +1186,7 @@ mod tests {
                 ignore: true,
                 should_panic: ShouldPanic::No,
             },
-            testfn: DynTestFn(Thunk::new(move|| f())),
+            testfn: DynTestFn(Box::new(move|| f())),
         };
         let (tx, rx) = channel();
         run_test(&TestOpts::new(), false, desc, tx);
@@ -1202,7 +1203,7 @@ mod tests {
                 ignore: true,
                 should_panic: ShouldPanic::No,
             },
-            testfn: DynTestFn(Thunk::new(move|| f())),
+            testfn: DynTestFn(Box::new(move|| f())),
         };
         let (tx, rx) = channel();
         run_test(&TestOpts::new(), false, desc, tx);
@@ -1219,7 +1220,7 @@ mod tests {
                 ignore: false,
                 should_panic: ShouldPanic::Yes(None)
             },
-            testfn: DynTestFn(Thunk::new(move|| f())),
+            testfn: DynTestFn(Box::new(move|| f())),
         };
         let (tx, rx) = channel();
         run_test(&TestOpts::new(), false, desc, tx);
@@ -1236,7 +1237,7 @@ mod tests {
                 ignore: false,
                 should_panic: ShouldPanic::Yes(Some("error message"))
             },
-            testfn: DynTestFn(Thunk::new(move|| f())),
+            testfn: DynTestFn(Box::new(move|| f())),
         };
         let (tx, rx) = channel();
         run_test(&TestOpts::new(), false, desc, tx);
@@ -1253,7 +1254,7 @@ mod tests {
                 ignore: false,
                 should_panic: ShouldPanic::Yes(Some("foobar"))
             },
-            testfn: DynTestFn(Thunk::new(move|| f())),
+            testfn: DynTestFn(Box::new(move|| f())),
         };
         let (tx, rx) = channel();
         run_test(&TestOpts::new(), false, desc, tx);
@@ -1270,7 +1271,7 @@ mod tests {
                 ignore: false,
                 should_panic: ShouldPanic::Yes(None)
             },
-            testfn: DynTestFn(Thunk::new(move|| f())),
+            testfn: DynTestFn(Box::new(move|| f())),
         };
         let (tx, rx) = channel();
         run_test(&TestOpts::new(), false, desc, tx);
@@ -1306,7 +1307,7 @@ mod tests {
                     ignore: true,
                     should_panic: ShouldPanic::No,
                 },
-                testfn: DynTestFn(Thunk::new(move|| {})),
+                testfn: DynTestFn(Box::new(move|| {})),
             },
             TestDescAndFn {
                 desc: TestDesc {
@@ -1314,7 +1315,7 @@ mod tests {
                     ignore: false,
                     should_panic: ShouldPanic::No,
                 },
-                testfn: DynTestFn(Thunk::new(move|| {})),
+                testfn: DynTestFn(Box::new(move|| {})),
             });
         let filtered = filter_tests(&opts, tests);
 
@@ -1350,7 +1351,7 @@ mod tests {
                         ignore: false,
                         should_panic: ShouldPanic::No,
                     },
-                    testfn: DynTestFn(Thunk::new(testfn)),
+                    testfn: DynTestFn(Box::new(testfn)),
                 };
                 tests.push(test);
             }
