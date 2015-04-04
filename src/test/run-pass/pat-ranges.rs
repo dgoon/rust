@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// Parsing of range patterns
+
+const NUM1: i32 = 10;
+
+mod m {
+    pub const NUM2: i32 = 16;
+}
+
 fn main() {
-    let a = Vec::new();
-    match a {
-        [1, tail.., tail..] => {}, //~ ERROR: expected one of `,` or `@`, found `..`
-        _ => ()
-    }
+    if let NUM1 ... m::NUM2 = 10 {} else { panic!() }
+    if let ::NUM1 ... ::m::NUM2 = 11 {} else { panic!() }
+    if let -13 ... -10 = 12 { panic!() } else {}
 }

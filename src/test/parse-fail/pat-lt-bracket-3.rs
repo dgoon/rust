@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn main() {
-    let a = Vec::new();
-    match a {
-        [1, tail.., tail..] => {}, //~ ERROR: expected one of `,` or `@`, found `..`
-        _ => ()
+struct Foo<T>(T, T);
+
+impl<T> Foo<T> {
+    fn foo(&self) {
+        match *self {
+            Foo<T>(x, y) => {
+            //~^ error: expected one of `=>`, `@`, `if`, or `|`, found `<`
+              println!("Goodbye, World!")
+            }
+        }
     }
 }
