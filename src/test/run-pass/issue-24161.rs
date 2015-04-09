@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// error-pattern:illegal cast
-
-#![feature(libc)]
-
-extern crate libc;
-
-fn main() {
-  println!("{:?}", 1.0 as *const libc::FILE); // Can't cast float to foreign.
+#[derive(Copy,Clone)]
+struct Functions {
+    a: fn(u32) -> u32,
+    b: extern "C" fn(u32) -> u32,
+    c: unsafe fn(u32) -> u32,
+    d: unsafe extern "C" fn(u32) -> u32
 }
+
+pub fn main() {}
