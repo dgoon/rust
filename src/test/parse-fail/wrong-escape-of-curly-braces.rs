@@ -8,22 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::marker::MarkerTrait;
-
-trait Foo : MarkerTrait {
-    type Item;
-}
-
-struct X;
-
-impl Foo for X {
-    type Item = bool;
-}
-
-fn print_x(_: &Foo<Item=bool>, extra: &str) {
-    println!("{}", extra);
-}
-
-fn main() {
-    print_x(X);  //~error this function takes 2 parameters but 1 parameter was supplied
+fn f() {
+    let ok = "{{everything fine}}";
+    let bad = "\{it is wrong\}";
+    //~^  ERROR unknown character escape: {
+    //~^^  HELP if used in a formatting string, curly braces are escaped with `{{` and `}}`
+    //~^^^ ERROR unknown character escape: }
+    //~^^^^  HELP if used in a formatting string, curly braces are escaped with `{{` and `}}`
 }
