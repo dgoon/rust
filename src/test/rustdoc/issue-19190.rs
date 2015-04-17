@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,9 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-const TUP: (usize,) = (42,);
+use std::ops::Deref;
 
-fn main() {
-    let a: [isize; TUP.1];
-    //~^ ERROR attempted out-of-bounds tuple index
+pub struct Foo;
+pub struct Bar;
+
+impl Foo {
+    pub fn foo(&self) {}
 }
+
+impl Deref for Bar {
+    type Target = Foo;
+    fn deref(&self) -> &Foo { loop {} }
+}
+
+// @has issue_19190/struct.Bar.html
+// @has - '//*[@id="method.foo"]' 'fn foo(&self)'
