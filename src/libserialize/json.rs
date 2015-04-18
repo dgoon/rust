@@ -211,8 +211,8 @@ use std::str::FromStr;
 use std::string;
 use std::{char, f64, fmt, num, str};
 use std;
-use unicode::str as unicode_str;
-use unicode::str::Utf16Item;
+use rustc_unicode::str as unicode_str;
+use rustc_unicode::str::Utf16Item;
 
 use Encodable;
 
@@ -1540,7 +1540,7 @@ impl<T: Iterator<Item=char>> Parser<T> {
             F64Value(res)
         } else {
             if neg {
-                let res = -(res as i64);
+                let res = (res as i64).wrapping_neg();
 
                 // Make sure we didn't underflow.
                 if res > 0 {

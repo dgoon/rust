@@ -13,17 +13,14 @@ pub use self::RenderSpan::*;
 pub use self::ColorConfig::*;
 use self::Destination::*;
 
-use codemap::{COMMAND_LINE_SP, COMMAND_LINE_EXPN, Pos, Span};
-use codemap;
+use codemap::{self, COMMAND_LINE_SP, COMMAND_LINE_EXPN, Pos, Span};
 use diagnostics;
 
 use std::cell::{RefCell, Cell};
-use std::cmp;
-use std::fmt;
+use std::{cmp, error, fmt};
 use std::io::prelude::*;
 use std::io;
-use term::WriterWrapper;
-use term;
+use term::{self, WriterWrapper};
 use libc;
 
 /// maximum number of lines we will print for each error; arbitrary.
@@ -83,14 +80,38 @@ pub trait Emitter {
 /// Used as a return value to signify a fatal error occurred. (It is also
 /// used as the argument to panic at the moment, but that will eventually
 /// not be true.)
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[must_use]
 pub struct FatalError;
 
+impl fmt::Display for FatalError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "parser fatal error")
+    }
+}
+
+impl error::Error for FatalError {
+    fn description(&self) -> &str {
+        "The parser has encountered a fatal error"
+    }
+}
+
 /// Signifies that the compiler died with an explicit call to `.bug`
 /// or `.span_bug` rather than a failed assertion, etc.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExplicitBug;
+
+impl fmt::Display for ExplicitBug {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "parser internal bug")
+    }
+}
+
+impl error::Error for ExplicitBug {
+    fn description(&self) -> &str {
+        "The parser has encountered an internal bug"
+    }
+}
 
 /// A span-handler is like a handler but also
 /// accepts span information for source-location
@@ -595,7 +616,7 @@ fn highlight_lines(err: &mut EmitterWriter,
         let mut s = String::new();
         // Skip is the number of characters we need to skip because they are
         // part of the 'filename:line ' part of the previous line.
-        let skip = fm.name.width(false) + digits + 3;
+        let skip = fm.name.chars().count() + digits + 3;
         for _ in 0..skip {
             s.push(' ');
         }
@@ -615,7 +636,7 @@ fn highlight_lines(err: &mut EmitterWriter,
                         col += 8 - col%8;
                         s.push('\t');
                     },
-                    c => for _ in 0..c.width(false).unwrap_or(0) {
+                    _ => {
                         col += 1;
                         s.push(' ');
                     },
@@ -627,7 +648,7 @@ fn highlight_lines(err: &mut EmitterWriter,
             let count = match lastc {
                 // Most terminals have a tab stop every eight columns by default
                 '\t' => 8 - col%8,
-                _ => lastc.width(false).unwrap_or(0),
+                _ => 1,
             };
             col += count;
             s.extend(::std::iter::repeat('~').take(count));
@@ -638,7 +659,7 @@ fn highlight_lines(err: &mut EmitterWriter,
                     if pos >= hi.col.to_usize() { break; }
                     let count = match ch {
                         '\t' => 8 - col%8,
-                        _ => ch.width(false).unwrap_or(0),
+                        _ => 1,
                     };
                     col += count;
                     s.extend(::std::iter::repeat('~').take(count));
@@ -664,6 +685,7 @@ fn highlight_lines(err: &mut EmitterWriter,
 /// than 6 lines), `end_highlight_lines` will print the first line, then
 /// dot dot dot, then last line, whereas `highlight_lines` prints the first
 /// six lines.
+#[allow(deprecated)]
 fn end_highlight_lines(w: &mut EmitterWriter,
                           cm: &codemap::CodeMap,
                           sp: Span,
@@ -694,7 +716,7 @@ fn end_highlight_lines(w: &mut EmitterWriter,
     }
     let last_line_start = format!("{}:{} ", fm.name, lines[lines.len()-1].line_index + 1);
     let hi = cm.lookup_char_pos(sp.hi);
-    let skip = last_line_start.width(false);
+    let skip = last_line_start.chars().count();
     let mut s = String::new();
     for _ in 0..skip {
         s.push(' ');
@@ -710,9 +732,7 @@ fn end_highlight_lines(w: &mut EmitterWriter,
             // position.
             match ch {
                 '\t' => s.push('\t'),
-                c => for _ in 0..c.width(false).unwrap_or(0) {
-                    s.push(' ');
-                },
+                _ => s.push(' '),
             }
         }
     }
