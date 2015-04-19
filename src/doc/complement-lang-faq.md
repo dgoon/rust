@@ -42,10 +42,7 @@ Let the fact that this is an easily countable number be a warning.
 
 ## Does it run on Windows?
 
-Yes. All development happens in lockstep on all 3 target platforms (using MinGW, not Cygwin). Note that the Windows implementation currently has some limitations; in particular, the 64-bit build is [not fully supported yet][win64], and all executables created by rustc [depend on libgcc DLL at runtime][libgcc].
-
-[win64]: https://github.com/rust-lang/rust/issues/1237
-[libgcc]: https://github.com/rust-lang/rust/issues/11782
+Yes. All development happens in lockstep on all 3 target platforms (using MinGW, not Cygwin).
 
 ## Is it OO? How do I do this thing I normally do in an OO language?
 
@@ -124,7 +121,7 @@ Yes. Calling C code from Rust is simple and exactly as efficient as calling C co
 
 Yes. The Rust code has to be exposed via an `extern` declaration, which makes it C-ABI compatible. Such a function can be passed to C code as a function pointer or, if given the `#[no_mangle]` attribute to disable symbol mangling, can be called directly from C code.
 
-## Why aren't function signatures inferred? Why only local slots?
+## Why aren't function signatures inferred? Why only local variables?
 
 * Mechanically, it simplifies the inference algorithm; inference only requires looking at one function at a time.
 * The same simplification goes double for human readers. A reader does not need an IDE running an inference algorithm across an entire crate to be able to guess at a function's argument types; it's always explicit and nearby.
