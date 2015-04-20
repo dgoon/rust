@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,8 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
+#![crate_name = "NonSnakeCase"]
+//~^ ERROR crate `NonSnakeCase` should have a snake case name such as `non_snake_case`
+#![deny(non_snake_case)]
 
-type v = [mut isize];
-    //~^  ERROR expected identifier, found keyword `mut`
-    //~^^ ERROR expected one of `(`, `+`, `::`, `;`, `<`, or `]`, found `isize`
+fn main() {}
