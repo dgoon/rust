@@ -7,8 +7,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//
-// ignore-lexer-test FIXME #15679
 
 //! String manipulation
 //!
@@ -341,7 +339,7 @@ impl<'a> DoubleEndedIterator for CharIndices<'a> {
 /// External iterator for a string's bytes.
 /// Use with the `std::iter` module.
 ///
-/// Created with `str::bytes`
+/// Created with the method `.bytes()`.
 #[stable(feature = "rust1", since = "1.0.0")]
 #[derive(Clone)]
 pub struct Bytes<'a>(Map<slice::Iter<'a, u8>, BytesDeref>);
@@ -636,10 +634,10 @@ impl<'a, P: Pattern<'a>> SplitInternal<'a, P> {
 
 generate_pattern_iterators! {
     forward:
-        /// Return type of `str::split()`
+        /// Created with the method `.split()`.
         struct Split;
     reverse:
-        /// Return type of `str::rsplit()`
+        /// Created with the method `.rsplit()`.
         struct RSplit;
     stability:
         #[stable(feature = "rust1", since = "1.0.0")]
@@ -650,10 +648,10 @@ generate_pattern_iterators! {
 
 generate_pattern_iterators! {
     forward:
-        /// Return type of `str::split_terminator()`
+        /// Created with the method `.split_terminator()`.
         struct SplitTerminator;
     reverse:
-        /// Return type of `str::rsplit_terminator()`
+        /// Created with the method `.rsplit_terminator()`.
         struct RSplitTerminator;
     stability:
         #[stable(feature = "rust1", since = "1.0.0")]
@@ -696,10 +694,10 @@ impl<'a, P: Pattern<'a>> SplitNInternal<'a, P> {
 
 generate_pattern_iterators! {
     forward:
-        /// Return type of `str::splitn()`
+        /// Created with the method `.splitn()`.
         struct SplitN;
     reverse:
-        /// Return type of `str::rsplitn()`
+        /// Created with the method `.rsplitn()`.
         struct RSplitN;
     stability:
         #[stable(feature = "rust1", since = "1.0.0")]
@@ -730,10 +728,10 @@ impl<'a, P: Pattern<'a>> MatchIndicesInternal<'a, P> {
 
 generate_pattern_iterators! {
     forward:
-        /// Return type of `str::match_indices()`
+        /// Created with the method `.match_indices()`.
         struct MatchIndices;
     reverse:
-        /// Return type of `str::rmatch_indices()`
+        /// Created with the method `.rmatch_indices()`.
         struct RMatchIndices;
     stability:
         #[unstable(feature = "core",
@@ -771,10 +769,10 @@ impl<'a, P: Pattern<'a>> MatchesInternal<'a, P> {
 
 generate_pattern_iterators! {
     forward:
-        /// Return type of `str::matches()`
+        /// Created with the method `.matches()`.
         struct Matches;
     reverse:
-        /// Return type of `str::rmatches()`
+        /// Created with the method `.rmatches()`.
         struct RMatches;
     stability:
         #[unstable(feature = "core", reason = "type got recently added")]
@@ -783,7 +781,7 @@ generate_pattern_iterators! {
     delegate double ended;
 }
 
-/// Return type of `str::lines()`
+/// Created with the method `.lines()`.
 #[stable(feature = "rust1", since = "1.0.0")]
 #[derive(Clone)]
 pub struct Lines<'a>(SplitTerminator<'a, char>);
@@ -811,7 +809,7 @@ impl<'a> DoubleEndedIterator for Lines<'a> {
     }
 }
 
-/// Return type of `str::lines_any()`
+/// Created with the method `.lines_any()`.
 #[stable(feature = "rust1", since = "1.0.0")]
 #[derive(Clone)]
 pub struct LinesAny<'a>(Map<Lines<'a>, LinesAnyMap>);

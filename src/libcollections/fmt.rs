@@ -7,8 +7,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//
-// ignore-lexer-test FIXME #15679
 
 //! Utilities for formatting and printing strings
 //!
@@ -246,7 +244,7 @@
 //!
 //! ```ignore
 //! format!      // described above
-//! write!       // first argument is a &mut old_io::Writer, the destination
+//! write!       // first argument is a &mut io::Write, the destination
 //! writeln!     // same as write but appends a newline
 //! print!       // the format string is printed to the standard output
 //! println!     // same as print but appends a newline
