@@ -8,12 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags:--test
-// ignore-pretty turns out the pretty-printer doesn't handle gensym'd things...
+// Regression test for issue #22779. An extra where clause was
+// permitted on the impl that is not present on the trait.
 
-mod tests {
-    use super::*;
-
-    #[test]
-    pub fn test(){}
+trait Tr<'a, T> {
+    fn renew<'b: 'a>(self) -> &'b mut [T];
 }
+
+impl<'a, T> Tr<'a, T> for &'a mut [T] {
+    fn renew<'b: 'a>(self) -> &'b mut [T] where 'a: 'b {
+        //~^ ERROR lifetime bound not satisfied
+        &mut self[..]
+    }
+}
+
+fn main() { }

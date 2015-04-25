@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags:--test
-// ignore-pretty turns out the pretty-printer doesn't handle gensym'd things...
+// Test that `#[rustc_on_unimplemented]` is gated by `on_unimplemented` feature
+// gate.
 
-mod tests {
-    use super::*;
+#[rustc_on_unimplemented = "test error `{Self}` with `{Bar}`"]
+//~^ ERROR the `#[rustc_on_unimplemented]` attribute is an experimental feature
+trait Foo<Bar>
+{}
 
-    #[test]
-    pub fn test(){}
-}
+fn main() {}

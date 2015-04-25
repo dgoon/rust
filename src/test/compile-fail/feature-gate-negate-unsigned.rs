@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags:--test
-// ignore-pretty turns out the pretty-printer doesn't handle gensym'd things...
+// Test that negating unsigned integers is gated by `negate_unsigned` feature
+// gate
 
-mod tests {
-    use super::*;
+const MAX: usize = -1;
+//~^ ERROR unary negation of unsigned integers may be removed in the future
 
-    #[test]
-    pub fn test(){}
-}
+fn main() {}

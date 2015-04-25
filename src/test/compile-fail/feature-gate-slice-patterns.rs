@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags:--test
-// ignore-pretty turns out the pretty-printer doesn't handle gensym'd things...
+// Test that slice pattern syntax is gated by `slice_patterns` feature gate
 
-mod tests {
-    use super::*;
-
-    #[test]
-    pub fn test(){}
+fn main() {
+    let x = [1, 2, 3, 4, 5];
+    match x {
+        [1, 2, xs..] => {} //~ ERROR slice pattern syntax is experimental
+    }
 }

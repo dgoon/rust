@@ -8,12 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags:--test
-// ignore-pretty turns out the pretty-printer doesn't handle gensym'd things...
+// Test related to #22779. In this case, the impl is an inherent impl,
+// so it doesn't have to match any trait, so no error results.
 
-mod tests {
-    use super::*;
+#![feature(rustc_attrs)]
+#![allow(dead_code)]
 
-    #[test]
-    pub fn test(){}
+struct MySlice<'a, T:'a>(&'a mut [T]);
+
+impl<'a, T> MySlice<'a, T> {
+    fn renew<'b: 'a>(self) -> &'b mut [T] where 'a: 'b {
+        &mut self.0[..]
+    }
 }
+
+#[rustc_error]
+fn main() { } //~ ERROR compilation successful

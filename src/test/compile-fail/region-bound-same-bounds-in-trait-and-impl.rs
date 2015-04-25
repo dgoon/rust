@@ -8,12 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags:--test
-// ignore-pretty turns out the pretty-printer doesn't handle gensym'd things...
+// Test related to #22779, but where the `'a:'b` relation
+// appears in the trait too. No error here.
 
-mod tests {
-    use super::*;
+#![feature(rustc_attrs)]
 
-    #[test]
-    pub fn test(){}
+trait Tr<'a, T> {
+    fn renew<'b: 'a>(self) -> &'b mut [T] where 'a: 'b;
 }
+
+impl<'a, T> Tr<'a, T> for &'a mut [T] {
+    fn renew<'b: 'a>(self) -> &'b mut [T] where 'a: 'b {
+        &mut self[..]
+    }
+}
+
+#[rustc_error]
+fn main() { } //~ ERROR compilation successful
