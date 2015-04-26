@@ -65,15 +65,12 @@ explicit code point lists. [^inputformat]
   provided to the grammar verifier, restricted to ASCII range, when verifying the
   grammar in this document.
 
-## Special Unicode Productions
+## Identifiers
 
-The following productions in the Rust grammar are defined in terms of Unicode
-properties: `ident`, `non_null`, `non_star`, `non_eol`, `non_slash_or_star`,
-`non_single_quote` and `non_double_quote`.
+An identifier is any nonempty Unicode[^non_ascii_idents] string of the following form:
 
-### Identifiers
-
-The `ident` production is any nonempty Unicode string of the following form:
+[^non_ascii_idents]: Non-ASCII characters in identifiers are currently feature
+  gated. This is expected to improve soon.
 
 - The first character has property `XID_start`
 - The remaining characters have property `XID_continue`
@@ -84,42 +81,34 @@ that does _not_ occur in the set of [keywords](#keywords).
 > character ranges used to form the more familiar C and Java language-family
 > identifiers.
 
-### Delimiter-restricted productions
-
-Some productions are defined by exclusion of particular Unicode characters:
-
-- `non_null` is any single Unicode character aside from `U+0000` (null)
-- `non_eol` is `non_null` restricted to exclude `U+000A` (`'\n'`)
-- `non_star` is `non_null` restricted to exclude `U+002A` (`*`)
-- `non_slash_or_star` is `non_null` restricted to exclude `U+002F` (`/`) and `U+002A` (`*`)
-- `non_single_quote` is `non_null` restricted to exclude `U+0027`  (`'`)
-- `non_double_quote` is `non_null` restricted to exclude `U+0022` (`"`)
-
 ## Comments
 
-Comments in Rust code follow the general C++ style of line and block-comment
-forms. Nested block comments are supported.
+Comments in Rust code follow the general C++ style of line (`//`) and
+block-comment (`/* ... */`) forms. Nested block comments are supported.
 
 Line comments beginning with exactly _three_ slashes (`///`), and block
 comments beginning with exactly one repeated asterisk in the block-open
 sequence (`/**`), are interpreted as a special syntax for `doc`
 [attributes](#attributes). That is, they are equivalent to writing
-`#[doc="..."]` around the body of the comment (this includes the comment
-characters themselves, i.e. `/// Foo` turns into `#[doc="/// Foo"]`).
+`#[doc="..."]` around the body of the comment, i.e., `/// Foo` turns into
+`#[doc="Foo"]`.
 
 Line comments beginning with `//!` and block comments beginning with `/*!` are
 doc comments that apply to the parent of the comment, rather than the item
 that follows.  That is, they are equivalent to writing `#![doc="..."]` around
-the body of the comment. `//!` comments are usually used to display
-information on the crate index page.
+the body of the comment. `//!` comments are usually used to document
+modules that occupy a source file.
 
 Non-doc comments are interpreted as a form of whitespace.
 
 ## Whitespace
 
-The `whitespace_char` production is any nonempty Unicode string consisting of
-any of the following Unicode characters: `U+0020` (space, `' '`), `U+0009`
-(tab, `'\t'`), `U+000A` (LF, `'\n'`), `U+000D` (CR, `'\r'`).
+Whitespace is any non-empty string containing any the following characters:
+
+- `U+0020` (space, `' '`)
+- `U+0009` (tab, `'\t'`)
+- `U+000A` (LF, `'\n'`)
+- `U+000D` (CR, `'\r'`)
 
 Rust is a "free-form" language, meaning that all forms of whitespace serve only
 to separate _tokens_ in the grammar, and have no semantic significance.
@@ -1977,7 +1966,7 @@ For any lint check `C`:
 
 The lint checks supported by the compiler can be found via `rustc -W help`,
 along with their default settings.  [Compiler
-plugins](book/plugins.html#lint-plugins) can provide additional lint checks.
+plugins](book/compiler-plugins.html#lint-plugins) can provide additional lint checks.
 
 ```{.ignore}
 mod m1 {
@@ -3647,4 +3636,4 @@ that have since been removed):
   pattern syntax
 
 [ffi]: book/ffi.html
-[plugin]: book/plugins.html
+[plugin]: book/compiler-plugins.html
