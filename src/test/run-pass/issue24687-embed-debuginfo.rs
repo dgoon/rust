@@ -8,18 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Test that `#[unsafe_destructor]` attribute is gated by `unsafe_destructor`
-// feature gate.
-//
-// (This test can be removed entirely when we remove the
-// `unsafe_destructor` feature itself.)
+// aux-build:issue24687_lib.rs
 
-struct D<'a>(&'a u32);
+extern crate issue24687_lib as d;
 
-#[unsafe_destructor]
-//~^ ERROR `#[unsafe_destructor]` does nothing anymore
-impl<'a> Drop for D<'a> {
-    fn drop(&mut self) { }
+fn main() {
+    // Create a d, which has a destructor whose body will be trans'ed
+    // into the generated code here, and thus the local debuginfo will
+    // need references into the original source locations from
+    // `importer` above.
+    let _d = d::D("Hi");
 }
-
-pub fn main() { }
