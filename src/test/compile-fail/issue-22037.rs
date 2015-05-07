@@ -1,4 +1,4 @@
-// Copyright 2012-2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct S<'a, T:'a> {
-    o: &'a Option<T>
+trait A {
+    type Output;
+    fn a(&self) -> <Self as A>::X;
+//~^ ERROR: use of undeclared associated type `A::X`
+}
+
+impl A for u32 {
+    type Output = u32;
+    fn a(&self) -> u32 {
+        0
+    }
 }
 
 fn main() {
-    S { o: &None }; //~ ERROR type annotations or generic parameter binding required
+    let a: u32 = 0;
+    let b: u32 = a.a();
 }

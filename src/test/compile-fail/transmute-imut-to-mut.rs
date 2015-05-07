@@ -1,4 +1,4 @@
-// Copyright 2012-2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct S<'a, T:'a> {
-    o: &'a Option<T>
-}
+// Tests that transmuting from &T to &mut T is Undefined Behavior.
+
+use std::mem::transmute;
 
 fn main() {
-    S { o: &None }; //~ ERROR type annotations or generic parameter binding required
+    let _a: &mut u8 = unsafe { transmute(&1u8) };
+    //~^ ERROR mutating transmuted &mut T from &T may cause undefined behavior
 }
+
+
