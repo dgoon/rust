@@ -8,12 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Bitrig-specific definitions
+struct S;
 
-#![unstable(feature = "raw_ext", reason = "recently added API")]
+trait InOut<T> { type Out; }
 
-pub mod raw;
+fn do_fold<B, F: InOut<B, Out=B>>(init: B, f: F) {}
 
-pub mod fs {
-    pub use sys::fs::MetadataExt;
+fn bot<T>() -> T { loop {} }
+
+fn main() {
+    do_fold(bot(), ()); //~ ERROR is not implemented for the type `()`
 }
