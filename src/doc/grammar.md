@@ -329,7 +329,7 @@ view_item : extern_crate_decl | use_decl ;
 
 ```antlr
 extern_crate_decl : "extern" "crate" crate_name
-crate_name: ident | ( string_lit as ident )
+crate_name: ident | ( ident "as" ident )
 ```
 
 ##### Use declarations
@@ -789,8 +789,8 @@ bound := path | lifetime
 
 ### Boxes
 
-## Tasks
+## Threads
 
-### Communication between tasks
+### Communication between threads
 
-### Task lifecycle
+### Thread lifecycle

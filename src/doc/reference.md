@@ -752,11 +752,10 @@ provided in the `extern_crate_decl`.
 The external crate is resolved to a specific `soname` at compile time, and a
 runtime linkage requirement to that `soname` is passed to the linker for
 loading at runtime. The `soname` is resolved at compile time by scanning the
-compiler's library path and matching the optional `crateid` provided as a
-string literal against the `crateid` attributes that were declared on the
-external crate when it was compiled. If no `crateid` is provided, a default
-`name` attribute is assumed, equal to the `ident` given in the
-`extern_crate_decl`.
+compiler's library path and matching the optional `crateid` provided against
+the `crateid` attributes that were declared on the external crate when it was
+compiled. If no `crateid` is provided, a default `name` attribute is assumed,
+equal to the `ident` given in the `extern_crate_decl`.
 
 Three examples of `extern crate` declarations:
 
@@ -3636,7 +3635,7 @@ that have since been removed):
 * ML Kit, Cyclone: region based memory management
 * Haskell (GHC): typeclasses, type families
 * Newsqueak, Alef, Limbo: channels, concurrency
-* Erlang: message passing, task failure, ~~linked task failure~~,
+* Erlang: message passing, thread failure, ~~linked thread failure~~,
   ~~lightweight concurrency~~
 * Swift: optional bindings
 * Scheme: hygienic macros
