@@ -273,8 +273,8 @@ See also http://doc.rust-lang.org/book/unsafe.html
 
 E0137: r##"
 This error indicates that the compiler found multiple functions with the
-#[main] attribute. This is an error because there must be a unique entry point
-into a Rust program.
+`#[main]` attribute. This is an error because there must be a unique entry
+point into a Rust program.
 "##,
 
 E0152: r##"
@@ -807,6 +807,7 @@ register_diagnostics! {
     E0017,
     E0019,
     E0022,
+    E0038,
     E0109,
     E0110,
     E0134,
