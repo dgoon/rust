@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,9 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(box_syntax)]
+#![ crate_name = "krate2" ]
+#![ crate_type = "lib" ]
 
-fn main() {
-    box ( () ) 0;
-    //~^ ERROR: only the exchange heap is currently supported
+use std::io::Write;
+
+pub fn hello() {
+    std::io::stdout().write_all(b"hello world!\n");
 }

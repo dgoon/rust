@@ -64,6 +64,43 @@ impl Foo for Bar {
 ```
 "##,
 
+E0053: r##"
+For any given method of a trait, the mutabilities of the parameters must match
+between the trait definition and the implementation.
+
+Here's an example where the mutability of the `self` parameter is wrong:
+
+```
+trait Foo { fn foo(&self); }
+
+struct Bar;
+
+impl Foo for Bar {
+    // error, the signature should be `fn foo(&self)` instead
+    fn foo(&mut self) { }
+}
+
+fn main() {}
+```
+
+Here's another example, this time for a non-`self` parameter:
+
+```
+trait Foo { fn foo(x: &mut bool) -> bool; }
+
+struct Bar;
+
+impl Foo for Bar {
+    // error, the type of `x` should be `&mut bool` instead
+    fn foo(x: &bool) -> bool { *x }
+}
+
+fn main() {}
+```
+
+
+"##,
+
 E0054: r##"
 It is not allowed to cast to a bool. If you are trying to cast a numeric type
 to a bool, you can compare it with zero instead:
@@ -91,6 +128,16 @@ enum variant, one of the fields was not provided. Each field should be specified
 exactly once.
 "##,
 
+E0066: r##"
+Box placement expressions (like C++'s "placement new") do not yet support any
+place expression except the exchange heap (i.e. `std::boxed::HEAP`).
+Furthermore, the syntax is changing to use `in` instead of `box`. See [RFC 470]
+and [RFC 809] for more details.
+
+[RFC 470]: https://github.com/rust-lang/rfcs/pull/470
+[RFC 809]: https://github.com/rust-lang/rfcs/pull/809
+"##,
+
 E0067: r##"
 The left-hand side of an assignment operator must be an lvalue expression. An
 lvalue expression represents a memory location and includes item paths (ie,
@@ -106,6 +153,21 @@ let mut list = LinkedList::new();
 // Bad: assignment to non-lvalue expression
 LinkedList::new() += 1;
 ```
+"##,
+
+E0069: r##"
+The compiler found a function whose body contains a `return;` statement but
+whose return type is not `()`. An example of this is:
+
+```
+// error
+fn foo() -> u8 {
+    return;
+}
+```
+
+Since `return;` is just like `return ();`, there is a mismatch between the
+function's return type and the value being returned.
 "##,
 
 E0081: r##"
@@ -302,6 +364,76 @@ it has been disabled for now.
 [iss20126]: https://github.com/rust-lang/rust/issues/20126
 "##,
 
+E0197: r##"
+Inherent implementations (one that do not implement a trait but provide
+methods associated with a type) are always safe because they are not
+implementing an unsafe trait. Removing the `unsafe` keyword from the inherent
+implementation will resolve this error.
+
+```
+struct Foo;
+
+// this will cause this error
+unsafe impl Foo { }
+// converting it to this will fix it
+impl Foo { }
+```
+
+"##,
+
+E0198: r##"
+A negative implementation is one that excludes a type from implementing a
+particular trait. Not being able to use a trait is always a safe operation,
+so negative implementations are always safe and never need to be marked as
+unsafe.
+
+```
+struct Foo;
+
+// unsafe is unnecessary
+unsafe impl !Clone for Foo { }
+// this will compile
+impl !Clone for Foo { }
+```
+
+"##,
+
+E0199: r##"
+Safe traits should not have unsafe implementations, therefore marking an
+implementation for a safe trait unsafe will cause a compiler error. Removing the
+unsafe marker on the trait noted in the error will resolve this problem.
+
+```
+struct Foo;
+
+trait Bar { }
+
+// this won't compile because Bar is safe
+unsafe impl Bar for Foo { }
+// this will compile
+impl Bar for Foo { }
+```
+
+"##,
+
+E0200: r##"
+Unsafe traits must have unsafe implementations. This error occurs when an
+implementation for an unsafe trait isn't marked as unsafe. This may be resolved
+by marking the unsafe implementation as unsafe.
+
+```
+struct Foo;
+
+unsafe trait Bar { }
+
+// this won't compile because Bar is unsafe and impl isn't unsafe
+impl Bar for Foo { }
+// this will compile
+unsafe impl Bar for Foo { }
+```
+
+"##,
+
 E0201: r##"
 It is an error to define a method--a trait method or an inherent method--more
 than once.
@@ -458,6 +590,48 @@ The `Sized` trait is a special trait built-in to the compiler for types with a
 constant size known at compile-time. This trait is automatically implemented
 for types as needed by the compiler, and it is currently disallowed to
 explicitly implement it for a type.
+"##,
+
+E0368: r##"
+This error indicates that a binary assignment operator like `+=` or `^=` was
+applied to the wrong types.
+
+A couple examples of this are as follows:
+
+```
+let mut x: u16 = 5;
+x ^= true; // error, `^=` cannot be applied to types `u16` and `bool`
+x += ();   // error, `+=` cannot be applied to types `u16` and `()`
+```
+
+Another problem you might be facing is this: suppose you've overloaded the `+`
+operator for some type `Foo` by implementing the `std::ops::Add` trait for
+`Foo`, but you find that using `+=` does not work, as in this example:
+
+```
+use std::ops::Add;
+
+struct Foo(u32);
+
+impl Add for Foo {
+    type Output = Foo;
+
+    fn add(self, rhs: Foo) -> Foo {
+        Foo(self.0 + rhs.0)
+    }
+}
+
+fn main() {
+    let mut x: Foo = Foo(5);
+    x += Foo(7); // error, `+= cannot be applied to types `Foo` and `Foo`
+}
+```
+
+This is because the binary assignment operators currently do not work off of
+traits, so it is not possible to overload them. See [RFC 953] for a proposal
+to change this.
+
+[RFC 953]: https://github.com/rust-lang/rfcs/pull/953
 "##
 
 }
@@ -478,15 +652,12 @@ register_diagnostics! {
     E0040, // explicit use of destructor method
     E0044, // foreign items may not have type parameters
     E0045, // variadic function must have C calling convention
-    E0053,
     E0055, // method has an incompatible type for trait
     E0057, // method has an incompatible type for trait
     E0059,
     E0060,
     E0061,
-    E0066,
     E0068,
-    E0069,
     E0070,
     E0071,
     E0072,
@@ -547,10 +718,6 @@ register_diagnostics! {
     E0194,
     E0195, // lifetime parameters or bounds on method do not match the trait declaration
     E0196, // cannot determine a type for this closure
-    E0197, // inherent impls cannot be declared as unsafe
-    E0198, // negative implementations are not unsafe
-    E0199, // implementing trait is not unsafe
-    E0200, // trait requires an `unsafe impl` declaration
     E0202, // associated items are not allowed in inherent impls
     E0203, // type parameter has more than one relaxed default bound,
            // and only one is supported
@@ -606,7 +773,6 @@ register_diagnostics! {
     E0328, // cannot implement Unsize explicitly
     E0366, // dropck forbid specialization to concrete type or region
     E0367, // dropck forbid specialization to predicate not in struct/enum
-    E0368, // binary operation `<op>=` cannot be applied to types
     E0369, // binary operation `<op>` cannot be applied to types
     E0371, // impl Trait for Trait is illegal
     E0372, // impl Trait for Trait where Trait is not object safe
