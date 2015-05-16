@@ -2026,7 +2026,8 @@ impl<'a> Parser<'a> {
                 return self.parse_block_expr(lo, DefaultBlock);
             },
             token::BinOp(token::Or) |  token::OrOr => {
-                return self.parse_lambda_expr(CaptureByRef);
+                let lo = self.span.lo;
+                return self.parse_lambda_expr(lo, CaptureByRef);
             },
             token::Ident(id @ ast::Ident {
                             name: token::SELF_KEYWORD_NAME,
@@ -2081,7 +2082,8 @@ impl<'a> Parser<'a> {
                     return Ok(self.mk_expr(lo, hi, ExprPath(Some(qself), path)));
                 }
                 if try!(self.eat_keyword(keywords::Move) ){
-                    return self.parse_lambda_expr(CaptureByValue);
+                    let lo = self.last_span.lo;
+                    return self.parse_lambda_expr(lo, CaptureByValue);
                 }
                 if try!(self.eat_keyword(keywords::If)) {
                     return self.parse_if_expr();
@@ -2840,10 +2842,9 @@ impl<'a> Parser<'a> {
     }
 
     // `|args| expr`
-    pub fn parse_lambda_expr(&mut self, capture_clause: CaptureClause)
+    pub fn parse_lambda_expr(&mut self, lo: BytePos, capture_clause: CaptureClause)
                              -> PResult<P<Expr>>
     {
-        let lo = self.span.lo;
         let decl = try!(self.parse_fn_block_decl());
         let body = match decl.output {
             DefaultReturn(_) => {
@@ -5266,11 +5267,7 @@ impl<'a> Parser<'a> {
                 return Ok(Some(try!(self.parse_item_foreign_mod(lo, opt_abi, visibility, attrs))));
             }
 
-            let span = self.span;
-            let token_str = self.this_token_to_string();
-            return Err(self.span_fatal(span,
-                            &format!("expected `{}` or `fn`, found `{}`", "{",
-                                    token_str)))
+            try!(self.expect_one_of(&[], &[]));
         }
 
         if try!(self.eat_keyword_noexpect(keywords::Virtual) ){
