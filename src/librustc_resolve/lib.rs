@@ -16,7 +16,7 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
-      html_favicon_url = "http://www.rust-lang.org/favicon.ico",
+      html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
       html_root_url = "http://doc.rust-lang.org/nightly/")]
 
 #![feature(alloc)]
@@ -2361,8 +2361,18 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                             "type name"
                         };
 
-                        let msg = format!("use of undeclared {} `{}`", kind,
-                                          path_names_to_string(path, 0));
+                        let self_type_name = special_idents::type_self.name;
+                        let is_invalid_self_type_name =
+                            path.segments.len() > 0 &&
+                            maybe_qself.is_none() &&
+                            path.segments[0].identifier.name == self_type_name;
+                        let msg = if is_invalid_self_type_name {
+                            "use of `Self` outside of an impl or trait".to_string()
+                        } else {
+                            format!("use of undeclared {} `{}`",
+                                kind, path_names_to_string(path, 0))
+                        };
+
                         self.resolve_error(ty.span, &msg[..]);
                     }
                 }
