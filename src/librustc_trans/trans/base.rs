@@ -237,6 +237,9 @@ pub fn get_extern_const<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, did: ast::DefId,
             llvm::set_thread_local(c, true);
         }
     }
+    if ccx.use_dll_storage_attrs() {
+        llvm::SetDLLStorageClass(c, llvm::DLLImportStorageClass);
+    }
     ccx.externs().borrow_mut().insert(name.to_string(), c);
     return c;
 }
@@ -670,7 +673,8 @@ pub fn trans_external_path<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                     ccx.sess().bug("unexpected intrinsic in trans_external_path")
                 }
                 _ => {
-                    let llfn = foreign::register_foreign_item_fn(ccx, fn_ty.abi, t, &name[..]);
+                    let llfn = foreign::register_foreign_item_fn(ccx, fn_ty.abi,
+                                                                 t, &name);
                     let attrs = csearch::get_item_attrs(&ccx.sess().cstore, did);
                     attributes::from_fn_attrs(ccx, &attrs, llfn);
                     llfn
@@ -869,8 +873,7 @@ pub fn with_cond<'blk, 'tcx, F>(bcx: Block<'blk, 'tcx>,
 {
     let _icx = push_ctxt("with_cond");
 
-    if bcx.unreachable.get() ||
-            (common::is_const(val) && common::const_to_uint(val) == 0) {
+    if bcx.unreachable.get() || common::const_to_opt_uint(val) == Some(0) {
         return bcx;
     }
 
@@ -1939,11 +1942,17 @@ pub fn update_linkage(ccx: &CrateContext,
     match id {
         Some(id) if ccx.reachable().contains(&id) => {
             llvm::SetLinkage(llval, llvm::ExternalLinkage);
+            if ccx.use_dll_storage_attrs() {
+                llvm::SetDLLStorageClass(llval, llvm::DLLExportStorageClass);
+            }
         },
         _ => {
             // `id` does not refer to an item in `ccx.reachable`.
             if ccx.sess().opts.cg.codegen_units > 1 {
                 llvm::SetLinkage(llval, llvm::ExternalLinkage);
+                if ccx.use_dll_storage_attrs() {
+                    llvm::SetDLLStorageClass(llval, llvm::DLLExportStorageClass);
+                }
             } else {
                 llvm::SetLinkage(llval, llvm::InternalLinkage);
             }
@@ -2102,9 +2111,15 @@ fn finish_register_fn(ccx: &CrateContext, sym: String, node_id: ast::NodeId,
     if ccx.tcx().lang_items.stack_exhausted() == Some(def) {
         attributes::split_stack(llfn, false);
         llvm::SetLinkage(llfn, llvm::ExternalLinkage);
+        if ccx.use_dll_storage_attrs() {
+            llvm::SetDLLStorageClass(llfn, llvm::DLLExportStorageClass);
+        }
     }
     if ccx.tcx().lang_items.eh_personality() == Some(def) {
         llvm::SetLinkage(llfn, llvm::ExternalLinkage);
+        if ccx.use_dll_storage_attrs() {
+            llvm::SetDLLStorageClass(llfn, llvm::DLLExportStorageClass);
+        }
     }
 }
 
@@ -2171,7 +2186,7 @@ pub fn create_entry_wrapper(ccx: &CrateContext,
         // FIXME: #16581: Marking a symbol in the executable with `dllexport`
         // linkage forces MinGW's linker to output a `.reloc` section for ASLR
         if ccx.sess().target.target.options.is_like_windows {
-            unsafe { llvm::LLVMRustSetDLLExportStorageClass(llfn) }
+            llvm::SetDLLStorageClass(llfn, llvm::DLLExportStorageClass);
         }
 
         let llbb = unsafe {
@@ -2527,7 +2542,7 @@ pub fn write_metadata(cx: &SharedCrateContext, krate: &ast::Crate) -> Vec<u8> {
     };
     unsafe {
         llvm::LLVMSetInitializer(llglobal, llconst);
-        let name = loader::meta_section_name(cx.sess().target.target.options.is_like_osx);
+        let name = loader::meta_section_name(&cx.sess().target.target);
         let name = CString::new(name).unwrap();
         llvm::LLVMSetSection(llglobal, name.as_ptr())
     }
@@ -2588,6 +2603,7 @@ fn internalize_symbols(cx: &SharedCrateContext, reachable: &HashSet<String>) {
                 if !declared.contains(&name) &&
                    !reachable.contains(str::from_utf8(&name).unwrap()) {
                     llvm::SetLinkage(val, llvm::InternalLinkage);
+                    llvm::SetDLLStorageClass(val, llvm::DefaultStorageClass);
                 }
             }
         }

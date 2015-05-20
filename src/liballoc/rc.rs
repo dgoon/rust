@@ -32,7 +32,7 @@
 //! and have the `Owner` remain allocated as long as any `Gadget` points at it.
 //!
 //! ```rust
-//! # #![feature(alloc, collections)]
+//! # #![feature(alloc)]
 //! use std::rc::Rc;
 //!
 //! struct Owner {
@@ -49,7 +49,7 @@
 //! fn main() {
 //!     // Create a reference counted Owner.
 //!     let gadget_owner : Rc<Owner> = Rc::new(
-//!             Owner { name: String::from_str("Gadget Man") }
+//!             Owner { name: String::from("Gadget Man") }
 //!     );
 //!
 //!     // Create Gadgets belonging to gadget_owner. To increment the reference
@@ -543,7 +543,7 @@ impl<T: ?Sized> Drop for Rc<T> {
         unsafe {
             let ptr = *self._ptr;
             if !(*(&ptr as *const _ as *const *const ())).is_null() &&
-               ptr as usize != mem::POST_DROP_USIZE {
+               ptr as *const () as usize != mem::POST_DROP_USIZE {
                 self.dec_strong();
                 if self.strong() == 0 {
                     // destroy the contained object
@@ -1051,7 +1051,7 @@ impl<T: ?Sized> Drop for Weak<T> {
         unsafe {
             let ptr = *self._ptr;
             if !(*(&ptr as *const _ as *const *const ())).is_null() &&
-               ptr as usize != mem::POST_DROP_USIZE {
+               ptr as *const () as usize != mem::POST_DROP_USIZE {
                 self.dec_weak();
                 // the weak count starts at 1, and will only go to zero if all
                 // the strong pointers have disappeared.
