@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,21 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub struct Struct {
-    field: isize
-}
+// Each path node in a `use` declaration must be treated as an item. If not, the following code
+// will trigger an ICE.
+//
+// Related issue: #25763
 
-impl Struct {
-    fn method(&self, x: isize) -> isize {
-        self.field + x
-    }
-}
+use std::{mem, ptr};
+use std::mem; //~ ERROR has already been imported
 
-#[no_mangle]
-pub fn test(a: &Struct,
-            b: &Struct,
-            c: &Struct,
-            d: &Struct,
-            e: &Struct) -> isize {
-    a.method(b.method(c.method(d.method(e.method(1)))))
-}
+fn main() {}
