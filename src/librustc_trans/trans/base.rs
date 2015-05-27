@@ -785,7 +785,7 @@ pub fn load_ty<'blk, 'tcx>(cx: Block<'blk, 'tcx>,
         if !global.is_null() && llvm::LLVMIsGlobalConstant(global) == llvm::True {
             let val = llvm::LLVMGetInitializer(global);
             if !val.is_null() {
-                return from_arg_ty(cx, val, t);
+                return to_arg_ty(cx, val, t);
             }
         }
     }
@@ -807,7 +807,7 @@ pub fn load_ty<'blk, 'tcx>(cx: Block<'blk, 'tcx>,
         llvm::LLVMSetAlignment(val, align);
     }
 
-    from_arg_ty(cx, val, t)
+    to_arg_ty(cx, val, t)
 }
 
 /// Helper for storing values in memory. Does the necessary conversion if the in-memory type
@@ -817,13 +817,13 @@ pub fn store_ty<'blk, 'tcx>(cx: Block<'blk, 'tcx>, v: ValueRef, dst: ValueRef, t
         return;
     }
 
-    let store = Store(cx, to_arg_ty(cx, v, t), to_arg_ty_ptr(cx, dst, t));
+    let store = Store(cx, from_arg_ty(cx, v, t), to_arg_ty_ptr(cx, dst, t));
     unsafe {
         llvm::LLVMSetAlignment(store, type_of::align_of(cx.ccx(), t));
     }
 }
 
-pub fn to_arg_ty(bcx: Block, val: ValueRef, ty: Ty) -> ValueRef {
+pub fn from_arg_ty(bcx: Block, val: ValueRef, ty: Ty) -> ValueRef {
     if ty::type_is_bool(ty) {
         ZExt(bcx, val, Type::i8(bcx.ccx()))
     } else {
@@ -831,7 +831,7 @@ pub fn to_arg_ty(bcx: Block, val: ValueRef, ty: Ty) -> ValueRef {
     }
 }
 
-pub fn from_arg_ty(bcx: Block, val: ValueRef, ty: Ty) -> ValueRef {
+pub fn to_arg_ty(bcx: Block, val: ValueRef, ty: Ty) -> ValueRef {
     if ty::type_is_bool(ty) {
         Trunc(bcx, val, Type::i1(bcx.ccx()))
     } else {
@@ -1073,7 +1073,7 @@ fn build_cfg(tcx: &ty::ctxt, id: ast::NodeId) -> (ast::NodeId, Option<cfg::CFG>)
     let blk = match tcx.map.find(id) {
         Some(ast_map::NodeItem(i)) => {
             match i.node {
-                ast::ItemFn(_, _, _, _, ref blk) => {
+                ast::ItemFn(_, _, _, _, _, ref blk) => {
                     blk
                 }
                 _ => tcx.sess.bug("unexpected item variant in has_nested_returns")
@@ -1966,7 +1966,7 @@ pub fn trans_item(ccx: &CrateContext, item: &ast::Item) {
     let from_external = ccx.external_srcs().borrow().contains_key(&item.id);
 
     match item.node {
-      ast::ItemFn(ref decl, _fn_style, abi, ref generics, ref body) => {
+      ast::ItemFn(ref decl, _, _, abi, ref generics, ref body) => {
         if !generics.is_type_parameterized() {
             let trans_everywhere = attr::requests_inline(&item.attrs);
             // Ignore `trans_everywhere` for cross-crate inlined items
@@ -2307,7 +2307,7 @@ pub fn get_item_val(ccx: &CrateContext, id: ast::NodeId) -> ValueRef {
                     // We need the translated value here, because for enums the
                     // LLVM type is not fully determined by the Rust type.
                     let empty_substs = ccx.tcx().mk_substs(Substs::trans_empty());
-                    let (v, ty) = consts::const_expr(ccx, &**expr, empty_substs);
+                    let (v, ty) = consts::const_expr(ccx, &**expr, empty_substs, None);
                     ccx.static_values().borrow_mut().insert(id, v);
                     unsafe {
                         // boolean SSA values are i1, but they have to be stored in i8 slots,
@@ -2336,7 +2336,7 @@ pub fn get_item_val(ccx: &CrateContext, id: ast::NodeId) -> ValueRef {
                     }
                 }
 
-                ast::ItemFn(_, _, abi, _, _) => {
+                ast::ItemFn(_, _, _, abi, _, _) => {
                     let sym = sym();
                     let llfn = if abi == Rust {
                         register_fn(ccx, i.span, sym, i.id, ty)

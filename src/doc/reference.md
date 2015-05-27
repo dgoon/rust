@@ -2003,6 +2003,10 @@ arbitrarily complex configurations through nesting.
 
 The following configurations must be defined by the implementation:
 
+* `debug_assertions`. Enabled by default when compiling without optimizations.
+  This can be used to enable extra debugging code in development but not in
+  production.  For example, it controls the behavior of the standard library's
+  `debug_assert!` macro.
 * `target_arch = "..."`. Target CPU architecture, such as `"x86"`, `"x86_64"`
   `"mips"`, `"powerpc"`, `"arm"`, or `"aarch64"`.
 * `target_endian = "..."`. Endianness of the target CPU, either `"little"` or
@@ -3621,6 +3625,14 @@ The `Sized` trait indicates that the size of this type is known at compile-time.
 
 The `Drop` trait provides a destructor, to be run whenever a value of this type
 is to be destroyed.
+
+## The `Deref` trait
+
+The `Deref<Target = U>` trait allows a type to implicitly implement all the methods
+of the type `U`. When attempting to resolve a method call, the compiler will search
+the top-level type for the implementation of the called method. If no such method is
+found, `.deref()` is called and the compiler continues to search for the method
+implementation in the returned type `U`.
 
 # Memory model
 

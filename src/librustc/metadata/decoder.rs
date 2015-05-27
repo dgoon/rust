@@ -30,7 +30,6 @@ use middle::lang_items;
 use middle::subst;
 use middle::ty::{ImplContainer, TraitContainer};
 use middle::ty::{self, Ty};
-use middle::astencode::vtable_decoder_helpers;
 use util::nodemap::FnvHashMap;
 
 use std::cell::{Cell, RefCell};
@@ -178,6 +177,19 @@ fn item_visibility(item: rbml::Doc) -> ast::Visibility {
     }
 }
 
+fn fn_constness(item: rbml::Doc) -> ast::Constness {
+    match reader::maybe_get_doc(item, tag_items_data_item_constness) {
+        None => ast::Constness::NotConst,
+        Some(constness_doc) => {
+            match reader::doc_as_u8(constness_doc) as char {
+                'c' => ast::Constness::Const,
+                'n' => ast::Constness::NotConst,
+                _ => panic!("unknown constness character")
+            }
+        }
+    }
+}
+
 fn item_sort(item: rbml::Doc) -> Option<char> {
     let mut ret = None;
     reader::tagged_docs(item, tag_item_trait_item_sort, |doc| {
@@ -275,25 +287,18 @@ fn enum_variant_ids(item: rbml::Doc, cdata: Cmd) -> Vec<ast::DefId> {
 
 fn item_path(item_doc: rbml::Doc) -> Vec<ast_map::PathElem> {
     let path_doc = reader::get_doc(item_doc, tag_path);
-
-    let len_doc = reader::get_doc(path_doc, tag_path_len);
-    let len = reader::doc_as_u32(len_doc) as usize;
-
-    let mut result = Vec::with_capacity(len);
-    reader::docs(path_doc, |tag, elt_doc| {
+    reader::docs(path_doc).filter_map(|(tag, elt_doc)| {
         if tag == tag_path_elem_mod {
             let s = elt_doc.as_str_slice();
-            result.push(ast_map::PathMod(token::intern(s)));
+            Some(ast_map::PathMod(token::intern(s)))
         } else if tag == tag_path_elem_name {
             let s = elt_doc.as_str_slice();
-            result.push(ast_map::PathName(token::intern(s)));
+            Some(ast_map::PathName(token::intern(s)))
         } else {
             // ignore tag_path_len element
+            None
         }
-        true
-    });
-
-    result
+    }).collect()
 }
 
 fn item_name(intr: &IdentInterner, item: rbml::Doc) -> ast::Name {
@@ -515,18 +520,6 @@ pub fn get_impl_trait<'tcx>(cdata: Cmd,
         _ => None
     }
 }
-
-pub fn get_impl_vtables<'tcx>(cdata: Cmd,
-                              id: ast::NodeId,
-                              tcx: &ty::ctxt<'tcx>)
-                              -> ty::vtable_res<'tcx>
-{
-    let item_doc = lookup_item(id, cdata.data());
-    let vtables_doc = reader::get_doc(item_doc, tag_item_impl_vtables);
-    let mut decoder = reader::Decoder::new(vtables_doc);
-    decoder.read_vtable_res(tcx, cdata)
-}
-
 
 pub fn get_symbol(data: &[u8], id: ast::NodeId) -> String {
     return item_symbol(lookup_item(id, data));
@@ -1532,6 +1525,22 @@ pub fn is_typedef(cdata: Cmd, id: ast::NodeId) -> bool {
     }
 }
 
+pub fn is_const_fn(cdata: Cmd, id: ast::NodeId) -> bool {
+    let item_doc = lookup_item(id, cdata.data());
+    match fn_constness(item_doc) {
+        ast::Constness::Const => true,
+        ast::Constness::NotConst => false,
+    }
+}
+
+pub fn is_impl(cdata: Cmd, id: ast::NodeId) -> bool {
+    let item_doc = lookup_item(id, cdata.data());
+    match item_family(item_doc) {
+        Impl => true,
+        _ => false,
+    }
+}
+
 fn doc_generics<'tcx>(base_doc: rbml::Doc,
                       tcx: &ty::ctxt<'tcx>,
                       cdata: Cmd,
@@ -1607,14 +1616,6 @@ fn doc_predicates<'tcx>(base_doc: rbml::Doc,
     });
 
     ty::GenericPredicates { predicates: predicates }
-}
-
-pub fn is_associated_type(cdata: Cmd, id: ast::NodeId) -> bool {
-    let items = reader::get_doc(rbml::Doc::new(cdata.data()), tag_items);
-    match maybe_find_item(id, items) {
-        None => false,
-        Some(item) => item_sort(item) == Some('t'),
-    }
 }
 
 pub fn is_defaulted_trait(cdata: Cmd, trait_id: ast::NodeId) -> bool {

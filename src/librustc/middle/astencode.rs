@@ -233,8 +233,6 @@ impl<'a, 'b, 'tcx> DecodeContext<'a, 'b, 'tcx> {
     /// codemap as a side-effect of creating the crate_metadata's
     /// `codemap_import_info`.
     pub fn tr_span(&self, span: Span) -> Span {
-        let imported_filemaps = &self.cdata.codemap_import_info[..];
-
         let span = if span.lo > span.hi {
             // Currently macro expansion sometimes produces invalid Span values
             // where lo > hi. In order not to crash the compiler when trying to
@@ -248,16 +246,18 @@ impl<'a, 'b, 'tcx> DecodeContext<'a, 'b, 'tcx> {
             span
         };
 
-        let filemap_index = {
+        let imported_filemaps = self.cdata.imported_filemaps(self.tcx.sess.codemap());
+        let filemap = {
             // Optimize for the case that most spans within a translated item
             // originate from the same filemap.
             let last_filemap_index = self.last_filemap_index.get();
+            let last_filemap = &imported_filemaps[last_filemap_index];
 
-            if span.lo >= imported_filemaps[last_filemap_index].original_start_pos &&
-               span.lo <= imported_filemaps[last_filemap_index].original_end_pos &&
-               span.hi >= imported_filemaps[last_filemap_index].original_start_pos &&
-               span.hi <= imported_filemaps[last_filemap_index].original_end_pos {
-                last_filemap_index
+            if span.lo >= last_filemap.original_start_pos &&
+               span.lo <= last_filemap.original_end_pos &&
+               span.hi >= last_filemap.original_start_pos &&
+               span.hi <= last_filemap.original_end_pos {
+                last_filemap
             } else {
                 let mut a = 0;
                 let mut b = imported_filemaps.len();
@@ -272,14 +272,14 @@ impl<'a, 'b, 'tcx> DecodeContext<'a, 'b, 'tcx> {
                 }
 
                 self.last_filemap_index.set(a);
-                a
+                &imported_filemaps[a]
             }
         };
 
-        let lo = (span.lo - imported_filemaps[filemap_index].original_start_pos) +
-                  imported_filemaps[filemap_index].translated_filemap.start_pos;
-        let hi = (span.hi - imported_filemaps[filemap_index].original_start_pos) +
-                  imported_filemaps[filemap_index].translated_filemap.start_pos;
+        let lo = (span.lo - filemap.original_start_pos) +
+                  filemap.translated_filemap.start_pos;
+        let hi = (span.hi - filemap.original_start_pos) +
+                  filemap.translated_filemap.start_pos;
 
         codemap::mk_sp(lo, hi)
     }
@@ -696,19 +696,6 @@ pub fn encode_cast_kind(ebml_w: &mut Encoder, kind: cast::CastKind) {
 pub trait vtable_decoder_helpers<'tcx> {
     fn read_vec_per_param_space<T, F>(&mut self, f: F) -> VecPerParamSpace<T> where
         F: FnMut(&mut Self) -> T;
-    fn read_vtable_res_with_key(&mut self,
-                                tcx: &ty::ctxt<'tcx>,
-                                cdata: &cstore::crate_metadata)
-                                -> (u32, ty::vtable_res<'tcx>);
-    fn read_vtable_res(&mut self,
-                       tcx: &ty::ctxt<'tcx>, cdata: &cstore::crate_metadata)
-                      -> ty::vtable_res<'tcx>;
-    fn read_vtable_param_res(&mut self,
-                       tcx: &ty::ctxt<'tcx>, cdata: &cstore::crate_metadata)
-                      -> ty::vtable_param_res<'tcx>;
-    fn read_vtable_origin(&mut self,
-                          tcx: &ty::ctxt<'tcx>, cdata: &cstore::crate_metadata)
-                          -> ty::vtable_origin<'tcx>;
 }
 
 impl<'tcx, 'a> vtable_decoder_helpers<'tcx> for reader::Decoder<'a> {
@@ -719,85 +706,6 @@ impl<'tcx, 'a> vtable_decoder_helpers<'tcx> for reader::Decoder<'a> {
         let selfs = self.read_to_vec(|this| Ok(f(this))).unwrap();
         let fns = self.read_to_vec(|this| Ok(f(this))).unwrap();
         VecPerParamSpace::new(types, selfs, fns)
-    }
-
-    fn read_vtable_res_with_key(&mut self,
-                                tcx: &ty::ctxt<'tcx>,
-                                cdata: &cstore::crate_metadata)
-                                -> (u32, ty::vtable_res<'tcx>) {
-        self.read_struct("VtableWithKey", 2, |this| {
-            let autoderef = this.read_struct_field("autoderef", 0, |this| {
-                Decodable::decode(this)
-            }).unwrap();
-            Ok((autoderef, this.read_struct_field("vtable_res", 1, |this| {
-                Ok(this.read_vtable_res(tcx, cdata))
-            }).unwrap()))
-        }).unwrap()
-    }
-
-    fn read_vtable_res(&mut self,
-                       tcx: &ty::ctxt<'tcx>,
-                       cdata: &cstore::crate_metadata)
-                       -> ty::vtable_res<'tcx>
-    {
-        self.read_vec_per_param_space(
-            |this| this.read_vtable_param_res(tcx, cdata))
-    }
-
-    fn read_vtable_param_res(&mut self,
-                             tcx: &ty::ctxt<'tcx>, cdata: &cstore::crate_metadata)
-                      -> ty::vtable_param_res<'tcx> {
-        self.read_to_vec(|this| Ok(this.read_vtable_origin(tcx, cdata)))
-             .unwrap().into_iter().collect()
-    }
-
-    fn read_vtable_origin(&mut self,
-                          tcx: &ty::ctxt<'tcx>, cdata: &cstore::crate_metadata)
-        -> ty::vtable_origin<'tcx> {
-        self.read_enum("vtable_origin", |this| {
-            this.read_enum_variant(&["vtable_static",
-                                     "vtable_param",
-                                     "vtable_error",
-                                     "vtable_closure"],
-                                   |this, i| {
-                Ok(match i {
-                  0 => {
-                    ty::vtable_static(
-                        this.read_enum_variant_arg(0, |this| {
-                            Ok(this.read_def_id_nodcx(cdata))
-                        }).unwrap(),
-                        this.read_enum_variant_arg(1, |this| {
-                            Ok(this.read_substs_nodcx(tcx, cdata))
-                        }).unwrap(),
-                        this.read_enum_variant_arg(2, |this| {
-                            Ok(this.read_vtable_res(tcx, cdata))
-                        }).unwrap()
-                    )
-                  }
-                  1 => {
-                    ty::vtable_param(
-                        this.read_enum_variant_arg(0, |this| {
-                            Decodable::decode(this)
-                        }).unwrap(),
-                        this.read_enum_variant_arg(1, |this| {
-                            this.read_uint()
-                        }).unwrap()
-                    )
-                  }
-                  2 => {
-                    ty::vtable_closure(
-                        this.read_enum_variant_arg(0, |this| {
-                            Ok(this.read_def_id_nodcx(cdata))
-                        }).unwrap()
-                    )
-                  }
-                  3 => {
-                    ty::vtable_error
-                  }
-                  _ => panic!("bad enum variant")
-                })
-            })
-        }).unwrap()
     }
 }
 
@@ -1206,13 +1114,6 @@ fn encode_side_tables_for_id(ecx: &e::EncodeContext,
         rbml_w.tag(c::tag_table_method_map, |rbml_w| {
             rbml_w.id(id);
             encode_method_callee(ecx, rbml_w, method_call.autoderef, method)
-        })
-    }
-
-    if let Some(trait_ref) = tcx.object_cast_map.borrow().get(&id) {
-        rbml_w.tag(c::tag_table_object_cast_map, |rbml_w| {
-            rbml_w.id(id);
-            rbml_w.emit_trait_ref(ecx, &trait_ref.0);
         })
     }
 
@@ -1726,7 +1627,7 @@ impl<'a, 'tcx> rbml_decoder_decoder_helpers<'tcx> for reader::Decoder<'a> {
 fn decode_side_tables(dcx: &DecodeContext,
                       ast_doc: rbml::Doc) {
     let tbl_doc = ast_doc.get(c::tag_table as usize);
-    reader::docs(tbl_doc, |tag, entry_doc| {
+    for (tag, entry_doc) in reader::docs(tbl_doc) {
         let mut entry_dsr = reader::Decoder::new(entry_doc);
         let id0: ast::NodeId = Decodable::decode(&mut entry_dsr).unwrap();
         let id = dcx.tr_id(id0);
@@ -1800,11 +1701,6 @@ fn decode_side_tables(dcx: &DecodeContext,
                         };
                         dcx.tcx.method_map.borrow_mut().insert(method_call, method);
                     }
-                    c::tag_table_object_cast_map => {
-                        let trait_ref = val_dsr.read_poly_trait_ref(dcx);
-                        dcx.tcx.object_cast_map.borrow_mut()
-                                               .insert(id, trait_ref);
-                    }
                     c::tag_table_adjustments => {
                         let adj: ty::AutoAdjustment = val_dsr.read_auto_adjustment(dcx);
                         dcx.tcx.adjustments.borrow_mut().insert(id, adj);
@@ -1840,8 +1736,7 @@ fn decode_side_tables(dcx: &DecodeContext,
         }
 
         debug!(">< Side table doc loaded");
-        true
-    });
+    }
 }
 
 // ______________________________________________________________________

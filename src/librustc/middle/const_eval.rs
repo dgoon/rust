@@ -24,11 +24,13 @@ use util::num::ToPrimitive;
 use util::ppaux::Repr;
 
 use syntax::ast::{self, Expr};
+use syntax::ast_map::blocks::FnLikeNode;
+use syntax::ast_util;
 use syntax::codemap::Span;
 use syntax::feature_gate;
 use syntax::parse::token::InternedString;
 use syntax::ptr::P;
-use syntax::{ast_map, ast_util, codemap};
+use syntax::{ast_map, codemap, visit};
 
 use std::borrow::{Cow, IntoCow};
 use std::num::wrapping::OverflowingOps;
@@ -126,8 +128,10 @@ pub fn lookup_const_by_id<'a, 'tcx: 'a>(tcx: &'a ty::ctxt<'tcx>,
                         Some(ref_id) => {
                             let trait_id = ty::trait_of_item(tcx, def_id)
                                               .unwrap();
+                            let substs = ty::node_id_item_substs(tcx, ref_id)
+                                            .substs;
                             resolve_trait_associated_const(tcx, ti, trait_id,
-                                                           ref_id)
+                                                           substs)
                         }
                         // Technically, without knowing anything about the
                         // expression that generates the obligation, we could
@@ -172,8 +176,10 @@ pub fn lookup_const_by_id<'a, 'tcx: 'a>(tcx: &'a ty::ctxt<'tcx>,
                         // a trait-associated const if the caller gives us
                         // the expression that refers to it.
                         Some(ref_id) => {
+                            let substs = ty::node_id_item_substs(tcx, ref_id)
+                                            .substs;
                             resolve_trait_associated_const(tcx, ti, trait_id,
-                                                           ref_id).map(|e| e.id)
+                                                           substs).map(|e| e.id)
                         }
                         None => None
                     }
@@ -195,6 +201,63 @@ pub fn lookup_const_by_id<'a, 'tcx: 'a>(tcx: &'a ty::ctxt<'tcx>,
                                     expr_id.unwrap_or(ast::DUMMY_NODE_ID));
         }
         expr_id.map(|id| tcx.map.expect_expr(id))
+    }
+}
+
+fn inline_const_fn_from_external_crate(tcx: &ty::ctxt, def_id: ast::DefId)
+                                       -> Option<ast::NodeId> {
+    match tcx.extern_const_fns.borrow().get(&def_id) {
+        Some(&ast::DUMMY_NODE_ID) => return None,
+        Some(&fn_id) => return Some(fn_id),
+        None => {}
+    }
+
+    if !csearch::is_const_fn(&tcx.sess.cstore, def_id) {
+        tcx.extern_const_fns.borrow_mut().insert(def_id, ast::DUMMY_NODE_ID);
+        return None;
+    }
+
+    let fn_id = match csearch::maybe_get_item_ast(tcx, def_id,
+        box |a, b, c, d| astencode::decode_inlined_item(a, b, c, d)) {
+        csearch::FoundAst::Found(&ast::IIItem(ref item)) => Some(item.id),
+        csearch::FoundAst::Found(&ast::IIImplItem(_, ref item)) => Some(item.id),
+        _ => None
+    };
+    tcx.extern_const_fns.borrow_mut().insert(def_id,
+                                             fn_id.unwrap_or(ast::DUMMY_NODE_ID));
+    fn_id
+}
+
+pub fn lookup_const_fn_by_id<'tcx>(tcx: &ty::ctxt<'tcx>, def_id: ast::DefId)
+                                   -> Option<FnLikeNode<'tcx>>
+{
+    let fn_id = if !ast_util::is_local(def_id) {
+        if let Some(fn_id) = inline_const_fn_from_external_crate(tcx, def_id) {
+            fn_id
+        } else {
+            return None;
+        }
+    } else {
+        def_id.node
+    };
+
+    let fn_like = match FnLikeNode::from_node(tcx.map.get(fn_id)) {
+        Some(fn_like) => fn_like,
+        None => return None
+    };
+
+    match fn_like.kind() {
+        visit::FkItemFn(_, _, _, ast::Constness::Const, _, _) => {
+            Some(fn_like)
+        }
+        visit::FkMethod(_, m, _) => {
+            if m.constness == ast::Constness::Const {
+                Some(fn_like)
+            } else {
+                None
+            }
+        }
+        _ => None
     }
 }
 
@@ -643,9 +706,23 @@ pub_fn_checked_op!{ const_uint_checked_shr_via_int(a: u64, b: i64,.. UintTy) {
            uint_shift_body overflowing_shr const_uint ShiftRightWithOverflow
 }}
 
+// After type checking, `eval_const_expr_partial` should always suffice. The
+// reason for providing `eval_const_expr_with_substs` is to allow
+// trait-associated consts to be evaluated *during* type checking, when the
+// substs for each expression have not been written into `tcx` yet.
 pub fn eval_const_expr_partial<'tcx>(tcx: &ty::ctxt<'tcx>,
                                      e: &Expr,
                                      ty_hint: Option<Ty<'tcx>>) -> EvalResult {
+    eval_const_expr_with_substs(tcx, e, ty_hint, |id| {
+        ty::node_id_item_substs(tcx, id).substs
+    })
+}
+
+pub fn eval_const_expr_with_substs<'tcx, S>(tcx: &ty::ctxt<'tcx>,
+                                            e: &Expr,
+                                            ty_hint: Option<Ty<'tcx>>,
+                                            get_substs: S) -> EvalResult
+        where S: Fn(ast::NodeId) -> subst::Substs<'tcx> {
     fn fromb(b: bool) -> const_val { const_int(b as i64) }
 
     let ety = ty_hint.or_else(|| ty::expr_ty_opt(tcx, e));
@@ -836,8 +913,11 @@ pub fn eval_const_expr_partial<'tcx>(tcx: &ty::ctxt<'tcx>,
                           def::FromTrait(trait_id) => match tcx.map.find(def_id.node) {
                               Some(ast_map::NodeTraitItem(ti)) => match ti.node {
                                   ast::ConstTraitItem(ref ty, _) => {
-                                      (resolve_trait_associated_const(tcx, ti,
-                                                                      trait_id, e.id),
+                                      let substs = get_substs(e.id);
+                                      (resolve_trait_associated_const(tcx,
+                                                                      ti,
+                                                                      trait_id,
+                                                                      substs),
                                        Some(&**ty))
                                   }
                                   _ => (None, None)
@@ -936,10 +1016,9 @@ pub fn eval_const_expr_partial<'tcx>(tcx: &ty::ctxt<'tcx>,
 fn resolve_trait_associated_const<'a, 'tcx: 'a>(tcx: &'a ty::ctxt<'tcx>,
                                                 ti: &'tcx ast::TraitItem,
                                                 trait_id: ast::DefId,
-                                                ref_id: ast::NodeId)
+                                                rcvr_substs: subst::Substs<'tcx>)
                                                 -> Option<&'tcx Expr>
 {
-    let rcvr_substs = ty::node_id_item_substs(tcx, ref_id).substs;
     let subst::SeparateVecsPerParamSpace {
         types: rcvr_type,
         selfs: rcvr_self,
@@ -1091,19 +1170,21 @@ pub fn compare_const_vals(a: &const_val, b: &const_val) -> Option<Ordering> {
     })
 }
 
-pub fn compare_lit_exprs<'tcx>(tcx: &ty::ctxt<'tcx>,
-                               a: &Expr,
-                               b: &Expr,
-                               ty_hint: Option<Ty<'tcx>>)
-                               -> Option<Ordering> {
-    let a = match eval_const_expr_partial(tcx, a, ty_hint) {
+pub fn compare_lit_exprs<'tcx, S>(tcx: &ty::ctxt<'tcx>,
+                                  a: &Expr,
+                                  b: &Expr,
+                                  ty_hint: Option<Ty<'tcx>>,
+                                  get_substs: S) -> Option<Ordering>
+        where S: Fn(ast::NodeId) -> subst::Substs<'tcx> {
+    let a = match eval_const_expr_with_substs(tcx, a, ty_hint,
+                                              |id| {get_substs(id)}) {
         Ok(a) => a,
         Err(e) => {
             tcx.sess.span_err(a.span, &e.description());
             return None;
         }
     };
-    let b = match eval_const_expr_partial(tcx, b, ty_hint) {
+    let b = match eval_const_expr_with_substs(tcx, b, ty_hint, get_substs) {
         Ok(b) => b,
         Err(e) => {
             tcx.sess.span_err(b.span, &e.description());

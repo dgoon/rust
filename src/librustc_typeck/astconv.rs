@@ -437,13 +437,12 @@ fn create_substs_for_ast_path<'tcx>(
             // defaults. This will lead to an ICE if we are not
             // careful!
             if self_ty.is_none() && ty::type_has_self(default) {
-                tcx.sess.span_err(
-                    span,
-                    &format!("the type parameter `{}` must be explicitly specified \
-                              in an object type because its default value `{}` references \
-                              the type `Self`",
-                             param.name.user_string(tcx),
-                             default.user_string(tcx)));
+                span_err!(tcx.sess, span, E0393,
+                          "the type parameter `{}` must be explicitly specified \
+                           in an object type because its default value `{}` references \
+                           the type `Self`",
+                          param.name.user_string(tcx),
+                          default.user_string(tcx));
                 substs.types.push(TypeSpace, tcx.types.err);
             } else {
                 // This is a default type parameter.
@@ -1395,7 +1394,11 @@ fn base_def_to_ty<'tcx>(this: &AstConv<'tcx>,
             // Self in impl (we know the concrete type).
             check_path_args(tcx, base_segments, NO_TPS | NO_REGIONS);
             if let Some(&ty) = tcx.ast_ty_to_ty_cache.borrow().get(&self_ty_id) {
-                ty
+                if let Some(free_substs) = this.get_free_substs() {
+                    ty.subst(tcx, free_substs)
+                } else {
+                    ty
+                }
             } else {
                 tcx.sess.span_bug(span, "self type has not been fully resolved")
             }

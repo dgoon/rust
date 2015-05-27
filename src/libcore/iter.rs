@@ -452,20 +452,19 @@ pub trait Iterator {
         Scan{iter: self, f: f, state: initial_state}
     }
 
-    /// Creates an iterator that maps each element to an iterator,
-    /// and yields the elements of the produced iterators.
+    /// Takes a function that maps each element to a new iterator and yields
+    /// all the elements of the produced iterators.
+    ///
+    /// This is useful for unraveling nested structures.
     ///
     /// # Examples
     ///
     /// ```
-    /// # #![feature(core)]
-    /// let xs = [2, 3];
-    /// let ys = [0, 1, 0, 1, 2];
-    /// let it = xs.iter().flat_map(|&x| (0..).take(x));
-    /// // Check that `it` has the same elements as `ys`
-    /// for (i, x) in it.enumerate() {
-    ///     assert_eq!(x, ys[i]);
-    /// }
+    /// let words = ["alpha", "beta", "gamma"];
+    /// let merged: String = words.iter()
+    ///                           .flat_map(|s| s.chars())
+    ///                           .collect();
+    /// assert_eq!(merged, "alphabetagamma");
     /// ```
     #[inline]
     #[stable(feature = "rust1", since = "1.0.0")]
@@ -1009,8 +1008,19 @@ pub trait Iterator {
         (ts, us)
     }
 
-    /// Creates an iterator that clones the elements it yields. Useful for
-    /// converting an Iterator<&T> to an Iterator<T>.
+    /// Creates an iterator that clones the elements it yields.
+    ///
+    /// This is useful for converting an Iterator<&T> to an Iterator<T>,
+    /// so it's a more convenient form of `map(|&x| x)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let a = [0, 1, 2];
+    /// let v_cloned: Vec<_> = a.iter().cloned().collect();
+    /// let v_map: Vec<_> = a.iter().map(|&x| x).collect();
+    /// assert_eq!(v_cloned, v_map);
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     fn cloned<'a, T: 'a>(self) -> Cloned<Self>
         where Self: Sized + Iterator<Item=&'a T>, T: Clone
@@ -1057,7 +1067,7 @@ pub trait Iterator {
     /// # #![feature(core)]
     ///
     /// let a = [1, 2, 3, 4, 5];
-    /// let mut it = a.iter().cloned();
+    /// let it = a.iter();
     /// assert_eq!(it.sum::<i32>(), 15);
     /// ```
     #[unstable(feature="core")]

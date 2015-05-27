@@ -98,7 +98,7 @@ use middle::ty::{FnSig, GenericPredicates, TypeScheme};
 use middle::ty::{Disr, ParamTy, ParameterEnvironment};
 use middle::ty::{self, HasProjectionTypes, RegionEscape, ToPolyTraitRef, Ty};
 use middle::ty::liberate_late_bound_regions;
-use middle::ty::{MethodCall, MethodCallee, MethodMap, ObjectCastMap};
+use middle::ty::{MethodCall, MethodCallee, MethodMap};
 use middle::ty_fold::{TypeFolder, TypeFoldable};
 use rscope::RegionScope;
 use session::Session;
@@ -164,7 +164,6 @@ pub struct Inherited<'a, 'tcx: 'a> {
     upvar_capture_map: RefCell<ty::UpvarCaptureMap>,
     closure_tys: RefCell<DefIdMap<ty::ClosureTy<'tcx>>>,
     closure_kinds: RefCell<DefIdMap<ty::ClosureKind>>,
-    object_cast_map: ObjectCastMap<'tcx>,
 
     // A mapping from each fn's id to its signature, with all bound
     // regions replaced with free ones. Unlike the other tables, this
@@ -383,7 +382,6 @@ impl<'a, 'tcx> Inherited<'a, 'tcx> {
             item_substs: RefCell::new(NodeMap()),
             adjustments: RefCell::new(NodeMap()),
             method_map: RefCell::new(FnvHashMap()),
-            object_cast_map: RefCell::new(NodeMap()),
             upvar_capture_map: RefCell::new(FnvHashMap()),
             closure_tys: RefCell::new(DefIdMap()),
             closure_kinds: RefCell::new(DefIdMap()),
@@ -741,7 +739,7 @@ pub fn check_item_type<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>, it: &'tcx ast::Item) {
                             &enum_definition.variants,
                             it.id);
       }
-      ast::ItemFn(_, _, _, _, _) => {} // entirely within check_item_body
+      ast::ItemFn(..) => {} // entirely within check_item_body
       ast::ItemImpl(_, _, _, _, _, ref impl_items) => {
           debug!("ItemImpl {} with id {}", token::get_ident(it.ident), it.id);
           match ty::impl_trait_ref(ccx.tcx, local_def(it.id)) {
@@ -796,7 +794,7 @@ pub fn check_item_body<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>, it: &'tcx ast::Item) {
            ty::item_path_str(ccx.tcx, local_def(it.id)));
     let _indenter = indenter();
     match it.node {
-      ast::ItemFn(ref decl, _, _, _, ref body) => {
+      ast::ItemFn(ref decl, _, _, _, _, ref body) => {
         let fn_pty = ty::lookup_item_type(ccx.tcx, ast_util::local_def(it.id));
         let param_env = ParameterEnvironment::for_item(ccx.tcx, it.id);
         check_bare_fn(ccx, &**decl, &**body, it.id, it.span, fn_pty.ty, param_env);
@@ -830,11 +828,15 @@ pub fn check_item_body<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>, it: &'tcx ast::Item) {
                     check_const(ccx, trait_item.span, &*expr, trait_item.id)
                 }
                 ast::MethodTraitItem(ref sig, Some(ref body)) => {
+                    check_trait_fn_not_const(ccx, trait_item.span, sig.constness);
+
                     check_method_body(ccx, &trait_def.generics, sig, body,
                                       trait_item.id, trait_item.span);
                 }
+                ast::MethodTraitItem(ref sig, None) => {
+                    check_trait_fn_not_const(ccx, trait_item.span, sig.constness);
+                }
                 ast::ConstTraitItem(_, None) |
-                ast::MethodTraitItem(_, None) |
                 ast::TypeTraitItem(..) => {
                     // Nothing to do.
                 }
@@ -842,6 +844,20 @@ pub fn check_item_body<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>, it: &'tcx ast::Item) {
         }
       }
       _ => {/* nothing to do */ }
+    }
+}
+
+fn check_trait_fn_not_const<'a,'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
+                                     span: Span,
+                                     constness: ast::Constness)
+{
+    match constness {
+        ast::Constness::NotConst => {
+            // good
+        }
+        ast::Constness::Const => {
+            span_err!(ccx.tcx.sess, span, E0379, "trait fns cannot be declared const");
+        }
     }
 }
 
@@ -966,7 +982,9 @@ fn check_impl_items_against_trait<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
                     }
                 }
             }
-            ast::MethodImplItem(_, ref body) => {
+            ast::MethodImplItem(ref sig, ref body) => {
+                check_trait_fn_not_const(ccx, impl_item.span, sig.constness);
+
                 let impl_method_def_id = local_def(impl_item.id);
                 let impl_item_ty = ty::impl_or_trait_item(ccx.tcx,
                                                           impl_method_def_id);
@@ -3741,8 +3759,36 @@ pub fn resolve_ty_and_def_ufcs<'a, 'b, 'tcx>(fcx: &FnCtxt<'b, 'tcx>,
                                                         &'a [ast::PathSegment],
                                                         def::Def)>
 {
+
+    // Associated constants can't depend on generic types.
+    fn have_disallowed_generic_consts<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
+                                                def: def::Def,
+                                                ty: Ty<'tcx>,
+                                                span: Span,
+                                                node_id: ast::NodeId) -> bool {
+        match def {
+            def::DefAssociatedConst(..) => {
+                if ty::type_has_params(ty) || ty::type_has_self(ty) {
+                    span_err!(fcx.sess(), span, E0329,
+                              "Associated consts cannot depend \
+                               on type parameters or Self.");
+                    fcx.write_error(node_id);
+                    return true;
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
     // If fully resolved already, we don't have to do anything.
     if path_res.depth == 0 {
+        if let Some(ty) = opt_self_ty {
+            if have_disallowed_generic_consts(fcx, path_res.full_def(), ty,
+                                              span, node_id) {
+                return None;
+            }
+        }
         Some((opt_self_ty, &path.segments, path_res.base_def))
     } else {
         let mut def = path_res.base_def;
@@ -3758,6 +3804,9 @@ pub fn resolve_ty_and_def_ufcs<'a, 'b, 'tcx>(fcx: &FnCtxt<'b, 'tcx>,
         let item_name = item_segment.identifier.name;
         match method::resolve_ufcs(fcx, span, item_name, ty, node_id) {
             Ok((def, lp)) => {
+                if have_disallowed_generic_consts(fcx, def, ty, span, node_id) {
+                    return None;
+                }
                 // Write back the new resolution.
                 fcx.ccx.tcx.def_map.borrow_mut()
                        .insert(node_id, def::PathResolution {
@@ -4639,9 +4688,12 @@ pub fn instantiate_path<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                 } else if i == type_count {
                     span_err!(fcx.tcx().sess, typ.span, E0087,
                         "too many type parameters provided: \
-                         expected at most {} parameter(s), \
-                         found {} parameter(s)",
-                         type_count, data.types.len());
+                         expected at most {} parameter{}, \
+                         found {} parameter{}",
+                         type_count,
+                         if type_count == 1 {""} else {"s"},
+                         data.types.len(),
+                         if data.types.len() == 1 {""} else {"s"});
                     substs.types.truncate(space, 0);
                     break;
                 }
@@ -4664,9 +4716,11 @@ pub fn instantiate_path<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                 } else if i == region_count {
                     span_err!(fcx.tcx().sess, lifetime.span, E0088,
                         "too many lifetime parameters provided: \
-                         expected {} parameter(s), found {} parameter(s)",
+                         expected {} parameter{}, found {} parameter{}",
                         region_count,
-                        data.lifetimes.len());
+                        if region_count == 1 {""} else {"s"},
+                        data.lifetimes.len(),
+                        if data.lifetimes.len() == 1 {""} else {"s"});
                     substs.mut_regions().truncate(space, 0);
                     break;
                 }
@@ -4756,9 +4810,12 @@ pub fn instantiate_path<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
             let qualifier =
                 if desired.len() != required_len { "at least " } else { "" };
             span_err!(fcx.tcx().sess, span, E0089,
-                "too few type parameters provided: expected {}{} parameter(s) \
-                , found {} parameter(s)",
-                qualifier, required_len, provided_len);
+                "too few type parameters provided: expected {}{} parameter{}, \
+                 found {} parameter{}",
+                qualifier, required_len,
+                if required_len == 1 {""} else {"s"},
+                provided_len,
+                if provided_len == 1 {""} else {"s"});
             substs.types.replace(space, repeat(fcx.tcx().types.err).take(desired.len()).collect());
             return;
         }
@@ -4809,9 +4866,12 @@ pub fn instantiate_path<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
         // Otherwise, too few were provided. Report an error and then
         // use inference variables.
         span_err!(fcx.tcx().sess, span, E0090,
-            "too few lifetime parameters provided: expected {} parameter(s), \
-             found {} parameter(s)",
-            desired.len(), provided_len);
+            "too few lifetime parameters provided: expected {} parameter{}, \
+             found {} parameter{}",
+            desired.len(),
+            if desired.len() == 1 {""} else {"s"},
+            provided_len,
+            if provided_len == 1 {""} else {"s"});
 
         substs.mut_regions().replace(
             space,

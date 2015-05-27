@@ -581,6 +581,16 @@ fn encode_visibility(rbml_w: &mut Encoder, visibility: ast::Visibility) {
     rbml_w.wr_tagged_u8(tag_items_data_item_visibility, ch as u8);
 }
 
+fn encode_constness(rbml_w: &mut Encoder, constness: ast::Constness) {
+    rbml_w.start_tag(tag_items_data_item_constness);
+    let ch = match constness {
+        ast::Constness::Const => 'c',
+        ast::Constness::NotConst => 'n',
+    };
+    rbml_w.wr_str(&ch.to_string());
+    rbml_w.end_tag();
+}
+
 fn encode_explicit_self(rbml_w: &mut Encoder,
                         explicit_self: &ty::ExplicitSelfCategory) {
     let tag = tag_item_trait_method_explicit_self;
@@ -867,10 +877,13 @@ fn encode_info_for_method<'a, 'tcx>(ecx: &EncodeContext<'a, 'tcx>,
             encode_attributes(rbml_w, &impl_item.attrs);
             let scheme = ty::lookup_item_type(ecx.tcx, m.def_id);
             let any_types = !scheme.generics.types.is_empty();
-            if any_types || is_default_impl || attr::requests_inline(&impl_item.attrs) {
+            let needs_inline = any_types || is_default_impl ||
+                               attr::requests_inline(&impl_item.attrs);
+            if needs_inline || sig.constness == ast::Constness::Const {
                 encode_inlined_item(ecx, rbml_w, IIImplItemRef(local_def(parent_id),
                                                                impl_item));
             }
+            encode_constness(rbml_w, sig.constness);
             if !any_types {
                 encode_symbol(ecx, rbml_w, m.def_id.node);
             }
@@ -986,7 +999,7 @@ fn encode_extension_implementations(ecx: &EncodeContext,
     });
 }
 
-fn encode_stability(rbml_w: &mut Encoder, stab_opt: Option<attr::Stability>) {
+fn encode_stability(rbml_w: &mut Encoder, stab_opt: Option<&attr::Stability>) {
     stab_opt.map(|stab| {
         rbml_w.start_tag(tag_items_data_item_stability);
         stab.encode(rbml_w).unwrap();
@@ -1049,7 +1062,7 @@ fn encode_info_for_item(ecx: &EncodeContext,
         encode_stability(rbml_w, stab);
         rbml_w.end_tag();
       }
-      ast::ItemFn(ref decl, _, _, ref generics, _) => {
+      ast::ItemFn(ref decl, _, constness, _, ref generics, _) => {
         add_to_index(item, rbml_w, index);
         rbml_w.start_tag(tag_items_data_item);
         encode_def_id(rbml_w, def_id);
@@ -1059,12 +1072,14 @@ fn encode_info_for_item(ecx: &EncodeContext,
         encode_name(rbml_w, item.ident.name);
         encode_path(rbml_w, path);
         encode_attributes(rbml_w, &item.attrs);
-        if tps_len > 0 || attr::requests_inline(&item.attrs) {
+        let needs_inline = tps_len > 0 || attr::requests_inline(&item.attrs);
+        if needs_inline || constness == ast::Constness::Const {
             encode_inlined_item(ecx, rbml_w, IIItemRef(item));
         }
         if tps_len == 0 {
             encode_symbol(ecx, rbml_w, item.id);
         }
+        encode_constness(rbml_w, constness);
         encode_visibility(rbml_w, vis);
         encode_stability(rbml_w, stab);
         encode_method_argument_names(rbml_w, &**decl);
@@ -1200,11 +1215,11 @@ fn encode_info_for_item(ecx: &EncodeContext,
           encode_name(rbml_w, item.ident.name);
           encode_unsafety(rbml_w, unsafety);
 
-          let trait_ref = ty::impl_id_to_trait_ref(tcx, item.id);
+          let trait_ref = ty::impl_trait_ref(tcx, local_def(item.id)).unwrap();
           encode_trait_ref(rbml_w, ecx, trait_ref, tag_item_trait_ref);
           rbml_w.end_tag();
       }
-      ast::ItemImpl(unsafety, polarity, _, ref opt_trait, ref ty, ref ast_items) => {
+      ast::ItemImpl(unsafety, polarity, _, _, ref ty, ref ast_items) => {
         // We need to encode information about the default methods we
         // have inherited, so we drive this based on the impl structure.
         let impl_items = tcx.impl_items.borrow();
@@ -1254,8 +1269,7 @@ fn encode_info_for_item(ecx: &EncodeContext,
             }
             rbml_w.end_tag();
         }
-        if opt_trait.is_some() {
-            let trait_ref = ty::impl_id_to_trait_ref(tcx, item.id);
+        if let Some(trait_ref) = ty::impl_trait_ref(tcx, local_def(item.id)) {
             encode_trait_ref(rbml_w, ecx, trait_ref, tag_item_trait_ref);
         }
         encode_path(rbml_w, path.clone());
@@ -1967,7 +1981,7 @@ fn encode_reachable_extern_fns(ecx: &EncodeContext, rbml_w: &mut Encoder) {
 
     for id in ecx.reachable {
         if let Some(ast_map::NodeItem(i)) = ecx.tcx.map.find(*id) {
-            if let ast::ItemFn(_, _, abi, ref generics, _) = i.node {
+            if let ast::ItemFn(_, _, _, abi, ref generics, _) = i.node {
                 if abi != abi::Rust && !generics.is_type_parameterized() {
                     rbml_w.wr_tagged_u32(tag_reachable_extern_fn_id, *id);
                 }

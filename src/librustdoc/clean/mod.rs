@@ -343,7 +343,7 @@ pub enum ItemEnum {
     EnumItem(Enum),
     FunctionItem(Function),
     ModuleItem(Module),
-    TypedefItem(Typedef),
+    TypedefItem(Typedef, bool /* is associated type */),
     StaticItem(Static),
     ConstantItem(Constant),
     TraitItem(Trait),
@@ -664,6 +664,7 @@ impl Clean<TyParamBound> for ty::BuiltinBound {
                 path: path,
                 typarams: None,
                 did: did,
+                is_generic: false,
             },
             lifetimes: vec![]
         }, ast::TraitBoundModifier::None)
@@ -706,7 +707,12 @@ impl<'tcx> Clean<TyParamBound> for ty::TraitRef<'tcx> {
         }
 
         TraitBound(PolyTrait {
-            trait_: ResolvedPath { path: path, typarams: None, did: self.def_id, },
+            trait_: ResolvedPath {
+                path: path,
+                typarams: None,
+                did: self.def_id,
+                is_generic: false,
+            },
             lifetimes: late_bounds
         }, ast::TraitBoundModifier::None)
     }
@@ -989,6 +995,7 @@ pub struct Method {
     pub generics: Generics,
     pub self_: SelfTy,
     pub unsafety: ast::Unsafety,
+    pub constness: ast::Constness,
     pub decl: FnDecl,
     pub abi: abi::Abi
 }
@@ -1010,7 +1017,8 @@ impl Clean<Method> for ast::MethodSig {
         Method {
             generics: self.generics.clean(cx),
             self_: self.explicit_self.node.clean(cx),
-            unsafety: self.unsafety.clone(),
+            unsafety: self.unsafety,
+            constness: self.constness,
             decl: decl,
             abi: self.abi
         }
@@ -1075,7 +1083,8 @@ pub struct Function {
     pub decl: FnDecl,
     pub generics: Generics,
     pub unsafety: ast::Unsafety,
-    pub abi: abi::Abi
+    pub constness: ast::Constness,
+    pub abi: abi::Abi,
 }
 
 impl Clean<Item> for doctree::Function {
@@ -1091,6 +1100,7 @@ impl Clean<Item> for doctree::Function {
                 decl: self.decl.clean(cx),
                 generics: self.generics.clean(cx),
                 unsafety: self.unsafety,
+                constness: self.constness,
                 abi: self.abi,
             }),
         }
@@ -1282,7 +1292,7 @@ impl Clean<Item> for ast::ImplItem {
                     type_params: Vec::new(),
                     where_predicates: Vec::new()
                 },
-            }),
+            }, true),
             ast::MacImplItem(_) => {
                 MacroItem(Macro {
                     source: self.span.to_src(cx),
@@ -1348,7 +1358,10 @@ impl<'tcx> Clean<Item> for ty::Method<'tcx> {
                 generics: generics,
                 self_: self_,
                 decl: decl,
-                abi: self.fty.abi
+                abi: self.fty.abi,
+
+                // trait methods canot (currently, at least) be const
+                constness: ast::Constness::NotConst,
             })
         } else {
             TyMethodItem(TyMethod {
@@ -1356,7 +1369,7 @@ impl<'tcx> Clean<Item> for ty::Method<'tcx> {
                 generics: generics,
                 self_: self_,
                 decl: decl,
-                abi: self.fty.abi
+                abi: self.fty.abi,
             })
         };
 
@@ -1394,11 +1407,13 @@ pub struct PolyTrait {
 /// it does not preserve mutability or boxes.
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Debug)]
 pub enum Type {
-    /// structs/enums/traits (anything that'd be an ast::TyPath)
+    /// structs/enums/traits (most that'd be an ast::TyPath)
     ResolvedPath {
         path: Path,
         typarams: Option<Vec<TyParamBound>>,
         did: ast::DefId,
+        /// true if is a `T::Name` path for associated types
+        is_generic: bool,
     },
     /// For parameterized types, so the consumer of the JSON don't go
     /// looking for types which don't exist anywhere.
@@ -1587,8 +1602,13 @@ impl Clean<Type> for ast::Ty {
             TyObjectSum(ref lhs, ref bounds) => {
                 let lhs_ty = lhs.clean(cx);
                 match lhs_ty {
-                    ResolvedPath { path, typarams: None, did } => {
-                        ResolvedPath { path: path, typarams: Some(bounds.clean(cx)), did: did}
+                    ResolvedPath { path, typarams: None, did, is_generic } => {
+                        ResolvedPath {
+                            path: path,
+                            typarams: Some(bounds.clean(cx)),
+                            did: did,
+                            is_generic: is_generic,
+                        }
                     }
                     _ => {
                         lhs_ty // shouldn't happen
@@ -1668,6 +1688,7 @@ impl<'tcx> Clean<Type> for ty::Ty<'tcx> {
                     path: path,
                     typarams: None,
                     did: did,
+                    is_generic: false,
                 }
             }
             ty::ty_trait(box ty::TyTrait { ref principal, ref bounds }) => {
@@ -1682,6 +1703,7 @@ impl<'tcx> Clean<Type> for ty::Ty<'tcx> {
                     path: path,
                     typarams: Some(typarams),
                     did: did,
+                    is_generic: false,
                 }
             }
             ty::ty_tup(ref t) => Tuple(t.clean(cx)),
@@ -2078,7 +2100,7 @@ impl Clean<Item> for doctree::Typedef {
             inner: TypedefItem(Typedef {
                 type_: self.ty.clean(cx),
                 generics: self.gen.clean(cx),
-            }),
+            }, false),
         }
     }
 }
@@ -2248,7 +2270,7 @@ fn build_deref_target_impls(cx: &DocContext,
 
     for item in items {
         let target = match item.inner {
-            TypedefItem(ref t) => &t.type_,
+            TypedefItem(ref t, true) => &t.type_,
             _ => continue,
         };
         let primitive = match *target {
@@ -2453,6 +2475,7 @@ impl Clean<Item> for ast::ForeignItem {
                     generics: generics.clean(cx),
                     unsafety: ast::Unsafety::Unsafe,
                     abi: abi::Rust,
+                    constness: ast::Constness::NotConst,
                 })
             }
             ast::ForeignItemStatic(ref ty, mutbl) => {
@@ -2572,10 +2595,7 @@ fn resolve_type(cx: &DocContext,
         None => panic!("unresolved id not in defmap")
     };
 
-    match def {
-        def::DefSelfTy(..) if path.segments.len() == 1 => {
-            return Generic(token::get_name(special_idents::type_self.name).to_string());
-        }
+    let is_generic = match def {
         def::DefPrimTy(p) => match p {
             ast::TyStr => return Primitive(Str),
             ast::TyBool => return Primitive(Bool),
@@ -2593,13 +2613,14 @@ fn resolve_type(cx: &DocContext,
             ast::TyFloat(ast::TyF32) => return Primitive(F32),
             ast::TyFloat(ast::TyF64) => return Primitive(F64),
         },
-        def::DefTyParam(_, _, _, n) => {
-            return Generic(token::get_name(n).to_string())
+        def::DefSelfTy(..) if path.segments.len() == 1 => {
+            return Generic(token::get_name(special_idents::type_self.name).to_string());
         }
-        _ => {}
+        def::DefSelfTy(..) | def::DefTyParam(..) => true,
+        _ => false,
     };
     let did = register_def(&*cx, def);
-    ResolvedPath { path: path, typarams: None, did: did }
+    ResolvedPath { path: path, typarams: None, did: did, is_generic: is_generic }
 }
 
 fn register_def(cx: &DocContext, def: def::Def) -> ast::DefId {
@@ -2673,6 +2694,21 @@ pub struct Stability {
 }
 
 impl Clean<Stability> for attr::Stability {
+    fn clean(&self, _: &DocContext) -> Stability {
+        Stability {
+            level: self.level,
+            feature: self.feature.to_string(),
+            since: self.since.as_ref().map_or("".to_string(),
+                                              |interned| interned.to_string()),
+            deprecated_since: self.deprecated_since.as_ref().map_or("".to_string(),
+                                                                    |istr| istr.to_string()),
+            reason: self.reason.as_ref().map_or("".to_string(),
+                                                |interned| interned.to_string()),
+        }
+    }
+}
+
+impl<'a> Clean<Stability> for &'a attr::Stability {
     fn clean(&self, _: &DocContext) -> Stability {
         Stability {
             level: self.level,
@@ -2798,6 +2834,7 @@ fn lang_struct(cx: &DocContext, did: Option<ast::DefId>,
                 }
             }],
         },
+        is_generic: false,
     }
 }
 

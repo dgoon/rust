@@ -236,9 +236,8 @@ impl<'a,'tcx> CrateCtxt<'a,'tcx> {
         assert!(!cycle.is_empty());
         let tcx = self.tcx;
 
-        tcx.sess.span_err(
-            span,
-            &format!("unsupported cyclic reference between types/traits detected"));
+        span_err!(tcx.sess, span, E0391,
+            "unsupported cyclic reference between types/traits detected");
 
         match cycle[0] {
             AstConvRequest::GetItemTypeScheme(def_id) |
@@ -820,7 +819,7 @@ fn convert_item(ccx: &CrateCtxt, it: &ast::Item) {
 
             ty::record_trait_has_default_impl(tcx, trait_ref.def_id);
 
-            tcx.impl_trait_refs.borrow_mut().insert(it.id, trait_ref);
+            tcx.impl_trait_refs.borrow_mut().insert(local_def(it.id), Some(trait_ref));
         }
         ast::ItemImpl(_, _,
                       ref generics,
@@ -828,7 +827,6 @@ fn convert_item(ccx: &CrateCtxt, it: &ast::Item) {
                       ref selfty,
                       ref impl_items) => {
             // Create generics from the generics specified in the impl head.
-
             debug!("convert: ast_generics={:?}", generics);
             let ty_generics = ty_generics_for_type_or_impl(ccx, generics);
             let ty_predicates = ty_generic_predicates_for_type_or_impl(ccx, generics);
@@ -877,7 +875,7 @@ fn convert_item(ccx: &CrateCtxt, it: &ast::Item) {
                 if let ast::TypeImplItem(ref ty) = impl_item.node {
                     if opt_trait_ref.is_none() {
                         span_err!(tcx.sess, impl_item.span, E0202,
-                                  "associated items are not allowed in inherent impls");
+                                  "associated types are not allowed in inherent impls");
                     }
 
                     as_refsociated_type(ccx, ImplContainer(local_def(it.id)),
@@ -926,14 +924,16 @@ fn convert_item(ccx: &CrateCtxt, it: &ast::Item) {
                 }
             }
 
-            if let Some(ref ast_trait_ref) = *opt_trait_ref {
-                let trait_ref =
-                    astconv::instantiate_mono_trait_ref(&ccx.icx(&ty_predicates),
-                                                        &ExplicitRscope,
-                                                        ast_trait_ref,
-                                                        Some(selfty));
-
-                tcx.impl_trait_refs.borrow_mut().insert(it.id, trait_ref);
+            if let &Some(ref ast_trait_ref) = opt_trait_ref {
+                tcx.impl_trait_refs.borrow_mut().insert(
+                    local_def(it.id),
+                    Some(astconv::instantiate_mono_trait_ref(&ccx.icx(&ty_predicates),
+                                                             &ExplicitRscope,
+                                                             ast_trait_ref,
+                                                             Some(selfty)))
+                        );
+            } else {
+                tcx.impl_trait_refs.borrow_mut().insert(local_def(it.id), None);
             }
 
             enforce_impl_params_are_constrained(tcx,
@@ -1440,7 +1440,7 @@ fn compute_type_scheme_of_item<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>,
             let ty = ccx.icx(&()).to_ty(&ExplicitRscope, &**t);
             ty::TypeScheme { ty: ty, generics: ty::Generics::empty() }
         }
-        ast::ItemFn(ref decl, unsafety, abi, ref generics, _) => {
+        ast::ItemFn(ref decl, unsafety, _, abi, ref generics, _) => {
             let ty_generics = ty_generics_for_fn(ccx, generics, &ty::Generics::empty());
             let tofd = astconv::ty_of_bare_fn(&ccx.icx(generics), unsafety, abi, &**decl);
             let ty = ty::mk_bare_fn(tcx, Some(local_def(it.id)), tcx.mk_bare_fn(tofd));
@@ -1492,7 +1492,7 @@ fn convert_typed_item<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
         ast::ItemStatic(..) | ast::ItemConst(..) => {
             ty::GenericPredicates::empty()
         }
-        ast::ItemFn(_, _, _, ref ast_generics, _) => {
+        ast::ItemFn(_, _, _, _, ref ast_generics, _) => {
             ty_generic_predicates_for_fn(ccx, ast_generics, &ty::GenericPredicates::empty())
         }
         ast::ItemTy(_, ref generics) => {

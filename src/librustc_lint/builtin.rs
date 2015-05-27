@@ -203,11 +203,13 @@ impl LintPass for TypeLimits {
                                 } else {
                                     t
                                 };
-                                let (min, max) = int_ty_range(int_type);
+                                let (_, max) = int_ty_range(int_type);
                                 let negative = self.negated_expr_id == e.id;
 
-                                if (negative && v > min.wrapping_neg() as u64) ||
-                                   (!negative && v > (max.abs() as u64)) {
+                                // Detect literal value out of range [min, max] inclusive
+                                // avoiding use of -min to prevent overflow/panic
+                                if (negative && v > max as u64 + 1) ||
+                                   (!negative && v > max as u64) {
                                     cx.span_lint(OVERFLOWING_LITERALS, e.span,
                                                  &*format!("literal out of range for {:?}", t));
                                     return;
@@ -641,9 +643,26 @@ impl LintPass for UnusedAttributes {
             }
         }
 
+        let plugin_attributes = cx.sess().plugin_attributes.borrow_mut();
+        for &(ref name, ty) in plugin_attributes.iter() {
+            if ty == AttributeType::Whitelisted && attr.check_name(&*name) {
+                break;
+            }
+        }
+
         if !attr::is_used(attr) {
             cx.span_lint(UNUSED_ATTRIBUTES, attr.span, "unused attribute");
-            if KNOWN_ATTRIBUTES.contains(&(&attr.name(), AttributeType::CrateLevel)) {
+            // Is it a builtin attribute that must be used at the crate level?
+            let known_crate = KNOWN_ATTRIBUTES.contains(&(&attr.name(),
+                                                          AttributeType::CrateLevel));
+            // Has a plugin registered this attribute as one which must be used at
+            // the crate level?
+            let plugin_crate = plugin_attributes.iter()
+                                                .find(|&&(ref x, t)| {
+                                                        &*attr.name() == &*x &&
+                                                        AttributeType::CrateLevel == t
+                                                    }).is_some();
+            if  known_crate || plugin_crate {
                 let msg = match attr.node.style {
                     ast::AttrOuter => "crate-level attribute should be an inner \
                                        attribute: add an exclamation mark: #![foo]",
@@ -977,7 +996,7 @@ impl LintPass for NonSnakeCase {
                 },
                 _ => (),
             },
-            visit::FkItemFn(ident, _, _, _, _) => {
+            visit::FkItemFn(ident, _, _, _, _, _) => {
                 self.check_snake_case(cx, "function", &token::get_ident(ident), Some(span))
             },
             _ => (),
@@ -1324,7 +1343,7 @@ impl LintPass for UnsafeCode {
     fn check_fn(&mut self, cx: &Context, fk: visit::FnKind, _: &ast::FnDecl,
                 _: &ast::Block, span: Span, _: ast::NodeId) {
         match fk {
-            visit::FkItemFn(_, _, ast::Unsafety::Unsafe, _, _) =>
+            visit::FkItemFn(_, _, ast::Unsafety::Unsafe, _, _, _) =>
                 cx.span_lint(UNSAFE_CODE, span, "declaration of an `unsafe` function"),
 
             visit::FkMethod(_, sig, _) => {
@@ -1779,20 +1798,21 @@ declare_lint! {
 pub struct Stability;
 
 impl Stability {
-    fn lint(&self, cx: &Context, _id: ast::DefId, span: Span, stability: &Option<attr::Stability>) {
+    fn lint(&self, cx: &Context, _id: ast::DefId,
+            span: Span, stability: &Option<&attr::Stability>) {
         // Deprecated attributes apply in-crate and cross-crate.
         let (lint, label) = match *stability {
-            Some(attr::Stability { deprecated_since: Some(_), .. }) =>
+            Some(&attr::Stability { deprecated_since: Some(_), .. }) =>
                 (DEPRECATED, "deprecated"),
             _ => return
         };
 
         output(cx, span, stability, lint, label);
 
-        fn output(cx: &Context, span: Span, stability: &Option<attr::Stability>,
+        fn output(cx: &Context, span: Span, stability: &Option<&attr::Stability>,
                   lint: &'static Lint, label: &'static str) {
             let msg = match *stability {
-                Some(attr::Stability { reason: Some(ref s), .. }) => {
+                Some(&attr::Stability { reason: Some(ref s), .. }) => {
                     format!("use of {} item: {}", label, *s)
                 }
                 _ => format!("use of {} item", label)
@@ -1853,7 +1873,7 @@ impl LintPass for UnconditionalRecursion {
                               ast::NodeId, ast::NodeId, ast::Ident, ast::NodeId) -> bool;
 
         let (name, checker) = match fn_kind {
-            visit::FkItemFn(name, _, _, _, _) => (name, id_refers_to_this_fn as F),
+            visit::FkItemFn(name, _, _, _, _, _) => (name, id_refers_to_this_fn as F),
             visit::FkMethod(name, _, _) => (name, id_refers_to_this_method as F),
             // closures can't recur, so they don't matter.
             visit::FkFnBlock => return
@@ -2203,7 +2223,11 @@ impl LintPass for UnstableFeatures {
     }
     fn check_attribute(&mut self, ctx: &Context, attr: &ast::Attribute) {
         if attr::contains_name(&[attr.node.value.clone()], "feature") {
-            ctx.span_lint(UNSTABLE_FEATURES, attr.span, "unstable feature");
+            if let Some(items) = attr.node.value.meta_item_list() {
+                for item in items {
+                    ctx.span_lint(UNSTABLE_FEATURES, item.span, "unstable feature");
+                }
+            }
         }
     }
 }

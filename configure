@@ -1,7 +1,7 @@
 #!/bin/sh
 
 msg() {
-    echo "configure: $1"
+    echo "configure: $*"
 }
 
 step_msg() {
@@ -33,8 +33,8 @@ need_ok() {
 
 need_cmd() {
     if command -v $1 >/dev/null 2>&1
-    then msg "found program $1"
-    else err "need program $1"
+    then msg "found program '$1'"
+    else err "program '$1' is missing, please install it"
     fi
 }
 
@@ -717,10 +717,10 @@ probe CFG_MD5              md5
 probe CFG_MD5SUM           md5sum
 if [ -n "$CFG_MD5" ]
 then
-    CFG_HASH_COMMAND="$CFG_MD5 -q | head -c 8"
+    CFG_HASH_COMMAND="$CFG_MD5 -q | cut -c 1-8"
 elif [ -n "$CFG_MD5SUM" ]
 then
-    CFG_HASH_COMMAND="$CFG_MD5SUM | head -c 8"
+    CFG_HASH_COMMAND="$CFG_MD5SUM | cut -c 1-8"
 else
     err 'could not find one of: md5 md5sum'
 fi
@@ -986,7 +986,7 @@ then
             | cut -d ' ' -f 2)
 
         case $CFG_CLANG_VERSION in
-            (3.2* | 3.3* | 3.4* | 3.5* | 3.6*)
+            (3.2* | 3.3* | 3.4* | 3.5* | 3.6* | 3.7*)
             step_msg "found ok version of CLANG: $CFG_CLANG_VERSION"
             if [ -z "$CC" ]
             then
