@@ -1,4 +1,4 @@
-// Copyright 2012-2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Operations and constants for pointer-sized signed integers (`isize` type)
+// Check that you can't dereference raw pointers in constants.
 
-#![stable(feature = "rust1", since = "1.0.0")]
-#![doc(primitive = "isize")]
-
-#[cfg(target_pointer_width = "32")]
-int_module! { isize, 32 }
-#[cfg(target_pointer_width = "64")]
-int_module! { isize, 64 }
+fn main() {
+    static C: u64 = unsafe {*(0xdeadbeef as *const u64)}; //~ ERROR E0396
+    println!("{}", C);
+}

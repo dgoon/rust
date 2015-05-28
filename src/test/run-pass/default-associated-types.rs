@@ -1,4 +1,4 @@
-// Copyright 2012-2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,23 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Operations and constants for pointer-sized signed integers (`isize` type)
+trait Foo<T> {
+    type Out = T;
+    fn foo(&self) -> Self::Out;
+}
 
-#![stable(feature = "rust1", since = "1.0.0")]
-#![doc(primitive = "isize")]
+impl Foo<u32> for () {
+    fn foo(&self) -> u32 {
+        4u32
+    }
+}
 
-#[cfg(target_pointer_width = "32")]
-int_module! { isize, 32 }
-#[cfg(target_pointer_width = "64")]
-int_module! { isize, 64 }
+impl Foo<u64> for bool {
+    type Out = ();
+    fn foo(&self) {}
+}
+
+fn main() {
+    assert_eq!(<() as Foo<u32>>::foo(&()), 4u32);
+    assert_eq!(<bool as Foo<u64>>::foo(&true), ());
+}
