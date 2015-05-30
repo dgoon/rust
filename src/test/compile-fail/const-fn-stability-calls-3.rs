@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(box_syntax)]
+// Test use of const fn from another crate without a feature gate.
 
-static mut a: Box<isize> = box 3;
-//~^ ERROR allocations are not allowed in statics
-//~^^ ERROR mutable statics are not allowed to have boxes
+#![feature(rustc_attrs)]
+#![allow(unused_variables)]
 
-fn main() {}
+// aux-build:const_fn_lib.rs
+
+extern crate const_fn_lib;
+
+use const_fn_lib::foo;
+
+#[rustc_error]
+fn main() { //~ ERROR compilation successful
+    let x = foo(); // use outside a constant is ok
+}

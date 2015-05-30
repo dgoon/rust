@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(box_syntax)]
+// Crate that exports a const fn. Used for testing cross-crate.
 
-static mut a: Box<isize> = box 3;
-//~^ ERROR allocations are not allowed in statics
-//~^^ ERROR mutable statics are not allowed to have boxes
+#![crate_type="rlib"]
+#![feature(const_fn)]
 
-fn main() {}
+pub const fn foo() -> usize { 22 } //~ ERROR const fn is unstable
