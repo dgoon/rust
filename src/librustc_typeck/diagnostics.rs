@@ -146,6 +146,47 @@ match d {
 ```
 "##,
 
+E0029: r##"
+In a match expression, only numbers and characters can be matched against a
+range. This is because the compiler checks that the range is non-empty at
+compile-time, and is unable to evaluate arbitrary comparison functions. If you
+want to capture values of an orderable type between two end-points, you can use
+a guard.
+
+```
+// The ordering relation for strings can't be evaluated at compile time,
+// so this doesn't work:
+match string {
+    "hello" ... "world" => ...
+    _ => ...
+}
+
+// This is a more general version, using a guard:
+match string {
+    s if s >= "hello" && s <= "world" => ...
+    _ => ...
+}
+```
+"##,
+
+E0030: r##"
+When matching against a range, the compiler verifies that the range is
+non-empty.  Range patterns include both end-points, so this is equivalent to
+requiring the start of the range to be less than or equal to the end of the
+range.
+
+For example:
+
+```
+match 5u32 {
+    // This range is ok, albeit pointless.
+    1 ... 1 => ...
+    // This range is empty, and the compiler can tell.
+    1000 ... 5 => ...
+}
+```
+"##,
+
 E0033: r##"
 This error indicates that a pointer to a trait type cannot be implicitly
 dereferenced by a pattern. Every trait defines a type, but because the
@@ -880,19 +921,29 @@ unsafe impl Bar for Foo { }
 "##,
 
 E0201: r##"
-It is an error to define a method--a trait method or an inherent method--more
-than once.
+It is an error to define an associated function more than once.
 
-For example,
+For example:
 
 ```
 struct Foo(u8);
 
 impl Foo {
+    fn bar(&self) -> bool { self.0 > 5 }
+
+    // error: duplicate associated function
     fn bar() {}
+}
+
+trait Baz {
+    fn baz(&self) -> bool;
+}
+
+impl Baz for Foo {
+    fn baz(&self) -> bool { true }
 
     // error: duplicate method
-    fn bar(&self) -> bool { self.0 > 5 }
+    fn baz(&self) -> bool { self.0 > 5 }
 }
 ```
 "##,
@@ -1154,9 +1205,6 @@ For more information see the [opt-in builtin traits RFC](https://github.com/rust
 }
 
 register_diagnostics! {
-    E0029,
-    E0030,
-    E0031,
     E0034, // multiple applicable methods in scope
     E0035, // does not take type parameters
     E0036, // incorrect number of type parameters given for this method

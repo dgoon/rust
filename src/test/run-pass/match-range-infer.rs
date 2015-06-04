@@ -8,7 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[static_assert] //~ ERROR `#[static_assert]` is an experimental feature
-static X: bool = true;
+// Test that type inference for range patterns works correctly (is bi-directional).
 
-fn main() {}
+pub fn main() {
+    match 1 {
+        1 ... 3 => {}
+        _ => panic!("should match range")
+    }
+    match 1 {
+        1 ... 3u16 => {}
+        _ => panic!("should match range with inferred start type")
+    }
+    match 1 {
+        1u16 ... 3 => {}
+        _ => panic!("should match range with inferred end type")
+    }
+}

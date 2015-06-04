@@ -1943,9 +1943,6 @@ macro scope.
 - `simd` - on certain tuple structs, derive the arithmetic operators, which
   lower to the target's SIMD instructions, if any; the `simd` feature gate
   is necessary to use this attribute.
-- `static_assert` - on statics whose type is `bool`, terminates compilation
-  with an error if it is not initialized to `true`. To use this, the `static_assert`
-  feature gate must be enabled.
 - `unsafe_no_drop_flag` - on structs, remove the flag that prevents
   destructors from being run twice. Destructors might be run multiple times on
   the same object with this attribute. To use this, the `unsafe_no_drop_flag` feature
@@ -2300,12 +2297,6 @@ The currently implemented features of the reference compiler are:
 * `staged_api` - Allows usage of stability markers and `#![staged_api]` in a
                  crate. Stability markers are also attributes: `#[stable]`,
                  `#[unstable]`, and `#[deprecated]` are the three levels.
-
-* `static_assert` - The `#[static_assert]` functionality is experimental and
-                    unstable. The attribute can be attached to a `static` of
-                    type `bool` and the compiler will error if the `bool` is
-                    `false` at compile time. This version of this functionality
-                    is unintuitive and suboptimal.
 
 * `start` - Allows use of the `#[start]` attribute, which changes the entry point
             into a Rust program. This capability, especially the signature for the
@@ -3607,6 +3598,147 @@ impl Printable for String {
 The notation `&self` is a shorthand for `self: &Self`. In this case,
 in the impl, `Self` refers to the value of type `String` that is the
 receiver for a call to the method `make_string`.
+
+## Subtyping
+
+Subtyping is implicit and can occur at any stage in type checking or
+inference. Subtyping in Rust is very restricted and occurs only due to
+variance with respect to lifetimes and between types with higher ranked
+lifetimes. If we were to erase lifetimes from types, then the only subtyping
+would be due to type equality.
+
+Consider the following example: string literals always have `'static`
+lifetime. Nevertheless, we can assign `s` to `t`:
+
+```
+fn bar<'a>() {
+    let s: &'static str = "hi";
+    let t: &'a str = s;
+}
+```
+Since `'static` "lives longer" than `'a`, `&'static str` is a subtype of
+`&'a str`.
+
+## Type coercions
+
+Coercions are defined in [RFC401]. A coercion is implicit and has no syntax.
+
+[RFC401]: https://github.com/rust-lang/rfcs/blob/master/text/0401-coercions.md
+
+### Coercion sites
+
+A coercion can only occur at certain coercion sites in a program; these are
+typically places where the desired type is explicit or can be dervied by
+propagation from explicit types (without type inference). Possible coercion
+sites are:
+
+* `let` statements where an explicit type is given.
+
+    In `let _: U = e;`, `e` is coerced to have type `U`.
+
+* `static` and `const` statements (similar to `let` statements).
+
+* arguments for function calls.
+
+    The value being coerced is the
+    actual parameter and it is coerced to the type of the formal parameter. For
+    example, let `foo` be defined as `fn foo(x: U) { ... }` and call it as
+    `foo(e);`. Then `e` is coerced to have type `U`;
+
+* instantiations of struct or variant fields.
+
+    Assume we have a `struct
+    Foo { x: U }` and instantiate it as `Foo { x: e }`. Then `e` is coerced to
+    have type `U`.
+
+* function results (either the final line of a block if it is not semicolon
+terminated or any expression in a `return` statement).
+
+    In `fn foo() -> U { e }`, `e` is coerced to to have type `U`.
+
+If the expression in one of these coercion sites is a coercion-propagating
+expression, then the relevant sub-expressions in that expression are also
+coercion sites. Propagation recurses from these new coercion sites.
+Propagating expressions and their relevant sub-expressions are:
+
+* array literals, where the array has type `[U; n]`. Each sub-expression in
+the array literal is a coercion site for coercion to type `U`.
+
+* array literals with repeating syntax, where the array has type `[U; n]`. The
+repeated sub-expression is a coercion site for coercion to type `U`.
+
+* tuples, where a tuple is a coercion site to type `(U_0, U_1, ..., U_n)`.
+Each sub-expression is a coercion site to the respective type, e.g. the
+zeroth sub-expression is a coercion site to type `U_0`.
+
+* parenthesised sub-expressions (`(e)`). If the expression has type `U`, then
+the sub-expression is a coercion site to `U`.
+
+* blocks. If a block has type `U`, then the last expression in the block (if
+it is not semicolon-terminated) is a coercion site to `U`. This includes
+blocks which are part of control flow statements, such as `if`/`else`, if
+the block has a known type.
+
+### Coercion types
+
+Coercion is allowed between the following types:
+
+* `T` to `U` if `T` is a subtype of `U` (*reflexive case*).
+
+* `T_1` to `T_3` where `T_1` coerces to `T_2` and `T_2` coerces to `T_3`
+(*transitive case*).
+
+    Note that this is not fully supported yet
+
+* `&mut T` to `&T`.
+
+* `*mut T` to `*const T`.
+
+* `&T` to `*const T`.
+
+* `&mut T` to `*mut T`.
+
+* `&T` to `&U` if `T` implements `Deref<Target = U>`. For example:
+
+```rust
+use std::ops::Deref;
+
+struct CharContainer {
+    value: char
+}
+
+impl Deref for CharContainer {
+    type Target = char;
+
+    fn deref<'a>(&'a self) -> &'a char {
+        &self.value
+    }
+}
+
+fn foo(arg: &char) {}
+
+fn main() {
+    let x = &mut CharContainer { value: 'y' };
+    foo(x); //&mut CharContainer is coerced to &char.
+}
+```
+* `&mut T` to `&mut U` if `T` implements `DerefMut<Target = U>`.
+
+* TyCtor(`T`) to TyCtor(coerce_inner(`T`)), where TyCtor(`T`) is one of
+    - `&T`
+    - `&mut T`
+    - `*const T`
+    - `*mut T`
+    - `Box<T>`
+
+    and where
+    - coerce_inner(`[T, ..n]`) = `[T]`
+    - coerce_inner(`T`) = `U` where `T` is a concrete type which implements the
+    trait `U`.
+
+    In the future, coerce_inner will be recursively extended to tuples and
+    structs. In addition, coercions from sub-traits to super-traits will be
+    added. See [RFC401] for more details.
 
 # Special traits
 
