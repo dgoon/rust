@@ -88,7 +88,7 @@ impl String {
     /// # Examples
     ///
     /// ```
-    /// # #![feature(collections, core)]
+    /// # #![feature(collections)]
     /// let s = String::from_str("hello");
     /// assert_eq!(&s[..], "hello");
     /// ```
@@ -790,6 +790,13 @@ impl Extend<char> for String {
         for ch in iterator {
             self.push(ch)
         }
+    }
+}
+
+#[stable(feature = "extend_ref", since = "1.2.0")]
+impl<'a> Extend<&'a char> for String {
+    fn extend<I: IntoIterator<Item=&'a char>>(&mut self, iter: I) {
+        self.extend(iter.into_iter().cloned());
     }
 }
 

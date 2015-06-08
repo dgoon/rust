@@ -125,8 +125,8 @@ fn match_words <'a,'b>(a: &'a BitVec, b: &'b BitVec) -> (MatchWords<'a>, MatchWo
     }
 }
 
-static TRUE: bool = true;
-static FALSE: bool = false;
+const TRUE: &'static bool = &true;
+const FALSE: &'static bool = &false;
 
 /// The bitvector type.
 ///
@@ -172,9 +172,9 @@ impl Index<usize> for BitVec {
     #[inline]
     fn index(&self, i: usize) -> &bool {
         if self.get(i).expect("index out of bounds") {
-            &TRUE
+            TRUE
         } else {
-            &FALSE
+            FALSE
         }
     }
 }
@@ -1070,6 +1070,13 @@ impl Extend<bool> for BitVec {
     }
 }
 
+#[stable(feature = "extend_ref", since = "1.2.0")]
+impl<'a> Extend<&'a bool> for BitVec {
+    fn extend<I: IntoIterator<Item=&'a bool>>(&mut self, iter: I) {
+        self.extend(iter.into_iter().cloned());
+    }
+}
+
 #[stable(feature = "rust1", since = "1.0.0")]
 impl Clone for BitVec {
     #[inline]
@@ -1275,6 +1282,13 @@ impl Extend<usize> for BitSet {
         for i in iter {
             self.insert(i);
         }
+    }
+}
+
+#[stable(feature = "extend_ref", since = "1.2.0")]
+impl<'a> Extend<&'a usize> for BitSet {
+    fn extend<I: IntoIterator<Item=&'a usize>>(&mut self, iter: I) {
+        self.extend(iter.into_iter().cloned());
     }
 }
 

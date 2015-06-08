@@ -83,7 +83,7 @@ use borrow::{Cow, IntoCow};
 use super::range::RangeArgument;
 
 // FIXME- fix places which assume the max vector allowed has memory usize::MAX.
-static MAX_MEMORY_SIZE: usize = isize::MAX as usize;
+const MAX_MEMORY_SIZE: usize = isize::MAX as usize;
 
 /// A growable list type, written `Vec<T>` but pronounced 'vector.'
 ///
@@ -840,7 +840,7 @@ impl<T> Vec<T> {
     /// # Examples
     ///
     /// ```
-    /// # #![feature(collections, core)]
+    /// # #![feature(collections)]
     /// let v = vec![0, 1, 2];
     /// let w = v.map_in_place(|i| i + 3);
     /// assert_eq!(&w[..], &[3, 4, 5]);
@@ -1575,6 +1575,13 @@ impl<T> Extend<T> for Vec<T> {
         for element in iterator {
             self.push(element)
         }
+    }
+}
+
+#[stable(feature = "extend_ref", since = "1.2.0")]
+impl<'a, T: 'a + Copy> Extend<&'a T> for Vec<T> {
+    fn extend<I: IntoIterator<Item=&'a T>>(&mut self, iter: I) {
+        self.extend(iter.into_iter().cloned());
     }
 }
 
