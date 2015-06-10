@@ -1180,9 +1180,8 @@ impl str {
     /// matched by a pattern.
     ///
     /// The pattern can be a simple `&str`, `char`, or a closure that
-    /// determines the split.
-    /// Additional libraries might provide more complex patterns like
-    /// regular expressions.
+    /// determines the split. Additional libraries might provide more complex
+    /// patterns like regular expressions.
     ///
     /// # Iterator behavior
     ///
@@ -1223,6 +1222,32 @@ impl str {
     /// ```
     /// let v: Vec<&str> = "abc1defXghi".split(|c| c == '1' || c == 'X').collect();
     /// assert_eq!(v, ["abc", "def", "ghi"]);
+    /// ```
+    ///
+    /// If a string contains multiple contiguous separators, you will end up
+    /// with empty strings in the output:
+    ///
+    /// ```
+    /// let x = "||||a||b|c".to_string();
+    /// let d: Vec<_> = x.split('|').collect();
+    ///
+    /// assert_eq!(d, &["", "", "", "", "a", "", "b", "c"]);
+    /// ```
+    ///
+    /// This can lead to possibly surprising behavior when whitespace is used
+    /// as the separator. This code is correct:
+    ///
+    /// ```
+    /// let x = "    a  b c".to_string();
+    /// let d: Vec<_> = x.split(' ').collect();
+    ///
+    /// assert_eq!(d, &["", "", "", "", "a", "", "b", "c"]);
+    /// ```
+    ///
+    /// It does _not_ give you:
+    ///
+    /// ```rust,ignore
+    /// assert_eq!(d, &["a", "b", "c"]);
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn split<'a, P: Pattern<'a>>(&'a self, pat: P) -> Split<'a, P> {
@@ -1816,11 +1841,40 @@ impl str {
     /// let s = "HELLO";
     /// assert_eq!(s.to_lowercase(), "hello");
     /// ```
-    #[unstable(feature = "collections")]
+    #[stable(feature = "unicode_case_mapping", since = "1.2.0")]
     pub fn to_lowercase(&self) -> String {
         let mut s = String::with_capacity(self.len());
-        s.extend(self[..].chars().flat_map(|c| c.to_lowercase()));
+        for (i, c) in self[..].char_indices() {
+            if c == 'Σ' {
+                // Σ maps to σ, except at the end of a word where it maps to ς.
+                // This is the only conditional (contextual) but language-independent mapping
+                // in `SpecialCasing.txt`,
+                // so hard-code it rather than have a generic "condition" mechanim.
+                // See https://github.com/rust-lang/rust/issues/26035
+                map_uppercase_sigma(self, i, &mut s)
+            } else {
+                s.extend(c.to_lowercase());
+            }
+        }
         return s;
+
+        fn map_uppercase_sigma(from: &str, i: usize, to: &mut String) {
+            // See http://www.unicode.org/versions/Unicode7.0.0/ch03.pdf#G33992
+            // for the definition of `Final_Sigma`.
+            debug_assert!('Σ'.len_utf8() == 2);
+            let is_word_final =
+                case_ignoreable_then_cased(from[..i].chars().rev()) &&
+                !case_ignoreable_then_cased(from[i + 2..].chars());
+            to.push_str(if is_word_final { "ς" } else { "σ" });
+        }
+
+        fn case_ignoreable_then_cased<I: Iterator<Item=char>>(iter: I) -> bool {
+            use rustc_unicode::derived_property::{Cased, Case_Ignorable};
+            match iter.skip_while(|&c| Case_Ignorable(c)).next() {
+                Some(c) => Cased(c),
+                None => false,
+            }
+        }
     }
 
     /// Returns the uppercase equivalent of this string.
@@ -1833,7 +1887,7 @@ impl str {
     /// let s = "hello";
     /// assert_eq!(s.to_uppercase(), "HELLO");
     /// ```
-    #[unstable(feature = "collections")]
+    #[stable(feature = "unicode_case_mapping", since = "1.2.0")]
     pub fn to_uppercase(&self) -> String {
         let mut s = String::with_capacity(self.len());
         s.extend(self[..].chars().flat_map(|c| c.to_uppercase()));
