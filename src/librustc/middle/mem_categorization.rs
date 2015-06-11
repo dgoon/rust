@@ -73,6 +73,7 @@ pub use self::categorization::*;
 
 use self::Aliasability::*;
 
+use ast_map;
 use middle::check_const;
 use middle::def;
 use middle::region;
@@ -82,7 +83,6 @@ use util::ppaux::{Repr, UserString};
 
 use syntax::ast::{MutImmutable, MutMutable};
 use syntax::ast;
-use syntax::ast_map;
 use syntax::codemap::Span;
 use syntax::print::pprust;
 use syntax::parse::token;
@@ -1410,7 +1410,7 @@ pub enum AliasableReason {
 
 impl<'tcx> cmt_<'tcx> {
     pub fn guarantor(&self) -> cmt<'tcx> {
-        //! Returns `self` after stripping away any owned pointer derefs or
+        //! Returns `self` after stripping away any derefs or
         //! interior content. The return value is basically the `cmt` which
         //! determines how long the value in `self` remains live.
 
@@ -1546,7 +1546,7 @@ impl<'tcx> cmt_<'tcx> {
                                 format!("`Box` content")
                             }
                             UnsafePtr(..) => {
-                                format!("dereference of unsafe pointer")
+                                format!("dereference of raw pointer")
                             }
                             BorrowedPtr(..) => {
                                 format!("borrowed content")
