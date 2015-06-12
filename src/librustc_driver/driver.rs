@@ -33,7 +33,7 @@ use super::Compilation;
 use serialize::json;
 
 use std::env;
-use std::ffi::OsString;
+use std::ffi::{OsString, OsStr};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -484,7 +484,7 @@ pub fn phase_2_configure_and_expand(sess: &Session,
                 let mut new_path = sess.host_filesearch(PathKind::All)
                                        .get_dylib_search_paths();
                 new_path.extend(env::split_paths(&_old_path));
-                env::set_var("PATH", &env::join_paths(new_path.iter()).unwrap());
+                env::set_var("PATH", &env::join_paths(new_path).unwrap());
             }
             let features = sess.features.borrow();
             let cfg = syntax::ext::expand::ExpansionConfig {
@@ -765,7 +765,7 @@ pub fn phase_6_link_output(sess: &Session,
     let old_path = env::var_os("PATH").unwrap_or(OsString::new());
     let mut new_path = sess.host_filesearch(PathKind::All).get_tools_search_paths();
     new_path.extend(env::split_paths(&old_path));
-    env::set_var("PATH", &env::join_paths(new_path.iter()).unwrap());
+    env::set_var("PATH", &env::join_paths(&new_path).unwrap());
 
     time(sess.time_passes(), "linking", (), |_|
          link::link_binary(sess,
@@ -792,7 +792,7 @@ fn write_out_deps(sess: &Session,
         let file = outputs.path(*output_type);
         match *output_type {
             config::OutputTypeExe => {
-                for output in &*sess.crate_types.borrow() {
+                for output in sess.crate_types.borrow().iter() {
                     let p = link::filename_for_input(sess, *output,
                                                      id, &file);
                     out_filenames.push(p);
@@ -895,7 +895,7 @@ pub fn collect_crate_types(session: &Session,
     // will be found in crate attributes.
     let mut base = session.opts.crate_types.clone();
     if base.is_empty() {
-        base.extend(attr_types.into_iter());
+        base.extend(attr_types);
         if base.is_empty() {
             base.push(link::default_output_for_target(session));
         }
@@ -966,7 +966,7 @@ pub fn build_output_filenames(input: &Input,
 
             OutputFilenames {
                 out_directory: out_file.parent().unwrap_or(cur_dir).to_path_buf(),
-                out_filestem: out_file.file_stem().unwrap()
+                out_filestem: out_file.file_stem().unwrap_or(OsStr::new(""))
                                       .to_str().unwrap().to_string(),
                 single_output_file: ofile,
                 extra: sess.opts.cg.extra_filename.clone(),
