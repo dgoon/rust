@@ -7,15 +7,27 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#![feature(libc)]
 
+extern crate libc;
 
-#![feature(hash)]
+#[cfg(windows)]
+extern "system" {
+    pub fn GetStdHandle(which: libc::DWORD) -> libc::HANDLE;
+}
 
-use std::hash::{SipHasher, hash};
+#[cfg(windows)]
+fn close_stdout() {
+    const STD_OUTPUT_HANDLE: libc::DWORD = -11i32 as libc::DWORD;
+    unsafe { libc::CloseHandle(GetStdHandle(STD_OUTPUT_HANDLE)); }
+}
 
-#[derive(Hash)]
-struct Empty;
+#[cfg(not(windows))]
+fn close_stdout() {
+    unsafe { libc::close(libc::STDOUT_FILENO); }
+}
 
-pub fn main() {
-    assert_eq!(hash::<_, SipHasher>(&Empty), hash::<_, SipHasher>(&Empty));
+fn main() {
+    close_stdout();
+    println!("hello world");
 }
