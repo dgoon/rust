@@ -8,21 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// force-host
+#![deny(dead_code)]
 
-#![feature(plugin_registrar)]
-#![feature(rustc_private)]
+#[derive(Clone)]
+enum Enum {
+    Variant1, //~ ERROR: variant is never used
+    Variant2,
+}
 
-extern crate rustc;
-
-use rustc::plugin::Registry;
-
-#[plugin_registrar]
-pub fn plugin_registrar(reg: &mut Registry) {
-    // This pass is built in to LLVM.
-    //
-    // Normally, we would name a pass that was registered through
-    // C++ static object constructors in the same .so file as the
-    // plugin registrar.
-    reg.register_llvm_pass("gvn");
+fn main() {
+    let e = Enum::Variant2;
+    e.clone();
 }

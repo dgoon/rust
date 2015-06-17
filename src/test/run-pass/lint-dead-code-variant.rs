@@ -8,21 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// force-host
+#![deny(dead_code)]
 
-#![feature(plugin_registrar)]
-#![feature(rustc_private)]
+enum Foo {
+    A,
+    B,
+}
 
-extern crate rustc;
-
-use rustc::plugin::Registry;
-
-#[plugin_registrar]
-pub fn plugin_registrar(reg: &mut Registry) {
-    // This pass is built in to LLVM.
-    //
-    // Normally, we would name a pass that was registered through
-    // C++ static object constructors in the same .so file as the
-    // plugin registrar.
-    reg.register_llvm_pass("gvn");
+pub fn main() {
+    match Foo::A {
+        Foo::A | Foo::B => Foo::B
+    };
 }

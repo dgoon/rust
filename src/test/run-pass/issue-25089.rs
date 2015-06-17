@@ -8,21 +8,33 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// force-host
+use std::thread;
 
-#![feature(plugin_registrar)]
-#![feature(rustc_private)]
+struct Foo(i32);
 
-extern crate rustc;
+impl Drop for Foo {
+    fn drop(&mut self) {
+        static mut DROPPED: bool = false;
+        unsafe {
+            assert!(!DROPPED);
+            DROPPED = true;
+        }
+    }
+}
 
-use rustc::plugin::Registry;
+struct Empty;
 
-#[plugin_registrar]
-pub fn plugin_registrar(reg: &mut Registry) {
-    // This pass is built in to LLVM.
-    //
-    // Normally, we would name a pass that was registered through
-    // C++ static object constructors in the same .so file as the
-    // plugin registrar.
-    reg.register_llvm_pass("gvn");
+fn empty() -> Empty { Empty }
+
+fn should_panic(_: Foo, _: Empty) {
+    panic!("test panic");
+}
+
+fn test() {
+    should_panic(Foo(1), empty());
+}
+
+fn main() {
+    let ret = thread::spawn(test).join();
+    assert!(ret.is_err());
 }
