@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,19 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(core_intrinsics)]
+struct S<T: 'static>(Option<&'static T>);
 
-use std::intrinsics;
+trait Tr { type Out; }
+impl<T> Tr for T { type Out = T; }
 
-// See also src/test/run-make/intrinsic-unreachable.
-
-unsafe fn f(x: usize) -> usize {
-    match x {
-        17 => 23,
-        _ => intrinsics::unreachable(),
-    }
+impl<T: 'static> Copy for S<T> where S<T>: Tr<Out=T> {}
+impl<T: 'static> Clone for S<T> where S<T>: Tr<Out=T> {
+    fn clone(&self) -> Self { *self }
 }
-
 fn main() {
-    assert_eq!(unsafe { f(17) }, 23);
+    let t = S::<()>(None);
+    drop(t);
+    drop(t); //~ ERROR use of moved value
 }
