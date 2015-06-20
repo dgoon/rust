@@ -25,11 +25,11 @@ use middle::ty::{self, Ty};
 use rustc::ast_map::{PathElem, PathElems, PathName};
 use trans::{CrateContext, CrateTranslation, gensym_name};
 use util::common::time;
-use util::ppaux;
 use util::sha2::{Digest, Sha256};
 use util::fs::fix_windows_verbatim_for_gcc;
 use rustc_back::tempdir::TempDir;
 
+use std::env;
 use std::fs::{self, PathExt};
 use std::io::{self, Read, Write};
 use std::mem;
@@ -347,8 +347,7 @@ pub fn mangle_exported_name<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, path: PathEl
 pub fn mangle_internal_name_by_type_and_seq<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                                                       t: Ty<'tcx>,
                                                       name: &str) -> String {
-    let s = ppaux::ty_to_string(ccx.tcx(), t);
-    let path = [PathName(token::intern(&s[..])),
+    let path = [PathName(token::intern(&t.to_string())),
                 gensym_name(name)];
     let hash = get_symbol_hash(ccx, t);
     mangle(path.iter().cloned(), Some(&hash[..]))
@@ -796,7 +795,16 @@ fn link_natively(sess: &Session, trans: &CrateTranslation, dylib: bool,
 
     // The invocations of cc share some flags across platforms
     let pname = get_cc_prog(sess);
-    let mut cmd = Command::new(&pname[..]);
+    let mut cmd = Command::new(&pname);
+
+    // The compiler's sysroot often has some bundled tools, so add it to the
+    // PATH for the child.
+    let mut new_path = sess.host_filesearch(PathKind::All)
+                           .get_tools_search_paths();
+    if let Some(path) = env::var_os("PATH") {
+        new_path.extend(env::split_paths(&path));
+    }
+    cmd.env("PATH", env::join_paths(new_path).unwrap());
 
     let root = sess.target_filesearch(PathKind::Native).get_lib_path();
     cmd.args(&sess.target.target.options.pre_link_args);
