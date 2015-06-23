@@ -49,14 +49,15 @@
 //! an rptr (`&r.T`) use the region `r` that appears in the rptr.
 
 use middle::astconv_util::{prim_ty_to_ty, check_path_args, NO_TPS, NO_REGIONS};
-use middle::const_eval;
+use middle::const_eval::{self, ConstVal};
 use middle::def;
 use middle::implicator::object_region_bounds;
 use middle::resolve_lifetime as rl;
 use middle::privacy::{AllPublic, LastMod};
 use middle::subst::{FnSpace, TypeSpace, SelfSpace, Subst, Substs};
 use middle::traits;
-use middle::ty::{self, RegionEscape, Ty};
+use middle::ty::{self, RegionEscape, Ty, AsPredicate};
+use middle::ty_fold;
 use rscope::{self, UnelidableRscope, RegionScope, ElidableRscope, ExplicitRscope,
              ObjectLifetimeDefaultRscope, ShiftedRscope, BindingRscope};
 use util::common::{ErrorReported, FN_OUTPUT_NAME};
@@ -1550,7 +1551,7 @@ pub fn ast_ty_to_ty<'tcx>(this: &AstConv<'tcx>,
         ast::TyParen(ref typ) => ast_ty_to_ty(this, rscope, &**typ),
         ast::TyBareFn(ref bf) => {
             if bf.decl.variadic && bf.abi != abi::C {
-                span_err!(tcx.sess, ast_ty.span, E0222,
+                span_err!(tcx.sess, ast_ty.span, E0045,
                           "variadic function must have C calling convention");
             }
             let bare_fn = ty_of_bare_fn(this, bf.unsafety, bf.abi, &*bf.decl);
@@ -1601,10 +1602,10 @@ pub fn ast_ty_to_ty<'tcx>(this: &AstConv<'tcx>,
             match const_eval::eval_const_expr_partial(tcx, &**e, Some(tcx.types.usize)) {
                 Ok(r) => {
                     match r {
-                        const_eval::const_int(i) =>
+                        ConstVal::Int(i) =>
                             ty::mk_vec(tcx, ast_ty_to_ty(this, rscope, &**ty),
                                         Some(i as usize)),
-                        const_eval::const_uint(i) =>
+                        ConstVal::Uint(i) =>
                             ty::mk_vec(tcx, ast_ty_to_ty(this, rscope, &**ty),
                                         Some(i as usize)),
                         _ => {
@@ -2190,4 +2191,48 @@ fn report_lifetime_number_error(tcx: &ty::ctxt, span: Span, number: usize, expec
     span_err!(tcx.sess, span, E0107,
               "wrong number of lifetime parameters: expected {}, found {}",
               expected, number);
+}
+
+// A helper struct for conveniently grouping a set of bounds which we pass to
+// and return from functions in multiple places.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Bounds<'tcx> {
+    pub region_bounds: Vec<ty::Region>,
+    pub builtin_bounds: ty::BuiltinBounds,
+    pub trait_bounds: Vec<ty::PolyTraitRef<'tcx>>,
+    pub projection_bounds: Vec<ty::PolyProjectionPredicate<'tcx>>,
+}
+
+impl<'tcx> Bounds<'tcx> {
+    pub fn predicates(&self,
+        tcx: &ty::ctxt<'tcx>,
+        param_ty: Ty<'tcx>)
+        -> Vec<ty::Predicate<'tcx>>
+    {
+        let mut vec = Vec::new();
+
+        for builtin_bound in &self.builtin_bounds {
+            match traits::trait_ref_for_builtin_bound(tcx, builtin_bound, param_ty) {
+                Ok(trait_ref) => { vec.push(trait_ref.as_predicate()); }
+                Err(ErrorReported) => { }
+            }
+        }
+
+        for &region_bound in &self.region_bounds {
+            // account for the binder being introduced below; no need to shift `param_ty`
+            // because, at present at least, it can only refer to early-bound regions
+            let region_bound = ty_fold::shift_region(region_bound, 1);
+            vec.push(ty::Binder(ty::OutlivesPredicate(param_ty, region_bound)).as_predicate());
+        }
+
+        for bound_trait_ref in &self.trait_bounds {
+            vec.push(bound_trait_ref.as_predicate());
+        }
+
+        for projection in &self.projection_bounds {
+            vec.push(projection.as_predicate());
+        }
+
+        vec
+    }
 }

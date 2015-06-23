@@ -46,7 +46,7 @@ use metadata::csearch;
 use middle;
 use middle::cast;
 use middle::check_const;
-use middle::const_eval;
+use middle::const_eval::{self, ConstVal};
 use middle::def::{self, DefMap, ExportMap};
 use middle::dependency_format;
 use middle::fast_reject;
@@ -1847,21 +1847,8 @@ pub enum type_err<'tcx> {
     terr_projection_bounds_length(expected_found<usize>),
 }
 
-/// Bounds suitable for a named type parameter like `A` in `fn foo<A>`
-/// as well as the existential type parameter in an object type.
-#[derive(PartialEq, Eq, Hash, Clone)]
-pub struct ParamBounds<'tcx> {
-    pub region_bounds: Vec<ty::Region>,
-    pub builtin_bounds: BuiltinBounds,
-    pub trait_bounds: Vec<PolyTraitRef<'tcx>>,
-    pub projection_bounds: Vec<PolyProjectionPredicate<'tcx>>,
-}
-
 /// Bounds suitable for an existentially quantified type parameter
-/// such as those that appear in object types or closure types. The
-/// major difference between this case and `ParamBounds` is that
-/// general purpose trait bounds are omitted and there must be
-/// *exactly one* region.
+/// such as those that appear in object types or closure types.
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct ExistentialBounds<'tcx> {
     pub region_bound: ty::Region,
@@ -1873,12 +1860,23 @@ pub struct ExistentialBounds<'tcx> {
 pub struct BuiltinBounds(EnumSet<BuiltinBound>);
 
 impl BuiltinBounds {
-    pub fn empty() -> BuiltinBounds {
+       pub fn empty() -> BuiltinBounds {
         BuiltinBounds(EnumSet::new())
     }
 
     pub fn iter(&self) -> enum_set::Iter<BuiltinBound> {
         self.into_iter()
+    }
+
+    pub fn to_predicates<'tcx>(&self,
+                               tcx: &ty::ctxt<'tcx>,
+                               self_ty: Ty<'tcx>) -> Vec<Predicate<'tcx>> {
+        self.iter().filter_map(|builtin_bound|
+            match traits::trait_ref_for_builtin_bound(tcx, builtin_bound, self_ty) {
+                Ok(trait_ref) => Some(trait_ref.as_predicate()),
+                Err(ErrorReported) => { None }
+            }
+        ).collect()
     }
 }
 
@@ -3283,6 +3281,7 @@ impl FlagComputation {
             }
 
             &TyClosure(_, substs) => {
+                self.add_flags(TypeFlags::HAS_TY_CLOSURE);
                 self.add_flags(TypeFlags::HAS_LOCAL_NAMES);
                 self.add_substs(substs);
             }
@@ -3700,17 +3699,6 @@ impl<'tcx> ItemSubsts<'tcx> {
 
     pub fn is_noop(&self) -> bool {
         self.substs.is_noop()
-    }
-}
-
-impl<'tcx> ParamBounds<'tcx> {
-    pub fn empty() -> ParamBounds<'tcx> {
-        ParamBounds {
-            builtin_bounds: BuiltinBounds::empty(),
-            trait_bounds: Vec::new(),
-            region_bounds: Vec::new(),
-            projection_bounds: Vec::new(),
-        }
     }
 }
 
@@ -6025,8 +6013,8 @@ fn compute_enum_variants<'tcx>(cx: &ctxt<'tcx>,
                 // more robust (on case-by-case basis).
 
                 match const_eval::eval_const_expr_partial(cx, &**e, Some(repr_type_ty)) {
-                    Ok(const_eval::const_int(val)) => current_disr_val = val as Disr,
-                    Ok(const_eval::const_uint(val)) => current_disr_val = val as Disr,
+                    Ok(ConstVal::Int(val)) => current_disr_val = val as Disr,
+                    Ok(ConstVal::Uint(val)) => current_disr_val = val as Disr,
                     Ok(_) => {
                         let sign_desc = if repr_type.is_signed() { "signed" } else { "unsigned" };
                         span_err!(cx.sess, e.span, E0079,
@@ -6140,39 +6128,6 @@ pub fn lookup_super_predicates<'tcx>(cx: &ctxt<'tcx>, did: ast::DefId)
     lookup_locally_or_in_crate_store(
         "super_predicates", did, &cx.super_predicates,
         || csearch::get_super_predicates(cx, did))
-}
-
-pub fn predicates<'tcx>(
-    tcx: &ctxt<'tcx>,
-    param_ty: Ty<'tcx>,
-    bounds: &ParamBounds<'tcx>)
-    -> Vec<Predicate<'tcx>>
-{
-    let mut vec = Vec::new();
-
-    for builtin_bound in &bounds.builtin_bounds {
-        match traits::trait_ref_for_builtin_bound(tcx, builtin_bound, param_ty) {
-            Ok(trait_ref) => { vec.push(trait_ref.as_predicate()); }
-            Err(ErrorReported) => { }
-        }
-    }
-
-    for &region_bound in &bounds.region_bounds {
-        // account for the binder being introduced below; no need to shift `param_ty`
-        // because, at present at least, it can only refer to early-bound regions
-        let region_bound = ty_fold::shift_region(region_bound, 1);
-        vec.push(ty::Binder(ty::OutlivesPredicate(param_ty, region_bound)).as_predicate());
-    }
-
-    for bound_trait_ref in &bounds.trait_bounds {
-        vec.push(bound_trait_ref.as_predicate());
-    }
-
-    for projection in &bounds.projection_bounds {
-        vec.push(projection.as_predicate());
-    }
-
-    vec
 }
 
 /// Get the attributes of a definition.
@@ -6399,15 +6354,15 @@ pub fn eval_repeat_count(tcx: &ctxt, count_expr: &ast::Expr) -> usize {
     match const_eval::eval_const_expr_partial(tcx, count_expr, Some(tcx.types.usize)) {
         Ok(val) => {
             let found = match val {
-                const_eval::const_uint(count) => return count as usize,
-                const_eval::const_int(count) if count >= 0 => return count as usize,
-                const_eval::const_int(_) => "negative integer",
-                const_eval::const_float(_) => "float",
-                const_eval::const_str(_) => "string",
-                const_eval::const_bool(_) => "boolean",
-                const_eval::const_binary(_) => "binary array",
-                const_eval::Struct(..) => "struct",
-                const_eval::Tuple(_) => "tuple"
+                ConstVal::Uint(count) => return count as usize,
+                ConstVal::Int(count) if count >= 0 => return count as usize,
+                ConstVal::Int(_) => "negative integer",
+                ConstVal::Float(_) => "float",
+                ConstVal::Str(_) => "string",
+                ConstVal::Bool(_) => "boolean",
+                ConstVal::Binary(_) => "binary array",
+                ConstVal::Struct(..) => "struct",
+                ConstVal::Tuple(_) => "tuple"
             };
             span_err!(tcx.sess, count_expr.span, E0306,
                 "expected positive integer for repeat count, found {}",
