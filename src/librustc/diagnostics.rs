@@ -602,15 +602,47 @@ const Y: u32 = X;
 
 E0267: r##"
 This error indicates the use of a loop keyword (`break` or `continue`) inside a
-closure but outside of any loop. Break and continue can be used as normal inside
-closures as long as they are also contained within a loop. To halt the execution
-of a closure you should instead use a return statement.
+closure but outside of any loop. Erroneous code example:
+
+```
+let w = || { break; }; // error: `break` inside of a closure
+```
+
+`break` and `continue` keywords can be used as normal inside closures as long as
+they are also contained within a loop. To halt the execution of a closure you
+should instead use a return statement. Example:
+
+```
+let w = || {
+    for _ in 0..10 {
+        break;
+    }
+};
+
+w();
+```
 "##,
 
 E0268: r##"
 This error indicates the use of a loop keyword (`break` or `continue`) outside
 of a loop. Without a loop to break out of or continue in, no sensible action can
-be taken.
+be taken. Erroneous code example:
+
+```
+fn some_func() {
+    break; // error: `break` outside of loop
+}
+```
+
+Please verify that you are using `break` and `continue` only in loops. Example:
+
+```
+fn some_func() {
+    for _ in 0..10 {
+        break; // ok!
+    }
+}
+```
 "##,
 
 E0271: r##"
@@ -745,6 +777,54 @@ for v in &vs {
         &1 => {}
         _ => {}
     }
+}
+```
+"##,
+
+E0277: r##"
+You tried to use a type which doesn't implement some trait in a place which
+expected that trait. Erroneous code example:
+
+```
+// here we declare the Foo trait with a bar method
+trait Foo {
+    fn bar(&self);
+}
+
+// we now declare a function which takes an object with Foo trait implemented
+// as parameter
+fn some_func<T: Foo>(foo: T) {
+    foo.bar();
+}
+
+fn main() {
+    // we now call the method with the i32 type, which doesn't implement
+    // the Foo trait
+    some_func(5i32); // error: the trait `Foo` is not implemented for the
+                     //     type `i32`
+}
+```
+
+In order to fix this error, verify that the type you're using does implement
+the trait. Example:
+
+```
+trait Foo {
+    fn bar(&self);
+}
+
+fn some_func<T: Foo>(foo: T) {
+    foo.bar(); // we can now use this method since i32 implements the
+               // Foo trait
+}
+
+// we implement the trait on the i32 type
+impl Foo for i32 {
+    fn bar(&self) {}
+}
+
+fn main() {
+    some_func(5i32); // ok!
 }
 ```
 "##,
@@ -1103,7 +1183,6 @@ register_diagnostics! {
     E0274, // rustc_on_unimplemented must have a value
     E0275, // overflow evaluating requirement
     E0276, // requirement appears on impl method but not on corresponding trait method
-    E0277, // trait is not implemented for type
     E0278, // requirement is not satisfied
     E0279, // requirement is not satisfied
     E0280, // requirement is not satisfied

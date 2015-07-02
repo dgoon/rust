@@ -26,7 +26,6 @@ use metadata::tydecode::{RegionParameter, ClosureSource};
 use metadata::tyencode;
 use middle::cast;
 use middle::check_const::ConstQualif;
-use middle::mem_categorization::Typer;
 use middle::privacy::{AllPublic, LastMod};
 use middle::subst;
 use middle::subst::VecPerParamSpace;
@@ -1656,7 +1655,7 @@ fn decode_side_tables(dcx: &DecodeContext,
                     c::tag_table_tcache => {
                         let type_scheme = val_dsr.read_type_scheme(dcx);
                         let lid = ast::DefId { krate: ast::LOCAL_CRATE, node: id };
-                        dcx.tcx.tcache.borrow_mut().insert(lid, type_scheme);
+                        dcx.tcx.register_item_type(lid, type_scheme);
                     }
                     c::tag_table_param_defs => {
                         let bounds = val_dsr.read_type_param_def(dcx);
