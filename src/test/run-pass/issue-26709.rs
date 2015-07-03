@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-windows
-// ignore-freebsd
-// ignore-openbsd
-// ignore-netbsd
-// ignore-bitrig
+struct Wrapper<'a, T: ?Sized>(&'a mut i32, T);
 
-// compile-flags: -Z parse-only
+impl<'a, T: ?Sized> Drop for Wrapper<'a, T> {
+    fn drop(&mut self) {
+        *self.0 = 432;
+    }
+}
 
-#[path = "../compile-fail"]
-mod foo; //~ ERROR: a directory
-
-fn main() {}
+fn main() {
+    let mut x = 0;
+    {
+        let wrapper = Box::new(Wrapper(&mut x, 123));
+        let _: Box<Wrapper<Send>> = wrapper;
+    }
+    assert_eq!(432, x)
+}
