@@ -8,13 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn main() {
-    static foo: Fn() -> u32 = || -> u32 {
-        //~^ ERROR: mismatched types:
-        //~| expected `core::ops::Fn() -> u32 + 'static`,
-        //~| found closure
-        //~| (expected trait core::ops::Fn,
-        //~| found closure)
-        0
-    };
+fn bot<T>() -> T { loop {} }
+
+fn mutate(s: &mut str) {
+    s[1..2] = bot();
+    //~^ ERROR `core::marker::Sized` is not implemented for the type `str`
+    //~^^ ERROR `core::marker::Sized` is not implemented for the type `str`
+    s[1usize] = bot();
+    //~^ ERROR `core::ops::Index<usize>` is not implemented for the type `str`
+    //~^^ ERROR `core::ops::Index<usize>` is not implemented for the type `str`
 }
+
+pub fn main() {}

@@ -8,13 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn main() {
-    static foo: Fn() -> u32 = || -> u32 {
-        //~^ ERROR: mismatched types:
-        //~| expected `core::ops::Fn() -> u32 + 'static`,
-        //~| found closure
-        //~| (expected trait core::ops::Fn,
-        //~| found closure)
-        0
-    };
+fn mutate(mut s: &mut str) {
+    let _s: &mut str = &mut s[1..2];
+    //~^ ERROR cannot borrow immutable indexed content as mutable
 }
+
+pub fn main() {}

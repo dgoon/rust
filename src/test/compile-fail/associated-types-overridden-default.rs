@@ -8,13 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn main() {
-    static foo: Fn() -> u32 = || -> u32 {
-        //~^ ERROR: mismatched types:
-        //~| expected `core::ops::Fn() -> u32 + 'static`,
-        //~| found closure
-        //~| (expected trait core::ops::Fn,
-        //~| found closure)
-        0
-    };
+#![feature(associated_consts)]
+
+pub trait Tr {
+    type Assoc = u8;
+    type Assoc2 = Self::Assoc;
+    const C: u8 = 11;
+    fn foo(&self) {}
 }
+
+impl Tr for () {
+    type Assoc = ();
+    //~^ ERROR need to be reimplemented as `Assoc` was overridden: `Assoc2`, `C`, `foo`
+}
+
+fn main() {}
