@@ -8,19 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! The fixed-size array type (`[T; n]`).
-//!
-//! Some usage examples:
-//!
-//! ```
-//! let array: [i32; 3] = [0, 1, 2];
-//!
-//! assert_eq!(0, array[0]);
-//! assert_eq!([0, 1], &array[..2]);
-//!
-//! for x in &array {
-//!     println!("{}", x);
-//! }
-//! ```
+// aux-build:issue-14344-1.rs
+// aux-build:issue-14344-2.rs
 
-#![doc(primitive = "array")]
+extern crate issue_14344_1;
+extern crate issue_14344_2;
+
+fn main() {
+    issue_14344_1::foo();
+    issue_14344_2::bar();
+}

@@ -8,19 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! The fixed-size array type (`[T; n]`).
-//!
-//! Some usage examples:
-//!
-//! ```
-//! let array: [i32; 3] = [0, 1, 2];
-//!
-//! assert_eq!(0, array[0]);
-//! assert_eq!([0, 1], &array[..2]);
-//!
-//! for x in &array {
-//!     println!("{}", x);
-//! }
-//! ```
+// Check that an enum with recursion in the discriminant throws
+// the appropriate error (rather than, say, blowing the stack).
+enum X {
+    A = X::A as isize, //~ ERROR E0265
+}
 
-#![doc(primitive = "array")]
+// Since `Y::B` here defaults to `Y::A+1`, this is also a
+// recursive definition.
+enum Y {
+    A = Y::B as isize, //~ ERROR E0265
+    B,
+}
+
+fn main() { }

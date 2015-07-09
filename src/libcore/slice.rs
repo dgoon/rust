@@ -1368,9 +1368,13 @@ pub fn mut_ref_slice<'a, A>(s: &'a mut A) -> &'a mut [A] {
 ///
 /// The `len` argument is the number of **elements**, not the number of bytes.
 ///
+/// # Unsafety
+///
 /// This function is unsafe as there is no guarantee that the given pointer is
 /// valid for `len` elements, nor whether the lifetime inferred is a suitable
 /// lifetime for the returned slice.
+///
+/// `p` must be non-null, even for zero-length slices.
 ///
 /// # Caveat
 ///
@@ -1459,12 +1463,30 @@ pub mod bytes {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<A, B> PartialEq<[B]> for [A] where A: PartialEq<B> {
     fn eq(&self, other: &[B]) -> bool {
-        self.len() == other.len() &&
-            order::eq(self.iter(), other.iter())
+        if self.len() != other.len() {
+            return false;
+        }
+
+        for i in 0..self.len() {
+            if !self[i].eq(&other[i]) {
+                return false;
+            }
+        }
+
+        true
     }
     fn ne(&self, other: &[B]) -> bool {
-        self.len() != other.len() ||
-            order::ne(self.iter(), other.iter())
+        if self.len() != other.len() {
+            return true;
+        }
+
+        for i in 0..self.len() {
+            if self[i].ne(&other[i]) {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
