@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,23 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct Monster {
-    damage: isize
+// Test for issue #23969
+
+#![feature(associated_consts)]
+
+trait Foo {
+    type Ty;
+    const BAR: u32;
 }
 
+impl Foo for () {
+    type Ty = ();
+    type Ty = usize; //~ ERROR duplicate associated type
+    const BAR: u32 = 7;
+    const BAR: u32 = 8; //~ ERROR duplicate associated constant
+}
 
 fn main() {
-    let _m = Monster(); //~ ERROR `Monster` is a struct variant name, but
-    //~^ HELP did you mean to write: `Monster { /* fields */ }`?
+    let _: <() as Foo>::Ty = ();
+    let _: u32 = <() as Foo>::BAR;
 }
