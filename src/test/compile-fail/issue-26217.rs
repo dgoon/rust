@@ -1,4 +1,4 @@
-// Copyright 2014-2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:lang-item-public.rs
-// ignore-android
+fn foo<T>() where for<'a> T: 'a {}
 
-#![feature(start, no_std)]
-#![no_std]
-
-extern crate lang_item_public as lang_lib;
-
-#[start]
-fn main(_: isize, _: *const *const u8) -> isize {
-    1_isize % 1_isize
+fn main<'a>() {
+    foo::<&'a i32>();
+    //~^ ERROR the type `&'a i32` does not fulfill the required lifetime
 }

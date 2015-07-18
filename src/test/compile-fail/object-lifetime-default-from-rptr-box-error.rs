@@ -8,16 +8,24 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use target::Target;
+// Test that the lifetime from the enclosing `&` is "inherited"
+// through the `Box` struct.
 
-pub fn target() -> Target {
-    Target {
-        llvm_target: "aarch64-linux-android".to_string(),
-        target_endian: "little".to_string(),
-        target_pointer_width: "64".to_string(),
-        arch: "aarch64".to_string(),
-        target_os: "android".to_string(),
-        target_env: "".to_string(),
-        options: super::android_base::opts(),
-    }
+// pretty-expanded FIXME #23616
+
+#![allow(dead_code)]
+
+trait Test {
+    fn foo(&self) { }
+}
+
+struct SomeStruct<'a> {
+    t: &'a Box<Test>,
+}
+
+fn c<'a>(t: &'a Box<Test+'a>, mut ss: SomeStruct<'a>) {
+    ss.t = t; //~ ERROR mismatched types
+}
+
+fn main() {
 }

@@ -8,16 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use target::Target;
+// When expanding a macro, documentation attributes (including documentation comments) must be
+// passed "as is" without being parsed. Otherwise, some text will be incorrectly interpreted as
+// escape sequences, leading to an ICE.
+//
+// Related issues: #25929, #25943
 
-pub fn target() -> Target {
-    Target {
-        llvm_target: "aarch64-linux-android".to_string(),
-        target_endian: "little".to_string(),
-        target_pointer_width: "64".to_string(),
-        arch: "aarch64".to_string(),
-        target_os: "android".to_string(),
-        target_env: "".to_string(),
-        options: super::android_base::opts(),
-    }
+macro_rules! homura {
+    (#[$x:meta]) => ()
 }
+
+homura! {
+    /// \madoka \x41
+}
+
+fn main() { }

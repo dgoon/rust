@@ -1476,8 +1476,10 @@ fn base_def_to_ty<'tcx>(this: &AstConv<'tcx>,
             prim_ty_to_ty(tcx, base_segments, prim_ty)
         }
         _ => {
+            let node = def.def_id().node;
             span_err!(tcx.sess, span, E0248,
-                      "found value name used as a type: {:?}", *def);
+                      "found value `{}` used as a type",
+                      tcx.map.path_to_string(node));
             return this.tcx().types.err;
         }
     }
@@ -2040,23 +2042,22 @@ pub fn conv_existential_bounds_from_partitioned_bounds<'tcx>(
                                       principal_trait_ref,
                                       builtin_bounds);
 
-    let (region_bound, will_change) = match region_bound {
-        Some(r) => (r, false),
+    let region_bound = match region_bound {
+        Some(r) => r,
         None => {
             match rscope.object_lifetime_default(span) {
-                Some(r) => (r, rscope.object_lifetime_default_will_change_in_1_3()),
+                Some(r) => r,
                 None => {
                     span_err!(this.tcx().sess, span, E0228,
                               "the lifetime bound for this object type cannot be deduced \
                                from context; please supply an explicit bound");
-                    (ty::ReStatic, false)
+                    ty::ReStatic
                 }
             }
         }
     };
 
-    debug!("region_bound: {:?} will_change: {:?}",
-           region_bound, will_change);
+    debug!("region_bound: {:?}", region_bound);
 
     ty::sort_bounds_list(&mut projection_bounds);
 
@@ -2064,7 +2065,6 @@ pub fn conv_existential_bounds_from_partitioned_bounds<'tcx>(
         region_bound: region_bound,
         builtin_bounds: builtin_bounds,
         projection_bounds: projection_bounds,
-        region_bound_will_change: will_change,
     }
 }
 
