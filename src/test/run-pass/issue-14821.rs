@@ -8,19 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(associated_consts)]
+trait SomeTrait {}
+struct Meow;
+impl SomeTrait for Meow {}
 
-trait Foo {
-    const BAR: u32;
+struct Foo<'a> {
+    x: &'a SomeTrait,
+    y: &'a SomeTrait,
 }
 
-struct SignedBar;
-
-impl Foo for SignedBar {
-    const BAR: i32 = -1;
-    //~^ ERROR implemented const `BAR` has an incompatible type for trait
-    //~| expected u32,
-    //~| found i32 [E0326]
+impl<'a> Foo<'a> {
+    pub fn new<'b>(x: &'b SomeTrait, y: &'b SomeTrait) -> Foo<'b> { Foo { x: x, y: y } }
 }
 
-fn main() {}
+fn main() {
+    let r = Meow;
+    let s = Meow;
+    let q = Foo::new(&r as &SomeTrait, &s as &SomeTrait);
+}
