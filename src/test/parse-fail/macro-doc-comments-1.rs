@@ -8,10 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Test that negating unsigned integers is gated by `negate_unsigned` feature
-// gate
+macro_rules! outer {
+    (#[$outer:meta]) => ()
+}
 
-const MAX: usize = -1;
-//~^ ERROR unary negation of unsigned integers may be removed in the future
+outer! {
+    //! Inner
+} //~^ ERROR no rules expected the token `!`
 
-fn main() {}
+fn main() { }

@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,7 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! The boolean type
+// Tests that empty codemaps don't ICE (#23301)
 
-#![doc(primitive = "bool")]
-#![stable(feature = "rust1", since = "1.0.0")]
+// compile-flags: --cfg ""
+
+// error-pattern: expected ident, found
+
+pub fn main() {
+}

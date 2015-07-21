@@ -208,6 +208,10 @@ impl Handler {
     }
     pub fn fatal(&self, msg: &str) -> ! {
         self.emit.borrow_mut().emit(None, msg, None, Fatal);
+
+        // Suppress the fatal error message from the panic below as we've
+        // already terminated in our own "legitimate" fashion.
+        io::set_panic(Box::new(io::sink()));
         panic!(FatalError);
     }
     pub fn err(&self, msg: &str) {
@@ -837,12 +841,7 @@ mod test {
         tolv
         dreizehn
         ";
-        let file = cm.new_filemap("dummy.txt".to_string(), content.to_string());
-        for (i, b) in content.bytes().enumerate() {
-            if b == b'\n' {
-                file.next_line(BytePos(i as u32));
-            }
-        }
+        let file = cm.new_filemap_and_lines("dummy.txt", content);
         let start = file.lines.borrow()[7];
         let end = file.lines.borrow()[11];
         let sp = mk_sp(start, end);
@@ -854,11 +853,12 @@ mod test {
         println!("done");
         let vec = data.lock().unwrap().clone();
         let vec: &[u8] = &vec;
-        println!("{}", from_utf8(vec).unwrap());
-        assert_eq!(vec, "dummy.txt: 8 \n\
-                         dummy.txt: 9 \n\
-                         dummy.txt:10 \n\
-                         dummy.txt:11 \n\
-                         dummy.txt:12 \n".as_bytes());
+        let str = from_utf8(vec).unwrap();
+        println!("{}", str);
+        assert_eq!(str, "dummy.txt: 8         line8\n\
+                         dummy.txt: 9         line9\n\
+                         dummy.txt:10         line10\n\
+                         dummy.txt:11         e-lä-vän\n\
+                         dummy.txt:12         tolv\n");
     }
 }
