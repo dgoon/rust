@@ -404,7 +404,11 @@ impl<'a, 'tcx> AstConv<'tcx> for ItemCtxt<'a, 'tcx> {
         }
     }
 
-    fn ty_infer(&self, span: Span) -> Ty<'tcx> {
+        fn ty_infer(&self,
+                    _ty_param_def: Option<ty::TypeParameterDef<'tcx>>,
+                    _substs: Option<&mut Substs<'tcx>>,
+                    _space: Option<ParamSpace>,
+                    span: Span) -> Ty<'tcx> {
         span_err!(self.tcx().sess, span, E0121,
                   "the type placeholder `_` is not allowed within types on item signatures");
         self.tcx().types.err
@@ -836,6 +840,18 @@ fn convert_item(ccx: &CrateCtxt, it: &ast::Item) {
                                                 ty: selfty });
             tcx.predicates.borrow_mut().insert(local_def(it.id),
                                                ty_predicates.clone());
+            if let &Some(ref ast_trait_ref) = opt_trait_ref {
+                tcx.impl_trait_refs.borrow_mut().insert(
+                    local_def(it.id),
+                    Some(astconv::instantiate_mono_trait_ref(&ccx.icx(&ty_predicates),
+                                                             &ExplicitRscope,
+                                                             ast_trait_ref,
+                                                             Some(selfty)))
+                        );
+            } else {
+                tcx.impl_trait_refs.borrow_mut().insert(local_def(it.id), None);
+            }
+
 
             // If there is a trait reference, treat the methods as always public.
             // This is to work around some incorrect behavior in privacy checking:
@@ -933,18 +949,6 @@ fn convert_item(ccx: &CrateCtxt, it: &ast::Item) {
                                            &sig.explicit_self,
                                            body_id);
                 }
-            }
-
-            if let &Some(ref ast_trait_ref) = opt_trait_ref {
-                tcx.impl_trait_refs.borrow_mut().insert(
-                    local_def(it.id),
-                    Some(astconv::instantiate_mono_trait_ref(&ccx.icx(&ty_predicates),
-                                                             &ExplicitRscope,
-                                                             ast_trait_ref,
-                                                             Some(selfty)))
-                        );
-            } else {
-                tcx.impl_trait_refs.borrow_mut().insert(local_def(it.id), None);
             }
 
             enforce_impl_params_are_constrained(tcx,
@@ -1643,11 +1647,14 @@ fn ty_generics_for_trait<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
     // the node id for the Self type parameter.
     let param_id = trait_id;
 
+    let parent = ccx.tcx.map.get_parent(param_id);
+
     let def = ty::TypeParameterDef {
         space: SelfSpace,
         index: 0,
         name: special_idents::type_self.name,
         def_id: local_def(param_id),
+        default_def_id: local_def(parent),
         default: None,
         object_lifetime_default: ty::ObjectLifetimeDefault::BaseDefault,
     };
@@ -1916,11 +1923,14 @@ fn get_or_create_type_parameter_def<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>,
         compute_object_lifetime_default(ccx, param.id,
                                         &param.bounds, &ast_generics.where_clause);
 
+    let parent = tcx.map.get_parent(param.id);
+
     let def = ty::TypeParameterDef {
         space: space,
         index: index,
         name: param.ident.name,
         def_id: local_def(param.id),
+        default_def_id: local_def(parent),
         default: default,
         object_lifetime_default: object_lifetime_default,
     };

@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,13 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-const FOO: usize = FOO; //~ ERROR recursive constant
+#![feature(default_type_parameter_fallback)]
+
+// Another example from the RFC
+trait Foo { }
+trait Bar { }
+
+impl<T:Bar=usize> Foo for Vec<T> {}
+impl Bar for usize {}
+
+fn takes_foo<F:Foo>(f: F) {}
 
 fn main() {
-    let _x: [u8; FOO]; // caused stack overflow prior to fix
-    let _y: usize = 1 + {
-        const BAR: usize = BAR; //~ ERROR recursive constant
-        let _z: [u8; BAR]; // caused stack overflow prior to fix
-        1
-    };
+    let x = Vec::new(); // x: Vec<$0>
+    takes_foo(x); // adds oblig Vec<$0> : Foo
 }

@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![feature(default_type_parameter_fallback)]
 
-// test that autoderef of a type like this does not
-// cause compiler to loop.  Note that no instances
-// of such a type could ever be constructed.
-struct S { //~ ERROR this type cannot be instantiated
-  x: X,
-  to_str: (),
+// An example from the RFC
+trait Foo { fn takes_foo(&self); }
+trait Bar { }
+
+impl<T:Bar=usize> Foo for Vec<T> {
+    fn takes_foo(&self) {}
 }
 
-struct X(Box<S>); //~ ERROR this type cannot be instantiated
+impl Bar for usize {}
 
-fn main() {}
+fn main() {
+    let x = Vec::new(); // x: Vec<$0>
+    x.takes_foo(); // adds oblig Vec<$0> : Foo
+}

@@ -55,12 +55,12 @@ use middle::def;
 use middle::implicator::object_region_bounds;
 use middle::resolve_lifetime as rl;
 use middle::privacy::{AllPublic, LastMod};
-use middle::subst::{FnSpace, TypeSpace, SelfSpace, Subst, Substs};
+use middle::subst::{FnSpace, TypeSpace, SelfSpace, Subst, Substs, ParamSpace};
 use middle::traits;
 use middle::ty::{self, RegionEscape, Ty, ToPredicate, HasTypeFlags};
 use middle::ty_fold;
 use require_c_abi_if_variadic;
-use rscope::{self, UnelidableRscope, RegionScope, ElidableRscope, ExplicitRscope,
+use rscope::{self, UnelidableRscope, RegionScope, ElidableRscope,
              ObjectLifetimeDefaultRscope, ShiftedRscope, BindingRscope,
              ElisionFailureInfo, ElidedLifetime};
 use util::common::{ErrorReported, FN_OUTPUT_NAME};
@@ -111,7 +111,11 @@ pub trait AstConv<'tcx> {
     }
 
     /// What type should we use when a type is omitted?
-    fn ty_infer(&self, span: Span) -> Ty<'tcx>;
+        fn ty_infer(&self,
+                    param_and_substs: Option<ty::TypeParameterDef<'tcx>>,
+                    substs: Option<&mut Substs<'tcx>>,
+                    space: Option<ParamSpace>,
+                    span: Span) -> Ty<'tcx>;
 
     /// Projecting an associated type from a (potentially)
     /// higher-ranked trait reference is more complicated, because of
@@ -403,7 +407,11 @@ fn create_substs_for_ast_path<'tcx>(
     // they were optional (e.g. paths inside expressions).
     let mut type_substs = if param_mode == PathParamMode::Optional &&
                              types_provided.is_empty() {
-        (0..formal_ty_param_count).map(|_| this.ty_infer(span)).collect()
+        let mut substs = region_substs.clone();
+        ty_param_defs
+            .iter()
+            .map(|p| this.ty_infer(Some(p.clone()), Some(&mut substs), Some(TypeSpace), span))
+            .collect()
     } else {
         types_provided
     };
@@ -1208,40 +1216,33 @@ fn associated_path_def_to_ty<'tcx>(this: &AstConv<'tcx>,
         (_, def::DefSelfTy(Some(trait_did), Some((impl_id, _)))) => {
             // `Self` in an impl of a trait - we have a concrete self type and a
             // trait reference.
-            match tcx.map.expect_item(impl_id).node {
-                ast::ItemImpl(_, _, _, Some(ref trait_ref), _, _) => {
-                    if this.ensure_super_predicates(span, trait_did).is_err() {
-                        return (tcx.types.err, ty_path_def);
-                    }
+            let trait_ref = tcx.impl_trait_ref(ast_util::local_def(impl_id)).unwrap();
+            let trait_ref = if let Some(free_substs) = this.get_free_substs() {
+                trait_ref.subst(tcx, free_substs)
+            } else {
+                trait_ref
+            };
 
-                    let trait_segment = &trait_ref.path.segments.last().unwrap();
-                    let trait_ref = ast_path_to_mono_trait_ref(this,
-                                                               &ExplicitRscope,
-                                                               span,
-                                                               PathParamMode::Explicit,
-                                                               trait_did,
-                                                               Some(ty),
-                                                               trait_segment);
+            if this.ensure_super_predicates(span, trait_did).is_err() {
+                return (tcx.types.err, ty_path_def);
+            }
 
-                    let candidates: Vec<ty::PolyTraitRef> =
-                        traits::supertraits(tcx, ty::Binder(trait_ref.clone()))
-                        .filter(|r| this.trait_defines_associated_type_named(r.def_id(),
-                                                                             assoc_name))
-                        .collect();
+            let candidates: Vec<ty::PolyTraitRef> =
+                traits::supertraits(tcx, ty::Binder(trait_ref))
+                .filter(|r| this.trait_defines_associated_type_named(r.def_id(),
+                                                                     assoc_name))
+                .collect();
 
-                    match one_bound_for_assoc_type(tcx,
-                                                   candidates,
-                                                   "Self",
-                                                   &token::get_name(assoc_name),
-                                                   span) {
-                        Ok(bound) => bound,
-                        Err(ErrorReported) => return (tcx.types.err, ty_path_def),
-                    }
-                }
-                _ => unreachable!()
+            match one_bound_for_assoc_type(tcx,
+                                           candidates,
+                                           "Self",
+                                           &token::get_name(assoc_name),
+                                           span) {
+                Ok(bound) => bound,
+                Err(ErrorReported) => return (tcx.types.err, ty_path_def),
             }
         }
-        (&ty::TyParam(_), def::DefSelfTy(Some(trait_did),  None)) => {
+        (&ty::TyParam(_), def::DefSelfTy(Some(trait_did), None)) => {
             assert_eq!(trait_did.krate, ast::LOCAL_CRATE);
             match find_bound_for_assoc_item(this,
                                             trait_did.node,
@@ -1661,7 +1662,7 @@ pub fn ast_ty_to_ty<'tcx>(this: &AstConv<'tcx>,
             // values in a ExprClosure, or as
             // the type of local variables. Both of these cases are
             // handled specially and will not descend into this routine.
-            this.ty_infer(ast_ty.span)
+            this.ty_infer(None, None, None, ast_ty.span)
         }
     };
 
@@ -1677,7 +1678,7 @@ pub fn ty_of_arg<'tcx>(this: &AstConv<'tcx>,
 {
     match a.ty.node {
         ast::TyInfer if expected_ty.is_some() => expected_ty.unwrap(),
-        ast::TyInfer => this.ty_infer(a.ty.span),
+        ast::TyInfer => this.ty_infer(None, None, None, a.ty.span),
         _ => ast_ty_to_ty(this, rscope, &*a.ty),
     }
 }
@@ -1796,7 +1797,7 @@ fn ty_of_method_or_bare_fn<'a, 'tcx>(this: &AstConv<'tcx>,
 
     let output_ty = match decl.output {
         ast::Return(ref output) if output.node == ast::TyInfer =>
-            ty::FnConverging(this.ty_infer(output.span)),
+            ty::FnConverging(this.ty_infer(None, None, None, output.span)),
         ast::Return(ref output) =>
             ty::FnConverging(convert_ty_with_lifetime_elision(this,
                                                               implied_output_region,
@@ -1936,7 +1937,7 @@ pub fn ty_of_closure<'tcx>(
         _ if is_infer && expected_ret_ty.is_some() =>
             expected_ret_ty.unwrap(),
         _ if is_infer =>
-            ty::FnConverging(this.ty_infer(decl.output.span())),
+            ty::FnConverging(this.ty_infer(None, None, None, decl.output.span())),
         ast::Return(ref output) =>
             ty::FnConverging(ast_ty_to_ty(this, &rb, &**output)),
         ast::DefaultReturn(..) => unreachable!(),

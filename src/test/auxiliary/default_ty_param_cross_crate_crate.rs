@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,13 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-const FOO: usize = FOO; //~ ERROR recursive constant
+#![crate_type = "lib"]
+#![crate_name = "default_param_test"]
 
-fn main() {
-    let _x: [u8; FOO]; // caused stack overflow prior to fix
-    let _y: usize = 1 + {
-        const BAR: usize = BAR; //~ ERROR recursive constant
-        let _z: [u8; BAR]; // caused stack overflow prior to fix
-        1
-    };
-}
+use std::marker::PhantomData;
+
+pub struct Foo<A, B>(PhantomData<(A, B)>);
+
+pub fn bleh<A=i32, X=char>() -> Foo<A, X> { Foo(PhantomData) }
+
