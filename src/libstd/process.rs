@@ -505,7 +505,7 @@ impl Child {
     }
 
     /// Returns the OS-assigned process identifier associated with this child.
-    #[unstable(feature = "process_id", reason = "api recently added")]
+    #[stable(feature = "process_id", since = "1.3.0")]
     pub fn id(&self) -> u32 {
         self.handle.id()
     }
@@ -799,7 +799,7 @@ mod tests {
     #[cfg(not(target_os="android"))]
     #[test]
     fn test_inherit_env() {
-        use std::env;
+        use env;
 
         let result = env_cmd().output().unwrap();
         let output = String::from_utf8(result.stdout).unwrap();
