@@ -313,8 +313,8 @@ fn resolve_error<'b, 'a:'b, 'tcx:'a>(resolver: &'b Resolver<'a, 'tcx>, span: syn
         },
         ResolutionError::StructVariantUsedAsFunction(path_name) => {
             span_err!(resolver.session, span, E0423,
-                         "`{}` is a struct variant name, but \
-                          this expression \
+                         "`{}` is the name of a struct or struct variant, \
+                          but this expression \
                           uses it like a function name",
                           path_name);
         },
@@ -3448,7 +3448,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
         // Look for a method in the current self type's impl module.
         if let Some(module) = get_module(self, path.span, &name_path) {
             if let Some(binding) = module.children.borrow().get(&name) {
-                if let Some(DefMethod(did, _)) = binding.def_for_namespace(ValueNS) {
+                if let Some(DefMethod(did)) = binding.def_for_namespace(ValueNS) {
                     if is_static_method(self, did) {
                         return StaticMethod(path_names_to_string(&path, 0))
                     }
