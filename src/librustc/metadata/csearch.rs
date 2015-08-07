@@ -22,7 +22,6 @@ use rbml::reader;
 use std::rc::Rc;
 use syntax::ast;
 use syntax::attr;
-use syntax::attr::AttrMetaMethods;
 use syntax::diagnostic::expect;
 
 use std::collections::hash_map::HashMap;
@@ -113,13 +112,6 @@ pub fn maybe_get_item_ast<'tcx>(tcx: &ty::ctxt<'tcx>, def: ast::DefId,
     decoder::maybe_get_item_ast(&*cdata, tcx, def.node, decode_inlined_item)
 }
 
-pub fn get_enum_variants<'tcx>(tcx: &ty::ctxt<'tcx>, def: ast::DefId)
-                               -> Vec<Rc<ty::VariantInfo<'tcx>>> {
-    let cstore = &tcx.sess.cstore;
-    let cdata = cstore.get_crate_data(def.krate);
-    decoder::get_enum_variants(cstore.intr.clone(), &*cdata, def.node, tcx)
-}
-
 /// Returns information about the given implementation.
 pub fn get_impl_items(cstore: &cstore::CStore, impl_def_id: ast::DefId)
                       -> Vec<ty::ImplOrTraitItemId> {
@@ -195,11 +187,9 @@ pub fn get_item_attrs(cstore: &cstore::CStore,
     decoder::get_item_attrs(&*cdata, def_id.node)
 }
 
-pub fn get_struct_fields(cstore: &cstore::CStore,
-                         def: ast::DefId)
-                      -> Vec<ty::FieldTy> {
+pub fn get_struct_field_names(cstore: &cstore::CStore, def: ast::DefId) -> Vec<ast::Name> {
     let cdata = cstore.get_crate_data(def.krate);
-    decoder::get_struct_fields(cstore.intr.clone(), &*cdata, def.node)
+    decoder::get_struct_field_names(&cstore.intr, &*cdata, def.node)
 }
 
 pub fn get_struct_field_attrs(cstore: &cstore::CStore, def: ast::DefId) -> HashMap<ast::NodeId,
@@ -220,6 +210,12 @@ pub fn get_trait_def<'tcx>(tcx: &ty::ctxt<'tcx>, def: ast::DefId) -> ty::TraitDe
     let cstore = &tcx.sess.cstore;
     let cdata = cstore.get_crate_data(def.krate);
     decoder::get_trait_def(&*cdata, def.node, tcx)
+}
+
+pub fn get_adt_def<'tcx>(tcx: &ty::ctxt<'tcx>, def: ast::DefId) -> ty::AdtDefMaster<'tcx> {
+    let cstore = &tcx.sess.cstore;
+    let cdata = cstore.get_crate_data(def.krate);
+    decoder::get_adt_def(&cstore.intr, &*cdata, def.node, tcx)
 }
 
 pub fn get_predicates<'tcx>(tcx: &ty::ctxt<'tcx>, def: ast::DefId)
@@ -386,15 +382,7 @@ pub fn get_stability(cstore: &cstore::CStore,
 }
 
 pub fn is_staged_api(cstore: &cstore::CStore, krate: ast::CrateNum) -> bool {
-    let cdata = cstore.get_crate_data(krate);
-    let attrs = decoder::get_crate_attributes(cdata.data());
-    for attr in &attrs {
-        if &attr.name()[..] == "staged_api" {
-            match attr.node.value.node { ast::MetaWord(_) => return true, _ => (/*pass*/) }
-        }
-    }
-
-    return false;
+    cstore.get_crate_data(krate).staged_api
 }
 
 pub fn get_repr_attrs(cstore: &cstore::CStore, def: ast::DefId)
