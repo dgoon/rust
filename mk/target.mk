@@ -40,7 +40,7 @@ CRATE_FULLDEPS_$(1)_T_$(2)_H_$(3)_$(4) := \
 		  $$(RT_OUTPUT_DIR_$(2))/$$(dep)) \
 		$$(foreach dep,$$(NATIVE_TOOL_DEPS_$(4)_T_$(2)), \
 		  $$(TBIN$(1)_T_$(3)_H_$(3))/$$(dep)) \
-		$$(CUSTOM_DEPS_$(4)_T_$(2))
+		$$(CUSTOM_DEPS$(1)_$(4)_T_$(2))
 endef
 
 $(foreach host,$(CFG_HOST), \
@@ -56,8 +56,7 @@ $(foreach host,$(CFG_HOST), \
 #   1. The immediate dependencies are the rust source files
 #   2. Each rust crate dependency is listed (based on their stamp files),
 #      as well as all native dependencies (listed in RT_OUTPUT_DIR)
-#   3. The stage (n-1) compiler is required through the TSREQ dependency, along
-#      with the morestack library
+#   3. The stage (n-1) compiler is required through the TSREQ dependency
 #   4. When actually executing the rule, the first thing we do is to clean out
 #      old libs and rlibs via the REMOVE_ALL_OLD_GLOB_MATCHES macro
 #   5. Finally, we get around to building the actual crate. It's just one
@@ -93,7 +92,7 @@ $$(TLIB$(1)_T_$(2)_H_$(3))/stamp.$(4): \
 		$$(LLVM_LIBDIR_RUSTFLAGS_$(2)) \
 		$$(LLVM_STDCPP_RUSTFLAGS_$(2)) \
 		$$(RUSTFLAGS_$(4)) \
-		$$(RUSTFLAGS_$(4)_T_$(2)) \
+		$$(RUSTFLAGS$(1)_$(4)_T_$(2)) \
 		--out-dir $$(@D) \
 		-C extra-filename=-$$(CFG_FILENAME_EXTRA) \
 		$$<
@@ -206,6 +205,9 @@ $(foreach host,$(CFG_HOST), \
 # $(3) - triple snapshot is built for
 # $(4) - crate
 # $(5) - tool
+#
+# FIXME(stage0): remove this and all other relevant support in the makefiles
+#                after a snapshot is made
 define MOVE_TOOLS_TO_SNAPSHOT_HOST_DIR
 ifneq (,$(3))
 $$(TLIB$(1)_T_$(2)_H_$(2))/stamp.$(4): $$(HLIB$(1)_H_$(2))/rustlib/$(3)/bin/$(5)
@@ -230,6 +232,9 @@ $(foreach target,$(CFG_TARGET), \
 #   path instead of MinGW's /usr/bin/link.exe (entirely unrelated)
 #
 # The values for these variables are detected by the configure script.
+#
+# FIXME(stage0): remove this and all other relevant support in the makefiles
+#                after a snapshot is made
 define SETUP_LIB_MSVC_ENV_VARS
 ifeq ($$(findstring msvc,$(2)),msvc)
 $$(TLIB$(1)_T_$(2)_H_$(3))/stamp.$(4): \

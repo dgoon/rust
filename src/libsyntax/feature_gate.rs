@@ -85,6 +85,7 @@ const KNOWN_FEATURES: &'static [(&'static str, &'static str, Status)] = &[
     ("on_unimplemented", "1.0.0", Active),
     ("simd_ffi", "1.0.0", Active),
     ("allocator", "1.0.0", Active),
+    ("linked_from", "1.3.0", Active),
 
     ("if_let", "1.0.0", Accepted),
     ("while_let", "1.0.0", Accepted),
@@ -225,6 +226,9 @@ pub const KNOWN_ATTRIBUTES: &'static [(&'static str, AttributeType)] = &[
     ("link_args", Normal),
     ("macro_escape", Normal),
 
+    // Not used any more, but we can't feature gate it
+    ("no_stack_check", Normal),
+
     ("staged_api", Gated("staged_api",
                          "staged_api is for use by rustc only")),
     ("plugin", Gated("plugin",
@@ -266,6 +270,10 @@ pub const KNOWN_ATTRIBUTES: &'static [(&'static str, AttributeType)] = &[
                           "the `#[fundamental]` attribute \
                            is an experimental feature")),
 
+    ("linked_from", Gated("linked_from",
+                          "the `#[linked_from]` attribute \
+                           is an experimental feature")),
+
     // FIXME: #14408 whitelist docs since rustdoc looks at them
     ("doc", Whitelisted),
 
@@ -279,7 +287,6 @@ pub const KNOWN_ATTRIBUTES: &'static [(&'static str, AttributeType)] = &[
     ("link_section", Whitelisted),
     ("no_builtins", Whitelisted),
     ("no_mangle", Whitelisted),
-    ("no_stack_check", Whitelisted),
     ("no_debug", Whitelisted),
     ("omit_gdb_pretty_printer_section", Whitelisted),
     ("unsafe_no_drop_flag", Gated("unsafe_no_drop_flag",

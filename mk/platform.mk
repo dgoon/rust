@@ -113,8 +113,7 @@ CFG_RLIB_GLOB=lib$(1)-*.rlib
 include $(wildcard $(CFG_SRC_DIR)mk/cfg/*.mk)
 
 define ADD_INSTALLED_OBJECTS
-  INSTALLED_OBJECTS_$(1) += $$(call CFG_STATIC_LIB_NAME_$(1),morestack) \
-                            $$(call CFG_STATIC_LIB_NAME_$(1),compiler-rt)
+  INSTALLED_OBJECTS_$(1) += $$(call CFG_STATIC_LIB_NAME_$(1),compiler-rt)
 endef
 
 $(foreach target,$(CFG_TARGET), \
@@ -243,6 +242,9 @@ $(foreach target,$(CFG_TARGET), \
 # Windows MSVC in the compiler, but the gist of it is that we use `llvm-ar.exe`
 # instead of `lib.exe` for assembling archives, so we need to inject this custom
 # dependency here.
+#
+# FIXME(stage0): remove this and all other relevant support in the makefiles
+#                after a snapshot is made
 define ADD_LLVM_AR_TO_MSVC_DEPS
 ifeq ($$(findstring msvc,$(1)),msvc)
 NATIVE_TOOL_DEPS_core_T_$(1) += llvm-ar.exe
@@ -278,10 +280,15 @@ $(foreach target,$(CFG_TARGET), \
 # Fun times!
 #
 # [1]: https://msdn.microsoft.com/en-us/library/28d6s79h.aspx
+#
+# FIXME(stage0): remove this macro and the usage below (and the commments above)
+# 	         when a new snapshot is available. Also remove the
+# 	         RUSTFLAGS$(1)_.._T_ variable in mk/target.mk along with
+# 	         CUSTOM_DEPS (as they were only added for this)
 define ADD_RUSTC_LLVM_DEF_TO_MSVC
 ifeq ($$(findstring msvc,$(1)),msvc)
-RUSTFLAGS_rustc_llvm_T_$(1) += -C link-args="-DEF:$(1)/rt/rustc_llvm.def"
-CUSTOM_DEPS_rustc_llvm_T_$(1) += $(1)/rt/rustc_llvm.def
+RUSTFLAGS0_rustc_llvm_T_$(1) += -C link-args="-DEF:$(1)/rt/rustc_llvm.def"
+CUSTOM_DEPS0_rustc_llvm_T_$(1) += $(1)/rt/rustc_llvm.def
 
 $(1)/rt/rustc_llvm.def: $$(S)src/etc/mklldef.py $$(S)src/librustc_llvm/lib.rs
 	$$(CFG_PYTHON) $$^ $$@ rustc_llvm-$$(CFG_FILENAME_EXTRA)

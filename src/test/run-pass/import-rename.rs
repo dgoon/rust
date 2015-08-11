@@ -8,14 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// no-prefer-dynamic
+use foo::{x, y as fooy};
+use Maybe::{Yes as MaybeYes};
 
-#![feature(linked_from)]
-
-#![crate_type = "rlib"]
-
-#[link(name = "rust_test_helpers", kind = "static")]
-#[linked_from = "rust_test_helpers"]
-extern {
-    pub fn rust_dbg_extern_identity_u32(u: u32) -> u32;
+pub enum Maybe { Yes, No }
+mod foo {
+    use super::Maybe::{self as MaybeFoo};
+    pub fn x(a: MaybeFoo) {}
+    pub fn y(a: i32) { println!("{}", a); }
 }
+
+pub fn main() { x(MaybeYes); fooy(10); }
