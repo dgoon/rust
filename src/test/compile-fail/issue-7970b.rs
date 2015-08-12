@@ -8,9 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: --crate-type=lib
+fn main() {}
 
-// pp-exact
-
-use std::io::{self, Error as IoError};
-use std::net::{self as stdnet, TcpStream};
+macro_rules! test {}
+//~^ ERROR unexpected end of macro invocation

@@ -8,9 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: --crate-type=lib
+// aux-build:fat_drop.rs
 
-// pp-exact
+#![feature(core_intrinsics)]
 
-use std::io::{self, Error as IoError};
-use std::net::{self as stdnet, TcpStream};
+extern crate fat_drop;
+
+fn main() {
+    unsafe {
+        let s: &mut fat_drop::S = std::mem::uninitialized();
+        std::intrinsics::drop_in_place(s);
+        assert!(fat_drop::DROPPED);
+    }
+}

@@ -8,9 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: --crate-type=lib
+pub static mut DROPPED: bool = false;
 
-// pp-exact
+pub struct S {
+    _unsized: [u8]
+}
 
-use std::io::{self, Error as IoError};
-use std::net::{self as stdnet, TcpStream};
+impl Drop for S {
+    fn drop(&mut self) {
+        unsafe {
+            DROPPED = true;
+        }
+    }
+}
