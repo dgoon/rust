@@ -190,7 +190,7 @@ trait_obj.method_two();
 You can read more about trait objects in the Trait Object section of the
 Reference:
 
-http://doc.rust-lang.org/reference.html#trait-objects
+https://doc.rust-lang.org/reference.html#trait-objects
 "##,
 
 E0034: r##"
@@ -642,6 +642,7 @@ item paths (ie, namespaced variables), dereferences, indexing expressions,
 and field references.
 
 Let's start with some bad examples:
+
 ```
 use std::collections::LinkedList;
 
@@ -653,8 +654,10 @@ LinkedList::new() += 1;
 fn some_func(i: &mut i32) {
     i += 12; // Error : '+=' operation cannot be applied on a reference !
 }
+```
 
 And now some good examples:
+
 ```
 let mut i : i32 = 0;
 
@@ -665,7 +668,6 @@ i += 12; // Good !
 fn some_func(i: &mut i32) {
     *i += 12; // Good !
 }
-
 ```
 "##,
 
@@ -694,6 +696,7 @@ More details can be found here:
 https://doc.rust-lang.org/reference.html#lvalues,-rvalues-and-temporaries
 
 Now, we can go further. Here are some bad examples:
+
 ```
 struct SomeStruct {
     x: i32,
@@ -1322,7 +1325,7 @@ fn bar(x: &str, y: &str) -> &str { ... }
 fn baz<'a>(x: &'a str, y: &str) -> &str { ... }
 ```
 
-[book-le]: http://doc.rust-lang.org/nightly/book/lifetimes.html#lifetime-elision
+[book-le]: https://doc.rust-lang.org/nightly/book/lifetimes.html#lifetime-elision
 "##,
 
 E0107: r##"
@@ -1838,6 +1841,22 @@ some types will not implement `Clone`, and thus will not get this method.
 In our erroneous example, however, we're referencing a single concrete type.
 Since we know for certain that Wrapper<u32> implements Clone, there's no reason
 to also specify it in a `where` clause.
+"##,
+
+E0194: r##"
+A type parameter was declared which shadows an existing one. An example of this
+error:
+
+```
+trait Foo<T> {
+    fn do_something(&self) -> T;
+    fn do_something_else<T: Clone>(&self, bar: T);
+}
+```
+
+In this example, the trait `Foo` and the trait method `do_something_else` both
+define a type parameter `T`. This is not allowed: if the method wishes to
+define a type parameter, it must use a different name for it.
 "##,
 
 E0195: r##"
@@ -2410,6 +2429,77 @@ fn main() {
 ```
 "##,
 
+E0366: r##"
+An attempt was made to implement `Drop` on a concrete specialization of a
+generic type. An example is shown below:
+
+```
+struct Foo<T> {
+    t: T
+}
+
+impl Drop for Foo<u32> {
+    fn drop(&mut self) {}
+}
+```
+
+This code is not legal: it is not possible to specialize `Drop` to a subset of
+implementations of a generic type. One workaround for this is to wrap the
+generic type, as shown below:
+
+```
+struct Foo<T> {
+    t: T
+}
+
+struct Bar {
+    t: Foo<u32>
+}
+
+impl Drop for Bar {
+    fn drop(&mut self) {}
+}
+```
+"##,
+
+E0367: r##"
+An attempt was made to implement `Drop` on a specialization of a generic type.
+An example is shown below:
+
+```
+trait Foo{}
+
+struct MyStruct<T> {
+    t: T
+}
+
+impl<T: Foo> Drop for MyStruct<T> {
+    fn drop(&mut self) {}
+}
+```
+
+This code is not legal: it is not possible to specialize `Drop` to a subset of
+implementations of a generic type. In order for this code to work, `MyStruct`
+must also require that `T` implements `Foo`. Alternatively, another option is
+to wrap the generic type in another that specializes appropriately:
+
+```
+trait Foo{}
+
+struct MyStruct<T> {
+    t: T
+}
+
+struct MyStructWrapper<T: Foo> {
+    t: MyStruct<T>
+}
+
+impl <T: Foo> Drop for MyStructWrapper<T> {
+    fn drop(&mut self) {}
+}
+```
+"##,
+
 E0368: r##"
 This error indicates that a binary assignment operator like `+=` or `^=` was
 applied to the wrong types. For example:
@@ -2595,7 +2685,6 @@ register_diagnostics! {
     E0188, // can not cast a immutable reference to a mutable pointer
     E0189, // deprecated: can only cast a boxed pointer to a boxed object
     E0190, // deprecated: can only cast a &-pointer to an &-object
-    E0194,
     E0196, // cannot determine a type for this closure
     E0203, // type parameter has more than one relaxed default bound,
            // and only one is supported
@@ -2641,8 +2730,6 @@ register_diagnostics! {
     E0325, // implemented an associated type when another trait item expected
     E0328, // cannot implement Unsize explicitly
     E0329, // associated const depends on type parameter or Self.
-    E0366, // dropck forbid specialization to concrete type or region
-    E0367, // dropck forbid specialization to predicate not in struct/enum
     E0369, // binary operation `<op>` cannot be applied to types
     E0370, // discriminant overflow
     E0374, // the trait `CoerceUnsized` may only be implemented for a coercion

@@ -7,3 +7,14 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+macro_rules! var {
+    ( $name:ident ) => ( $name );
+}
+
+pub fn main() {
+    let x = [ 3, 3, 3 ];
+    for var!(i) in &x {
+        assert_eq!(*i, 3);
+    }
+}
