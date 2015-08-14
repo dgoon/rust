@@ -82,24 +82,6 @@ impl String {
         }
     }
 
-    /// Creates a new string buffer from the given string.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// #![feature(collections)]
-    ///
-    /// let s = String::from("hello");
-    /// assert_eq!(&s[..], "hello");
-    /// ```
-    #[inline]
-    #[unstable(feature = "collections", reason = "use `String::from` instead")]
-    #[deprecated(since = "1.2.0", reason = "use `String::from` instead")]
-    #[cfg(not(test))]
-    pub fn from_str(string: &str) -> String {
-        String { vec: <[_]>::to_vec(string.as_bytes()) }
-    }
-
     // HACK(japaric): with cfg(test) the inherent `[T]::to_vec` method, which is
     // required for this method definition, is not available. Since we don't
     // require this method for testing purposes, I'll just stub it
@@ -747,9 +729,19 @@ impl String {
     /// Note that this will drop any excess capacity.
     #[unstable(feature = "box_str",
                reason = "recently added, matches RFC")]
-    pub fn into_boxed_slice(self) -> Box<str> {
+    pub fn into_boxed_str(self) -> Box<str> {
         let slice = self.vec.into_boxed_slice();
         unsafe { mem::transmute::<Box<[u8]>, Box<str>>(slice) }
+    }
+
+    /// Converts the string into `Box<str>`.
+    ///
+    /// Note that this will drop any excess capacity.
+    #[unstable(feature = "box_str",
+               reason = "recently added, matches RFC")]
+    #[deprecated(since = "1.4.0", reason = "renamed to `into_boxed_str`")]
+    pub fn into_boxed_slice(self) -> Box<str> {
+        self.into_boxed_str()
     }
 }
 
