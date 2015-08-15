@@ -2229,6 +2229,42 @@ type Foo = Trait<Bar=i32>; // ok!
 ```
 "##,
 
+E0221: r##"
+An attempt was made to retrieve an associated type, but the type was ambiguous.
+For example:
+
+```
+trait T1 {}
+trait T2 {}
+
+trait Foo {
+    type A: T1;
+}
+
+trait Bar : Foo {
+    type A: T2;
+    fn do_something() {
+        let _: Self::A;
+    }
+}
+```
+
+In this example, `Foo` defines an associated type `A`. `Bar` inherits that type
+from `Foo`, and defines another associated type of the same name. As a result,
+when we attempt to use `Self::A`, it's ambiguous whether we mean the `A` defined
+by `Foo` or the one defined by `Bar`.
+
+There are two options to work around this issue. The first is simply to rename
+one of the types. Alternatively, one can specify the intended type using the
+following syntax:
+
+```
+fn do_something() {
+    let _: <Self as Bar>::A;
+}
+```
+"##,
+
 E0223: r##"
 An attempt was made to retrieve an associated type, but the type was ambiguous.
 For example:
@@ -2327,6 +2363,25 @@ struct Foo { x: bool }
 
 struct Bar<S, T> { x: Foo<S, T> }
 ```
+"##,
+
+E0248: r##"
+This error indicates an attempt to use a value where a type is expected. For
+example:
+
+```
+enum Foo {
+    Bar(u32)
+}
+
+fn do_something(x: Foo::Bar) { }
+```
+
+In this example, we're attempting to take a type of `Foo::Bar` in the
+do_something function. This is not legal: `Foo::Bar` is a value of type `Foo`,
+not a distinct static type. Likewise, it's not legal to attempt to
+`impl Foo::Bar`: instead, you must `impl Foo` and then pattern match to specify
+behaviour for specific enum variants.
 "##,
 
 E0249: r##"
@@ -2698,7 +2753,6 @@ register_diagnostics! {
     E0217, // ambiguous associated type, defined in multiple supertraits
     E0218, // no associated type defined
     E0219, // associated type defined in higher-ranked supertrait
-    E0221, // ambiguous associated type in bounds
 //  E0222, // Error code E0045 (variadic function must have C calling
            // convention) duplicate
     E0224, // at least one non-builtin train is required for an object type
@@ -2721,7 +2775,6 @@ register_diagnostics! {
     E0245, // not a trait
     E0246, // invalid recursive type
     E0247, // found module name used as a type
-    E0248, // found value name used as a type
     E0319, // trait impls for defaulted traits allowed just for structs/enums
     E0320, // recursive overflow during dropck
     E0321, // extended coherence rules for defaulted traits violated
