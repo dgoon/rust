@@ -616,6 +616,8 @@ pub trait Iterator {
 
     /// Tests whether the predicate holds true for all elements in the iterator.
     ///
+    /// Does not consume the iterator past the first non-matching element.
+    ///
     /// # Examples
     ///
     /// ```
@@ -818,7 +820,8 @@ pub trait Iterator {
     /// ```
     #[inline]
     #[unstable(feature = "iter_cmp",
-               reason = "may want to produce an Ordering directly; see #15311")]
+               reason = "may want to produce an Ordering directly; see #15311",
+               issue = "27724")]
     fn max_by<B: Ord, F>(self, f: F) -> Option<Self::Item> where
         Self: Sized,
         F: FnMut(&Self::Item) -> B,
@@ -847,7 +850,8 @@ pub trait Iterator {
     /// ```
     #[inline]
     #[unstable(feature = "iter_cmp",
-               reason = "may want to produce an Ordering directly; see #15311")]
+               reason = "may want to produce an Ordering directly; see #15311",
+               issue = "27724")]
     fn min_by<B: Ord, F>(self, f: F) -> Option<Self::Item> where
         Self: Sized,
         F: FnMut(&Self::Item) -> B,
@@ -970,7 +974,8 @@ pub trait Iterator {
     /// let it = a.iter();
     /// assert_eq!(it.sum::<i32>(), 15);
     /// ```
-    #[unstable(feature="iter_arith", reason = "bounds recently changed")]
+    #[unstable(feature = "iter_arith", reason = "bounds recently changed",
+               issue = "27739")]
     fn sum<S=<Self as Iterator>::Item>(self) -> S where
         S: Add<Self::Item, Output=S> + Zero,
         Self: Sized,
@@ -992,7 +997,8 @@ pub trait Iterator {
     /// assert_eq!(factorial(1), 1);
     /// assert_eq!(factorial(5), 120);
     /// ```
-    #[unstable(feature="iter_arith", reason = "bounds recently changed")]
+    #[unstable(feature="iter_arith", reason = "bounds recently changed",
+               issue = "27739")]
     fn product<P=<Self as Iterator>::Item>(self) -> P where
         P: Mul<Self::Item, Output=P> + One,
         Self: Sized,
@@ -2134,8 +2140,9 @@ impl<I: DoubleEndedIterator, F> DoubleEndedIterator for Inspect<I, F>
 /// The `steps_between` function provides a way to efficiently compare
 /// two `Step` objects.
 #[unstable(feature = "step_trait",
-           reason = "likely to be replaced by finer-grained traits")]
-pub trait Step: PartialOrd+Sized {
+           reason = "likely to be replaced by finer-grained traits",
+           issue = "27741")]
+pub trait Step: PartialOrd + Sized {
     /// Steps `self` if possible.
     fn step(&self, by: &Self) -> Option<Self>;
 
@@ -2234,7 +2241,9 @@ step_impl_signed!(isize i8 i16 i32);
 step_impl_unsigned!(u64);
 #[cfg(target_pointer_width = "64")]
 step_impl_signed!(i64);
-#[cfg(target_pointer_width = "32")]
+// If the target pointer width is not 64-bits, we
+// assume here that it is less than 64-bits.
+#[cfg(not(target_pointer_width = "64"))]
 step_impl_no_between!(u64 i64);
 
 /// An adapter for stepping range iterators by a custom amount.
@@ -2243,7 +2252,8 @@ step_impl_no_between!(u64 i64);
 /// parameter is the type being iterated over, while `R` is the range
 /// type (usually one of `std::ops::{Range, RangeFrom}`.
 #[derive(Clone)]
-#[unstable(feature = "step_by", reason = "recent addition")]
+#[unstable(feature = "step_by", reason = "recent addition",
+           issue = "27741")]
 pub struct StepBy<A, R> {
     step_by: A,
     range: R,
@@ -2262,7 +2272,8 @@ impl<A: Step> RangeFrom<A> {
     /// ```
     ///
     /// This prints all even `u8` values.
-    #[unstable(feature = "step_by", reason = "recent addition")]
+    #[unstable(feature = "step_by", reason = "recent addition",
+               issue = "27741")]
     pub fn step_by(self, by: A) -> StepBy<A, Self> {
         StepBy {
             step_by: by,
@@ -2296,7 +2307,8 @@ impl<A: Step> ops::Range<A> {
     /// 6
     /// 8
     /// ```
-    #[unstable(feature = "step_by", reason = "recent addition")]
+    #[unstable(feature = "step_by", reason = "recent addition",
+               issue = "27741")]
     pub fn step_by(self, by: A) -> StepBy<A, Self> {
         StepBy {
             step_by: by,
@@ -2328,7 +2340,8 @@ impl<A> Iterator for StepBy<A, RangeFrom<A>> where
 /// An iterator over the range [start, stop]
 #[derive(Clone)]
 #[unstable(feature = "range_inclusive",
-           reason = "likely to be replaced by range notation and adapters")]
+           reason = "likely to be replaced by range notation and adapters",
+           issue = "27777")]
 pub struct RangeInclusive<A> {
     range: ops::Range<A>,
     done: bool,
@@ -2337,7 +2350,8 @@ pub struct RangeInclusive<A> {
 /// Returns an iterator over the range [start, stop].
 #[inline]
 #[unstable(feature = "range_inclusive",
-           reason = "likely to be replaced by range notation and adapters")]
+           reason = "likely to be replaced by range notation and adapters",
+           issue = "27777")]
 pub fn range_inclusive<A>(start: A, stop: A) -> RangeInclusive<A>
     where A: Step + One + Clone
 {
@@ -2348,7 +2362,8 @@ pub fn range_inclusive<A>(start: A, stop: A) -> RangeInclusive<A>
 }
 
 #[unstable(feature = "range_inclusive",
-           reason = "likely to be replaced by range notation and adapters")]
+           reason = "likely to be replaced by range notation and adapters",
+           issue = "27777")]
 impl<A> Iterator for RangeInclusive<A> where
     A: PartialEq + Step + One + Clone,
     for<'a> &'a A: Add<&'a A, Output = A>
@@ -2381,7 +2396,8 @@ impl<A> Iterator for RangeInclusive<A> where
 }
 
 #[unstable(feature = "range_inclusive",
-           reason = "likely to be replaced by range notation and adapters")]
+           reason = "likely to be replaced by range notation and adapters",
+           issue = "27777")]
 impl<A> DoubleEndedIterator for RangeInclusive<A> where
     A: PartialEq + Step + One + Clone,
     for<'a> &'a A: Add<&'a A, Output = A>,
@@ -2638,7 +2654,8 @@ pub fn once<T>(value: T) -> Once<T> {
 ///
 /// If two sequences are equal up until the point where one ends,
 /// the shorter sequence compares less.
-#[unstable(feature = "iter_order", reason = "needs review and revision")]
+#[unstable(feature = "iter_order", reason = "needs review and revision",
+           issue = "27737")]
 pub mod order {
     use cmp;
     use cmp::{Eq, Ord, PartialOrd, PartialEq};
