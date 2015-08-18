@@ -101,7 +101,7 @@ use middle::ty_fold::{TypeFolder, TypeFoldable};
 use require_c_abi_if_variadic;
 use rscope::{ElisionFailureInfo, RegionScope};
 use session::Session;
-use {CrateCtxt, lookup_full_def, require_same_types};
+use {CrateCtxt, lookup_full_def};
 use TypeAndSubsts;
 use lint;
 use util::common::{block_query, ErrorReported, indenter, loop_query};
@@ -109,7 +109,7 @@ use util::nodemap::{DefIdMap, FnvHashMap, NodeMap};
 use util::lev_distance::lev_distance;
 
 use std::cell::{Cell, Ref, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashSet};
 use std::mem::replace;
 use std::slice;
 use syntax::{self, abi, attr};
@@ -139,6 +139,7 @@ mod cast;
 mod closure;
 mod callee;
 mod compare_method;
+mod intrinsic;
 mod op;
 
 /// closures defined within the function.  For example:
@@ -716,7 +717,11 @@ pub fn check_item_type<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>, it: &'tcx ast::Item) {
       ast::ItemForeignMod(ref m) => {
         if m.abi == abi::RustIntrinsic {
             for item in &m.items {
-                check_intrinsic_type(ccx, &**item);
+                intrinsic::check_intrinsic_type(ccx, &**item);
+            }
+        } else if m.abi == abi::PlatformIntrinsic {
+            for item in &m.items {
+                intrinsic::check_platform_intrinsic_type(ccx, &**item);
             }
         } else {
             for item in &m.items {
@@ -1409,67 +1414,67 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                        cause)
     }
 
-    /// Returns the type of `def_id` with all generics replaced by by fresh type/region variables.
-    /// Also returns the substitution from the type parameters on `def_id` to the fresh variables.
-    /// Registers any trait obligations specified on `def_id` at the same time.
+    /// Instantiates the type in `did` with the generics in `path` and returns
+    /// it (registering the necessary trait obligations along the way).
     ///
-    /// Note that function is only intended to be used with types (notably, not fns). This is
-    /// because it doesn't do any instantiation of late-bound regions.
+    /// Note that this function is only intended to be used with type-paths,
+    /// not with value-paths.
     pub fn instantiate_type(&self,
-                            span: Span,
-                            def_id: ast::DefId)
-                            -> TypeAndSubsts<'tcx>
+                            did: ast::DefId,
+                            path: &ast::Path)
+                            -> Ty<'tcx>
     {
+        debug!("instantiate_type(did={:?}, path={:?})", did, path);
         let type_scheme =
-            self.tcx().lookup_item_type(def_id);
+            self.tcx().lookup_item_type(did);
         let type_predicates =
-            self.tcx().lookup_predicates(def_id);
-        let substs =
-            self.infcx().fresh_substs_for_generics(
-                span,
-                &type_scheme.generics);
-        let bounds =
-            self.instantiate_bounds(span, &substs, &type_predicates);
-        self.add_obligations_for_parameters(
-            traits::ObligationCause::new(
-                span,
-                self.body_id,
-                traits::ItemObligation(def_id)),
-            &bounds);
-        let monotype =
-            self.instantiate_type_scheme(span, &substs, &type_scheme.ty);
-
-        TypeAndSubsts {
-            ty: monotype,
-            substs: substs
-        }
-    }
-
-    /// Returns the type that this AST path refers to. If the path has no type
-    /// parameters and the corresponding type has type parameters, fresh type
-    /// and/or region variables are substituted.
-    ///
-    /// This is used when checking the constructor in struct literals.
-    fn instantiate_struct_literal_ty(&self,
-                                     did: ast::DefId,
-                                     path: &ast::Path)
-                                     -> TypeAndSubsts<'tcx>
-    {
-        let tcx = self.tcx();
-
-        let ty::TypeScheme { generics, ty: decl_ty } =
-            tcx.lookup_item_type(did);
-
+            self.tcx().lookup_predicates(did);
         let substs = astconv::ast_path_substs_for_ty(self, self,
                                                      path.span,
                                                      PathParamMode::Optional,
-                                                     &generics,
+                                                     &type_scheme.generics,
                                                      path.segments.last().unwrap());
+        debug!("instantiate_type: ty={:?} substs={:?}", &type_scheme.ty, &substs);
+        let bounds =
+            self.instantiate_bounds(path.span, &substs, &type_predicates);
+        self.add_obligations_for_parameters(
+            traits::ObligationCause::new(
+                path.span,
+                self.body_id,
+                traits::ItemObligation(did)),
+            &bounds);
 
-        let ty = self.instantiate_type_scheme(path.span, &substs, &decl_ty);
-
-        TypeAndSubsts { substs: substs, ty: ty }
+        self.instantiate_type_scheme(path.span, &substs, &type_scheme.ty)
     }
+
+    /// Return the dict-like variant corresponding to a given `Def`.
+    pub fn def_struct_variant(&self,
+                              def: def::Def)
+                              -> Option<(ty::AdtDef<'tcx>, ty::VariantDef<'tcx>)>
+    {
+        let (adt, variant) = match def {
+            def::DefVariant(enum_id, variant_id, true) => {
+                let adt = self.tcx().lookup_adt_def(enum_id);
+                (adt, adt.variant_with_id(variant_id))
+            }
+            def::DefTy(did, _) | def::DefStruct(did) => {
+                let typ = self.tcx().lookup_item_type(did);
+                if let ty::TyStruct(adt, _) = typ.ty.sty {
+                    (adt, adt.struct_variant())
+                } else {
+                    return None;
+                }
+            }
+            _ => return None
+        };
+
+        if let ty::VariantKind::Dict = variant.kind() {
+            Some((adt, variant))
+        } else {
+            None
+        }
+    }
+
 
     pub fn write_nil(&self, node_id: ast::NodeId) {
         self.write_ty(node_id, self.tcx().mk_nil());
@@ -3100,18 +3105,17 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
     }
 
 
-    fn check_struct_or_variant_fields<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
-                                                adt_ty: Ty<'tcx>,
-                                                span: Span,
-                                                variant_id: ast::DefId,
-                                                ast_fields: &'tcx [ast::Field],
-                                                check_completeness: bool) -> Result<(),()> {
+    fn check_expr_struct_fields<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
+                                          adt_ty: Ty<'tcx>,
+                                          span: Span,
+                                          variant: ty::VariantDef<'tcx>,
+                                          ast_fields: &'tcx [ast::Field],
+                                          check_completeness: bool) {
         let tcx = fcx.ccx.tcx;
-        let (adt_def, substs) = match adt_ty.sty {
-            ty::TyStruct(def, substs) | ty::TyEnum(def, substs) => (def, substs),
-            _ => tcx.sess.span_bug(span, "non-ADT passed to check_struct_or_variant_fields")
+        let substs = match adt_ty.sty {
+            ty::TyStruct(_, substs) | ty::TyEnum(_, substs) => substs,
+            _ => tcx.sess.span_bug(span, "non-ADT passed to check_expr_struct_fields")
         };
-        let variant = adt_def.variant_with_id(variant_id);
 
         let mut remaining_fields = FnvHashMap();
         for field in &variant.fields {
@@ -3148,7 +3152,6 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
             !error_happened &&
             !remaining_fields.is_empty()
         {
-            error_happened = true;
             span_err!(tcx.sess, span, E0063,
                       "missing field{}: {}",
                       if remaining_fields.len() == 1 {""} else {"s"},
@@ -3157,68 +3160,6 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
                                       .collect::<Vec<_>>()
                                       .join(", "));
         }
-
-        if error_happened { Err(()) } else { Ok(()) }
-    }
-
-    fn check_struct_constructor<'a,'tcx>(fcx: &FnCtxt<'a,'tcx>,
-                                         id: ast::NodeId,
-                                         span: codemap::Span,
-                                         struct_def: ty::AdtDef<'tcx>,
-                                         fields: &'tcx [ast::Field],
-                                         base_expr: Option<&'tcx ast::Expr>) {
-        let tcx = fcx.ccx.tcx;
-
-        // Generate the struct type.
-        let TypeAndSubsts {
-            ty: mut struct_type,
-            substs: _
-        } = fcx.instantiate_type(span, struct_def.did);
-
-        // Look up and check the fields.
-        let res = check_struct_or_variant_fields(fcx,
-                                                 struct_type,
-                                                 span,
-                                                 struct_def.did,
-                                                 fields,
-                                                 base_expr.is_none());
-        if res.is_err() {
-            struct_type = tcx.types.err;
-        }
-
-        // Check the base expression if necessary.
-        match base_expr {
-            None => {}
-            Some(base_expr) => {
-                check_expr_has_type(fcx, &*base_expr, struct_type);
-            }
-        }
-
-        // Write in the resulting type.
-        fcx.write_ty(id, struct_type);
-    }
-
-    fn check_struct_enum_variant<'a,'tcx>(fcx: &FnCtxt<'a,'tcx>,
-                                          id: ast::NodeId,
-                                          span: codemap::Span,
-                                          enum_id: ast::DefId,
-                                          variant_id: ast::DefId,
-                                          fields: &'tcx [ast::Field]) {
-        // Look up the number of type parameters and the raw type, and
-        // determine whether the enum is region-parameterized.
-        let TypeAndSubsts {
-            ty: enum_type,
-            substs: _
-        } = fcx.instantiate_type(span, enum_id);
-
-        // Look up and check the enum variant fields.
-        let _ = check_struct_or_variant_fields(fcx,
-                                               enum_type,
-                                               span,
-                                               variant_id,
-                                               fields,
-                                               true);
-        fcx.write_ty(id, enum_type);
     }
 
     fn check_struct_fields_on_error<'a,'tcx>(fcx: &FnCtxt<'a,'tcx>,
@@ -3234,6 +3175,42 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
         match *base_expr {
             Some(ref base) => check_expr(fcx, &**base),
             None => {}
+        }
+    }
+
+    fn check_expr_struct<'a, 'tcx>(fcx: &FnCtxt<'a,'tcx>,
+                                   expr: &ast::Expr,
+                                   path: &ast::Path,
+                                   fields: &'tcx [ast::Field],
+                                   base_expr: &'tcx Option<P<ast::Expr>>)
+    {
+        let tcx = fcx.tcx();
+
+        // Find the relevant variant
+        let def = lookup_full_def(tcx, path.span, expr.id);
+        let (adt, variant) = match fcx.def_struct_variant(def) {
+            Some((adt, variant)) => (adt, variant),
+            None => {
+                span_err!(fcx.tcx().sess, path.span, E0071,
+                          "`{}` does not name a structure",
+                          pprust::path_to_string(path));
+                check_struct_fields_on_error(fcx, expr.id, fields, base_expr);
+                return;
+            }
+        };
+
+        let expr_ty = fcx.instantiate_type(def.def_id(), path);
+        fcx.write_ty(expr.id, expr_ty);
+
+        check_expr_struct_fields(fcx, expr_ty, expr.span, variant, fields,
+                                 base_expr.is_none());
+
+        if let &Some(ref base_expr) = base_expr {
+            check_expr_has_type(fcx, base_expr, expr_ty);
+            if adt.adt_kind() == ty::AdtKind::Enum {
+                span_err!(tcx.sess, base_expr.span, E0436,
+                          "functional record update syntax requires a struct");
+            }
         }
     }
 
@@ -3689,83 +3666,7 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
         }
       }
       ast::ExprStruct(ref path, ref fields, ref base_expr) => {
-        // Resolve the path.
-        let def = lookup_full_def(tcx, path.span, id);
-        let struct_id = match def {
-            def::DefVariant(enum_id, variant_id, true) => {
-                if let &Some(ref base_expr) = base_expr {
-                    span_err!(tcx.sess, base_expr.span, E0436,
-                              "functional record update syntax requires a struct");
-                    fcx.write_error(base_expr.id);
-                }
-                check_struct_enum_variant(fcx, id, expr.span, enum_id,
-                                          variant_id, &fields[..]);
-                enum_id
-            }
-            def::DefTrait(def_id) => {
-                span_err!(tcx.sess, path.span, E0159,
-                    "use of trait `{}` as a struct constructor",
-                    pprust::path_to_string(path));
-                check_struct_fields_on_error(fcx,
-                                             id,
-                                             &fields[..],
-                                             base_expr);
-                def_id
-            },
-            def => {
-                // Verify that this was actually a struct.
-                let typ = fcx.ccx.tcx.lookup_item_type(def.def_id());
-                match typ.ty.sty {
-                    ty::TyStruct(struct_def, _) => {
-                        check_struct_constructor(fcx,
-                                                 id,
-                                                 expr.span,
-                                                 struct_def,
-                                                 &fields[..],
-                                                 base_expr.as_ref().map(|e| &**e));
-                    }
-                    _ => {
-                        span_err!(tcx.sess, path.span, E0071,
-                            "`{}` does not name a structure",
-                            pprust::path_to_string(path));
-                        check_struct_fields_on_error(fcx,
-                                                     id,
-                                                     &fields[..],
-                                                     base_expr);
-                    }
-                }
-
-                def.def_id()
-            }
-        };
-
-        // Turn the path into a type and verify that that type unifies with
-        // the resulting structure type. This is needed to handle type
-        // parameters correctly.
-        let actual_structure_type = fcx.expr_ty(&*expr);
-        if !actual_structure_type.references_error() {
-            let type_and_substs = fcx.instantiate_struct_literal_ty(struct_id, path);
-            match fcx.mk_subty(false,
-                               infer::Misc(path.span),
-                               actual_structure_type,
-                               type_and_substs.ty) {
-                Ok(()) => {}
-                Err(type_error) => {
-                    span_err!(fcx.tcx().sess, path.span, E0235,
-                                 "structure constructor specifies a \
-                                         structure of type `{}`, but this \
-                                         structure has type `{}`: {}",
-                                         fcx.infcx()
-                                            .ty_to_string(type_and_substs.ty),
-                                         fcx.infcx()
-                                            .ty_to_string(
-                                                actual_structure_type),
-                                         type_error);
-                    tcx.note_and_explain_type_err(&type_error, path.span);
-                }
-            }
-        }
-
+        check_expr_struct(fcx, expr, path, fields, base_expr);
         fcx.require_expr_have_sized_type(expr, traits::StructInitializerSized);
       }
       ast::ExprField(ref base, ref field) => {
@@ -4316,10 +4217,6 @@ pub fn check_instantiable(tcx: &ty::ctxt,
 
 pub fn check_simd(tcx: &ty::ctxt, sp: Span, id: ast::NodeId) {
     let t = tcx.node_id_to_type(id);
-    if t.needs_subst() {
-        span_err!(tcx.sess, sp, E0074, "SIMD vector cannot be generic");
-        return;
-    }
     match t.sty {
         ty::TyStruct(def, substs) => {
             let fields = &def.struct_variant().fields;
@@ -4332,10 +4229,14 @@ pub fn check_simd(tcx: &ty::ctxt, sp: Span, id: ast::NodeId) {
                 span_err!(tcx.sess, sp, E0076, "SIMD vector should be homogeneous");
                 return;
             }
-            if !e.is_machine() {
-                span_err!(tcx.sess, sp, E0077,
-                    "SIMD vector element type should be machine type");
-                return;
+            match e.sty {
+                ty::TyParam(_) => { /* struct<T>(T, T, T, T) is ok */ }
+                _ if e.is_machine()  => { /* struct(u8, u8, u8, u8) is ok */ }
+                _ => {
+                    span_err!(tcx.sess, sp, E0077,
+                              "SIMD vector element type should be machine type");
+                    return;
+                }
             }
         }
         _ => ()
@@ -4420,6 +4321,9 @@ pub fn check_enum_variants<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>,
                         span_note!(ccx.tcx.sess, sp,
                             "discriminant type specified here");
                     }
+                }
+                attr::ReprSimd => {
+                    ccx.tcx.sess.bug("range_to_inttype: found ReprSimd on an enum");
                 }
                 attr::ReprPacked => {
                     ccx.tcx.sess.bug("range_to_inttype: found ReprPacked on an enum");
@@ -4745,6 +4649,9 @@ pub fn instantiate_path<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
         }
     }
 
+    debug!("instantiate_path: type of {:?} is {:?}",
+           node_id,
+           ty_substituted);
     fcx.write_ty(node_id, ty_substituted);
     fcx.write_substs(node_id, ty::ItemSubsts { substs: substs });
     return;
@@ -5075,317 +4982,5 @@ pub fn check_bounds_are_used<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
                 "type parameter `{}` is unused",
                 tps[i].ident);
         }
-    }
-}
-
-/// Remember to add all intrinsics here, in librustc_trans/trans/intrinsic.rs,
-/// and in libcore/intrinsics.rs
-pub fn check_intrinsic_type(ccx: &CrateCtxt, it: &ast::ForeignItem) {
-    fn param<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>, n: u32) -> Ty<'tcx> {
-        let name = token::intern(&format!("P{}", n));
-        ccx.tcx.mk_param(subst::FnSpace, n, name)
-    }
-
-    let tcx = ccx.tcx;
-    let name = it.ident.name.as_str();
-    let (n_tps, inputs, output) = if name.starts_with("atomic_") {
-        let split : Vec<&str> = name.split('_').collect();
-        assert!(split.len() >= 2, "Atomic intrinsic not correct format");
-
-        //We only care about the operation here
-        let (n_tps, inputs, output) = match split[1] {
-            "cxchg" => (1, vec!(tcx.mk_mut_ptr(param(ccx, 0)),
-                                param(ccx, 0),
-                                param(ccx, 0)),
-                        param(ccx, 0)),
-            "load" => (1, vec!(tcx.mk_imm_ptr(param(ccx, 0))),
-                       param(ccx, 0)),
-            "store" => (1, vec!(tcx.mk_mut_ptr(param(ccx, 0)), param(ccx, 0)),
-                        tcx.mk_nil()),
-
-            "xchg" | "xadd" | "xsub" | "and"  | "nand" | "or" | "xor" | "max" |
-            "min"  | "umax" | "umin" => {
-                (1, vec!(tcx.mk_mut_ptr(param(ccx, 0)), param(ccx, 0)),
-                 param(ccx, 0))
-            }
-            "fence" | "singlethreadfence" => {
-                (0, Vec::new(), tcx.mk_nil())
-            }
-            op => {
-                span_err!(tcx.sess, it.span, E0092,
-                    "unrecognized atomic operation function: `{}`", op);
-                return;
-            }
-        };
-        (n_tps, inputs, ty::FnConverging(output))
-    } else if &name[..] == "abort" || &name[..] == "unreachable" {
-        (0, Vec::new(), ty::FnDiverging)
-    } else {
-        let (n_tps, inputs, output) = match &name[..] {
-            "breakpoint" => (0, Vec::new(), tcx.mk_nil()),
-            "size_of" |
-            "pref_align_of" | "min_align_of" => (1, Vec::new(), ccx.tcx.types.usize),
-            "size_of_val" |  "min_align_of_val" => {
-                (1, vec![
-                    tcx.mk_imm_ref(tcx.mk_region(ty::ReLateBound(ty::DebruijnIndex::new(1),
-                                                                  ty::BrAnon(0))),
-                                    param(ccx, 0))
-                 ], ccx.tcx.types.usize)
-            }
-            "init" | "init_dropped" => (1, Vec::new(), param(ccx, 0)),
-            "uninit" => (1, Vec::new(), param(ccx, 0)),
-            "forget" => (1, vec!( param(ccx, 0) ), tcx.mk_nil()),
-            "transmute" => (2, vec!( param(ccx, 0) ), param(ccx, 1)),
-            "move_val_init" => {
-                (1,
-                 vec!(
-                    tcx.mk_mut_ptr(param(ccx, 0)),
-                    param(ccx, 0)
-                  ),
-               tcx.mk_nil())
-            }
-            "drop_in_place" => {
-                (1, vec![tcx.mk_mut_ptr(param(ccx, 0))], tcx.mk_nil())
-            }
-            "needs_drop" => (1, Vec::new(), ccx.tcx.types.bool),
-
-            "type_name" => (1, Vec::new(), tcx.mk_static_str()),
-            "type_id" => (1, Vec::new(), ccx.tcx.types.u64),
-            "offset" | "arith_offset" => {
-              (1,
-               vec!(
-                  tcx.mk_ptr(ty::TypeAndMut {
-                      ty: param(ccx, 0),
-                      mutbl: ast::MutImmutable
-                  }),
-                  ccx.tcx.types.isize
-               ),
-               tcx.mk_ptr(ty::TypeAndMut {
-                   ty: param(ccx, 0),
-                   mutbl: ast::MutImmutable
-               }))
-            }
-            "copy" | "copy_nonoverlapping" => {
-              (1,
-               vec!(
-                  tcx.mk_ptr(ty::TypeAndMut {
-                      ty: param(ccx, 0),
-                      mutbl: ast::MutImmutable
-                  }),
-                  tcx.mk_ptr(ty::TypeAndMut {
-                      ty: param(ccx, 0),
-                      mutbl: ast::MutMutable
-                  }),
-                  tcx.types.usize,
-               ),
-               tcx.mk_nil())
-            }
-            "volatile_copy_memory" | "volatile_copy_nonoverlapping_memory" => {
-              (1,
-               vec!(
-                  tcx.mk_ptr(ty::TypeAndMut {
-                      ty: param(ccx, 0),
-                      mutbl: ast::MutMutable
-                  }),
-                  tcx.mk_ptr(ty::TypeAndMut {
-                      ty: param(ccx, 0),
-                      mutbl: ast::MutImmutable
-                  }),
-                  tcx.types.usize,
-               ),
-               tcx.mk_nil())
-            }
-            "write_bytes" | "volatile_set_memory" => {
-              (1,
-               vec!(
-                  tcx.mk_ptr(ty::TypeAndMut {
-                      ty: param(ccx, 0),
-                      mutbl: ast::MutMutable
-                  }),
-                  tcx.types.u8,
-                  tcx.types.usize,
-               ),
-               tcx.mk_nil())
-            }
-            "sqrtf32" => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "sqrtf64" => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "powif32" => {
-               (0,
-                vec!( tcx.types.f32, tcx.types.i32 ),
-                tcx.types.f32)
-            }
-            "powif64" => {
-               (0,
-                vec!( tcx.types.f64, tcx.types.i32 ),
-                tcx.types.f64)
-            }
-            "sinf32" => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "sinf64" => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "cosf32" => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "cosf64" => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "powf32" => {
-               (0,
-                vec!( tcx.types.f32, tcx.types.f32 ),
-                tcx.types.f32)
-            }
-            "powf64" => {
-               (0,
-                vec!( tcx.types.f64, tcx.types.f64 ),
-                tcx.types.f64)
-            }
-            "expf32"   => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "expf64"   => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "exp2f32"  => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "exp2f64"  => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "logf32"   => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "logf64"   => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "log10f32" => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "log10f64" => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "log2f32"  => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "log2f64"  => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "fmaf32" => {
-                (0,
-                 vec!( tcx.types.f32, tcx.types.f32, tcx.types.f32 ),
-                 tcx.types.f32)
-            }
-            "fmaf64" => {
-                (0,
-                 vec!( tcx.types.f64, tcx.types.f64, tcx.types.f64 ),
-                 tcx.types.f64)
-            }
-            "fabsf32"      => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "fabsf64"      => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "copysignf32"  => (0, vec!( tcx.types.f32, tcx.types.f32 ), tcx.types.f32),
-            "copysignf64"  => (0, vec!( tcx.types.f64, tcx.types.f64 ), tcx.types.f64),
-            "floorf32"     => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "floorf64"     => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "ceilf32"      => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "ceilf64"      => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "truncf32"     => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "truncf64"     => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "rintf32"      => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "rintf64"      => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "nearbyintf32" => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "nearbyintf64" => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "roundf32"     => (0, vec!( tcx.types.f32 ), tcx.types.f32),
-            "roundf64"     => (0, vec!( tcx.types.f64 ), tcx.types.f64),
-            "ctpop8"       => (0, vec!( tcx.types.u8  ), tcx.types.u8),
-            "ctpop16"      => (0, vec!( tcx.types.u16 ), tcx.types.u16),
-            "ctpop32"      => (0, vec!( tcx.types.u32 ), tcx.types.u32),
-            "ctpop64"      => (0, vec!( tcx.types.u64 ), tcx.types.u64),
-            "ctlz8"        => (0, vec!( tcx.types.u8  ), tcx.types.u8),
-            "ctlz16"       => (0, vec!( tcx.types.u16 ), tcx.types.u16),
-            "ctlz32"       => (0, vec!( tcx.types.u32 ), tcx.types.u32),
-            "ctlz64"       => (0, vec!( tcx.types.u64 ), tcx.types.u64),
-            "cttz8"        => (0, vec!( tcx.types.u8  ), tcx.types.u8),
-            "cttz16"       => (0, vec!( tcx.types.u16 ), tcx.types.u16),
-            "cttz32"       => (0, vec!( tcx.types.u32 ), tcx.types.u32),
-            "cttz64"       => (0, vec!( tcx.types.u64 ), tcx.types.u64),
-            "bswap16"      => (0, vec!( tcx.types.u16 ), tcx.types.u16),
-            "bswap32"      => (0, vec!( tcx.types.u32 ), tcx.types.u32),
-            "bswap64"      => (0, vec!( tcx.types.u64 ), tcx.types.u64),
-
-            "volatile_load" =>
-                (1, vec!( tcx.mk_imm_ptr(param(ccx, 0)) ), param(ccx, 0)),
-            "volatile_store" =>
-                (1, vec!( tcx.mk_mut_ptr(param(ccx, 0)), param(ccx, 0) ), tcx.mk_nil()),
-
-            "i8_add_with_overflow" | "i8_sub_with_overflow" | "i8_mul_with_overflow" =>
-                (0, vec!(tcx.types.i8, tcx.types.i8),
-                tcx.mk_tup(vec!(tcx.types.i8, tcx.types.bool))),
-
-            "i16_add_with_overflow" | "i16_sub_with_overflow" | "i16_mul_with_overflow" =>
-                (0, vec!(tcx.types.i16, tcx.types.i16),
-                tcx.mk_tup(vec!(tcx.types.i16, tcx.types.bool))),
-
-            "i32_add_with_overflow" | "i32_sub_with_overflow" | "i32_mul_with_overflow" =>
-                (0, vec!(tcx.types.i32, tcx.types.i32),
-                tcx.mk_tup(vec!(tcx.types.i32, tcx.types.bool))),
-
-            "i64_add_with_overflow" | "i64_sub_with_overflow" | "i64_mul_with_overflow" =>
-                (0, vec!(tcx.types.i64, tcx.types.i64),
-                tcx.mk_tup(vec!(tcx.types.i64, tcx.types.bool))),
-
-            "u8_add_with_overflow" | "u8_sub_with_overflow" | "u8_mul_with_overflow" =>
-                (0, vec!(tcx.types.u8, tcx.types.u8),
-                tcx.mk_tup(vec!(tcx.types.u8, tcx.types.bool))),
-
-            "u16_add_with_overflow" | "u16_sub_with_overflow" | "u16_mul_with_overflow" =>
-                (0, vec!(tcx.types.u16, tcx.types.u16),
-                tcx.mk_tup(vec!(tcx.types.u16, tcx.types.bool))),
-
-            "u32_add_with_overflow" | "u32_sub_with_overflow" | "u32_mul_with_overflow"=>
-                (0, vec!(tcx.types.u32, tcx.types.u32),
-                tcx.mk_tup(vec!(tcx.types.u32, tcx.types.bool))),
-
-            "u64_add_with_overflow" | "u64_sub_with_overflow"  | "u64_mul_with_overflow" =>
-                (0, vec!(tcx.types.u64, tcx.types.u64),
-                tcx.mk_tup(vec!(tcx.types.u64, tcx.types.bool))),
-
-            "unchecked_udiv" | "unchecked_sdiv" | "unchecked_urem" | "unchecked_srem" =>
-                (1, vec![param(ccx, 0), param(ccx, 0)], param(ccx, 0)),
-
-            "overflowing_add" | "overflowing_sub" | "overflowing_mul" =>
-                (1, vec![param(ccx, 0), param(ccx, 0)], param(ccx, 0)),
-
-            "return_address" => (0, vec![], tcx.mk_imm_ptr(tcx.types.u8)),
-
-            "assume" => (0, vec![tcx.types.bool], tcx.mk_nil()),
-
-            "discriminant_value" => (1, vec![
-                    tcx.mk_imm_ref(tcx.mk_region(ty::ReLateBound(ty::DebruijnIndex::new(1),
-                                                                  ty::BrAnon(0))),
-                                    param(ccx, 0))], tcx.types.u64),
-
-            "try" => {
-                let mut_u8 = tcx.mk_mut_ptr(tcx.types.u8);
-                let fn_ty = ty::BareFnTy {
-                    unsafety: ast::Unsafety::Normal,
-                    abi: abi::Rust,
-                    sig: ty::Binder(FnSig {
-                        inputs: vec![mut_u8],
-                        output: ty::FnOutput::FnConverging(tcx.mk_nil()),
-                        variadic: false,
-                    }),
-                };
-                let fn_ty = tcx.mk_bare_fn(fn_ty);
-                (0, vec![tcx.mk_fn(None, fn_ty), mut_u8], mut_u8)
-            }
-
-            ref other => {
-                span_err!(tcx.sess, it.span, E0093,
-                    "unrecognized intrinsic function: `{}`", *other);
-                return;
-            }
-        };
-        (n_tps, inputs, ty::FnConverging(output))
-    };
-    let fty = tcx.mk_fn(None, tcx.mk_bare_fn(ty::BareFnTy {
-        unsafety: ast::Unsafety::Unsafe,
-        abi: abi::RustIntrinsic,
-        sig: ty::Binder(FnSig {
-            inputs: inputs,
-            output: output,
-            variadic: false,
-        }),
-    }));
-    let i_ty = ccx.tcx.lookup_item_type(local_def(it.id));
-    let i_n_tps = i_ty.generics.types.len(subst::FnSpace);
-    if i_n_tps != n_tps {
-        span_err!(tcx.sess, it.span, E0094,
-            "intrinsic has wrong number of type \
-             parameters: found {}, expected {}",
-             i_n_tps, n_tps);
-    } else {
-        require_same_types(tcx,
-                           None,
-                           false,
-                           it.span,
-                           i_ty.ty,
-                           fty,
-                           || {
-                format!("intrinsic has wrong type: expected `{}`",
-                         fty)
-            });
     }
 }

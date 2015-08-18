@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,7 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[simd]
-pub struct i64x2(i64, i64); //~ ERROR: SIMD types are experimental
+mod A {}
 
-fn main() {}
+fn main() {
+    let u = A { x: 1 }; //~ ERROR `A` does not name a structure
+    let v = u32 { x: 1 }; //~ ERROR `u32` does not name a structure
+    match () {
+        A { x: 1 } => {} //~ ERROR `A` does not name a struct
+        u32 { x: 1 } => {} //~ ERROR `u32` does not name a struct
+    }
+}

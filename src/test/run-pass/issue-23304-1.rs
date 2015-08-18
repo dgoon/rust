@@ -8,16 +8,27 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// error-pattern:thread '<main>' panicked at 'shift operation overflowed'
-// compile-flags: -C debug-assertions
+#![allow(dead_code)]
 
-#![feature(core_simd)]
+#[repr(u8)]
+#[allow(dead_code)]
+enum ValueType {
+    DOUBLE              = 0x00,
+    INT32               = 0x01,
+}
 
-use std::simd::i32x4;
+#[repr(u32)]
+enum ValueTag {
+    INT32                = 0x1FFF0u32 | (ValueType::INT32 as u32),
+    X,
+}
 
-// (Work around constant-evaluation)
-fn id<T>(x: T) -> T { x }
+#[repr(u64)]
+enum ValueShiftedTag {
+    INT32        = ValueTag::INT32 as u64,
+    X,
+}
 
 fn main() {
-    let _x = i32x4(1, 0, 0, 0) << id(i32x4(32, 0, 0, 0));
+    println!("{}", ValueTag::INT32 as u32);
 }

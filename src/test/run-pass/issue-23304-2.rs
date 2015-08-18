@@ -8,16 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// error-pattern:thread '<main>' panicked at 'shift operation overflowed'
-// compile-flags: -C debug-assertions
+#![allow(dead_code)]
 
-#![feature(core_simd)]
+enum X { A = 0 as isize }
 
-use std::simd::u64x2;
+enum Y { A = X::A as isize }
 
-// (Work around constant-evaluation)
-fn id<T>(x: T) -> T { x }
-
-fn main() {
-    let _x = u64x2(1, 0) << id(u64x2(64, 0));
-}
+fn main() { }
