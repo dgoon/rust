@@ -8,15 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:allocator1.rs
-// error-pattern: cannot link together two allocators
-// ignore-musl no dylibs on musl yet
+#[inline(never)]
+fn foo(a: f32, b: f32) -> f32 {
+    a % b
+}
 
-// We're linking std dynamically (via -C prefer-dynamic for this test) which
-// has an allocator and then we're also linking in a new allocator (allocator1)
-// and this should be an error
-
-extern crate allocator1;
+#[inline(never)]
+fn bar(a: f32, b: f32) -> f32 {
+    ((a as f64) % (b as f64)) as f32
+}
 
 fn main() {
+    let unknown_float = std::env::args().len();
+    println!("{}", foo(4.0, unknown_float as f32));
+    println!("{}", foo(5.0, (unknown_float as f32) + 1.0));
+    println!("{}", bar(6.0, (unknown_float as f32) + 2.0));
+    println!("{}", bar(7.0, (unknown_float as f32) + 3.0));
 }
