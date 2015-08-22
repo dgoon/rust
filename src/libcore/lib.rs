@@ -58,7 +58,8 @@
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "https://doc.rust-lang.org/nightly/",
-       html_playground_url = "https://play.rust-lang.org/")]
+       html_playground_url = "https://play.rust-lang.org/",
+       issue_tracker_base_url = "https://github.com/rust-lang/rust/issues/")]
 #![doc(test(no_crate_inject))]
 
 #![no_core]
@@ -143,7 +144,7 @@ pub mod convert;
 
 pub mod any;
 pub mod array;
-pub mod atomic;
+pub mod sync;
 pub mod cell;
 pub mod char;
 pub mod panicking;
