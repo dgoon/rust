@@ -9,6 +9,7 @@
 // except according to those terms.
 
 use middle::def::DefFn;
+use middle::def_id::DefId;
 use middle::subst::{Subst, Substs, EnumeratedItems};
 use middle::ty::{TransmuteRestriction, ctxt, TyBareFn};
 use middle::ty::{self, Ty, HasTypeFlags};
@@ -16,7 +17,6 @@ use middle::ty::{self, Ty, HasTypeFlags};
 use std::fmt;
 
 use syntax::abi::RustIntrinsic;
-use syntax::ast::DefId;
 use syntax::ast;
 use syntax::codemap::Span;
 use syntax::visit::Visitor;
@@ -225,7 +225,7 @@ impl<'a, 'tcx, 'v> Visitor<'v> for IntrinsicCheckingVisitor<'a, 'tcx> {
                 visit::walk_fn(self, fk, fd, b, s);
                 self.param_envs.pop();
             }
-            visit::FkFnBlock(..) => {
+            visit::FkClosure(..) => {
                 visit::walk_fn(self, fk, fd, b, s);
             }
         }
