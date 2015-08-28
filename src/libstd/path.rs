@@ -598,8 +598,11 @@ impl<'a> Components<'a> {
     /// how much of the prefix is left from the point of view of iteration?
     #[inline]
     fn prefix_remaining(&self) -> usize {
-        if self.front == State::Prefix { self.prefix_len() }
-        else { 0 }
+        if self.front == State::Prefix {
+            self.prefix_len()
+        } else {
+            0
+        }
     }
 
     // Given the iteration so far, how much of the pre-State::Body path is left?
@@ -632,9 +635,11 @@ impl<'a> Components<'a> {
     /// ```
     /// use std::path::Path;
     ///
-    /// let path = Path::new("/tmp/foo/bar.txt");
+    /// let mut components = Path::new("/tmp/foo/bar.txt").components();
+    /// components.next();
+    /// components.next();
     ///
-    /// println!("{:?}", path.components().as_path());
+    /// assert_eq!(Path::new("foo/bar.txt"), components.as_path());
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn as_path(&self) -> &'a Path {
