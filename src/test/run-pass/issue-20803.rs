@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,18 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Unordered containers, implemented as hash-tables
+use std::ops::Add;
 
-mod bench;
-mod table;
-pub mod map;
-pub mod set;
-pub mod state;
+fn foo<T>(x: T) -> <i32 as Add<T>>::Output where i32: Add<T> {
+    42i32 + x
+}
 
-trait Recover<Q: ?Sized> {
-    type Key;
-
-    fn get(&self, key: &Q) -> Option<&Self::Key>;
-    fn take(&mut self, key: &Q) -> Option<Self::Key>;
-    fn replace(&mut self, key: Self::Key) -> Option<Self::Key>;
+fn main() {
+    println!("{}", foo(0i32));
 }
