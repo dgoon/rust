@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-macro_rules! Id {
-    { $T:tt } => $T
-}
+// Test the type binding span doesn't include >>
 
-struct Foo<T> {
-    x: Id!(T)
-    //~^ ERROR: type macros are experimental (see issue #27336)
-}
+use std::ops::Deref;
+
+fn homura<T: Deref<Trget=i32 //~ ERROR associated type
+>>(_: T) { }
+
 
 fn main() {
-    let foo = Foo { x: i32 };
 }
