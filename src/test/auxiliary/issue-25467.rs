@@ -8,13 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(alloc_jemalloc, alloc_system)]
+#![crate_type="lib"]
 
-#[cfg(not(any(target_env = "msvc", target_os = "bitrig", target_os = "openbsd")))]
-extern crate alloc_jemalloc;
-#[cfg(any(target_env = "msvc", target_os = "bitrig", target_os = "openbsd"))]
-extern crate alloc_system;
-
-fn main() {
-    println!("{:?}", Box::new(3));
+pub trait Trait {
+    // the issue is sensitive to interning order - so use names
+    // unlikely to appear in libstd.
+    type Issue25467FooT;
+    type Issue25467BarT;
 }
+
+pub type Object = Option<Box<Trait<Issue25467FooT=(),Issue25467BarT=()>>>;

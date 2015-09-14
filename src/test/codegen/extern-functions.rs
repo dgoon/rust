@@ -8,13 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(alloc_jemalloc, alloc_system)]
+// compile-flags: -C no-prepopulate-passes
 
-#[cfg(not(any(target_env = "msvc", target_os = "bitrig", target_os = "openbsd")))]
-extern crate alloc_jemalloc;
-#[cfg(any(target_env = "msvc", target_os = "bitrig", target_os = "openbsd"))]
-extern crate alloc_system;
+#![feature(unwind_attributes)]
 
-fn main() {
-    println!("{:?}", Box::new(3));
+extern {
+// CHECK: Function Attrs: nounwind
+// CHECK-NEXT: declare void @extern_fn
+    fn extern_fn();
+// CHECK-NOT: Function Attrs: nounwind
+// CHECK: declare void @unwinding_extern_fn
+    #[unwind]
+    fn unwinding_extern_fn();
 }

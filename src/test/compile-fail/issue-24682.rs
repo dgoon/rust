@@ -8,13 +8,24 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(alloc_jemalloc, alloc_system)]
+trait A: Sized {
+    type N;
+    fn x() ->
+        Self<
+          N= //~ ERROR associated type bindings are not allowed here
+          Self::N> {
+        loop {}
+    }
+    fn y(&self) ->
+        std
+           <N=()> //~ ERROR associated type bindings are not allowed here
+           ::option::Option<()>
+    { None }
+    fn z(&self) ->
+        u32<N=()> //~ ERROR associated type bindings are not allowed here
+    { 42 }
 
-#[cfg(not(any(target_env = "msvc", target_os = "bitrig", target_os = "openbsd")))]
-extern crate alloc_jemalloc;
-#[cfg(any(target_env = "msvc", target_os = "bitrig", target_os = "openbsd"))]
-extern crate alloc_system;
+}
 
 fn main() {
-    println!("{:?}", Box::new(3));
 }
