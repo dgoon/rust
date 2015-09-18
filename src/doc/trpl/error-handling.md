@@ -87,7 +87,9 @@ thread '<main>' panicked at 'Invalid number: 11', src/bin/panic-simple.rs:5
 Here's another example that is slightly less contrived. A program that accepts
 an integer as an argument, doubles it and prints it.
 
+<div id="code-unwrap-double">
 ```rust,should_panic
+
 use std::env;
 
 fn main() {
@@ -97,6 +99,7 @@ fn main() {
     println!("{}", 2 * n);
 }
 ```
+</div>
 
 If you give this program zero arguments (error 1) or if the first argument
 isn't an integer (error 2), the program will panic just like in the first
@@ -120,7 +123,7 @@ It would be better if we just showed the code for unwrapping because it is so
 simple, but to do that, we will first need to explore the `Option` and `Result`
 types. Both of these types have a method called `unwrap` defined on them.
 
-## The `Option` type
+### The `Option` type
 
 The `Option` type is [defined in the standard library][5]:
 
@@ -137,6 +140,7 @@ system is an important concept because it will cause the compiler to force the
 programmer to handle that absence. Let's take a look at an example that tries
 to find a character in a string:
 
+<div id="code-option-ex-string-find">
 ```rust
 // Searches `haystack` for the Unicode character `needle`. If one is found, the
 // byte offset of the character is returned. Otherwise, `None` is returned.
@@ -149,6 +153,7 @@ fn find(haystack: &str, needle: char) -> Option<usize> {
     None
 }
 ```
+</div>
 
 Notice that when this function finds a matching character, it doen't just
 return the `offset`. Instead, it returns `Some(offset)`. `Some` is a variant or
