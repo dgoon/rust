@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,9 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
+// Check that `pub extern crate` gives a warning.
 
-struct Foo {}
-//~^ ERROR: unit-like struct definition should be written as `struct Foo;`
 
-fn main() {}
+pub extern crate core; //~WARN `pub extern crate` does not work
+//~^ ERROR core
+
+fn main() {
+}

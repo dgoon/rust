@@ -2231,14 +2231,6 @@ impl<'a> Parser<'a> {
                                                  &[token::CloseDelim(token::Brace)]));
                             }
 
-                            if fields.is_empty() && base.is_none() {
-                                let last_span = self.last_span;
-                                self.span_err(last_span,
-                                              "structure literal must either \
-                                              have at least one field or use \
-                                              structure update syntax");
-                            }
-
                             hi = self.span.hi;
                             try!(self.expect(&token::CloseDelim(token::Brace)));
                             ex = ExprStruct(pth, fields, base);
@@ -4713,14 +4705,14 @@ impl<'a> Parser<'a> {
                 (Vec::new(), Some(ast::DUMMY_NODE_ID))
             } else {
                 // If we see: `struct Foo<T> where T: Copy { ... }`
-                (try!(self.parse_record_struct_body(&class_name)), None)
+                (try!(self.parse_record_struct_body()), None)
             }
         // No `where` so: `struct Foo<T>;`
         } else if try!(self.eat(&token::Semi) ){
             (Vec::new(), Some(ast::DUMMY_NODE_ID))
         // Record-style struct definition
         } else if self.token == token::OpenDelim(token::Brace) {
-            let fields = try!(self.parse_record_struct_body(&class_name));
+            let fields = try!(self.parse_record_struct_body());
             (fields, None)
         // Tuple-style struct definition with optional where-clause.
         } else if self.token == token::OpenDelim(token::Paren) {
@@ -4740,18 +4732,11 @@ impl<'a> Parser<'a> {
          None))
     }
 
-    pub fn parse_record_struct_body(&mut self,
-                                    class_name: &ast::Ident) -> PResult<Vec<StructField>> {
+    pub fn parse_record_struct_body(&mut self) -> PResult<Vec<StructField>> {
         let mut fields = Vec::new();
         if try!(self.eat(&token::OpenDelim(token::Brace)) ){
             while self.token != token::CloseDelim(token::Brace) {
                 fields.push(try!(self.parse_struct_decl_field(true)));
-            }
-
-            if fields.is_empty() {
-                return Err(self.fatal(&format!("unit-like struct definition should be \
-                    written as `struct {};`",
-                    class_name)));
             }
 
             try!(self.bump());
@@ -5116,12 +5101,19 @@ impl<'a> Parser<'a> {
         try!(self.expect(&token::Semi));
 
         let last_span = self.last_span;
+
+        if visibility == ast::Public {
+            self.span_warn(mk_sp(lo, last_span.hi),
+                           "`pub extern crate` does not work as expected and should not be used. \
+                            Likely to become an error. Prefer `extern crate` and `pub use`.");
+        }
+
         Ok(self.mk_item(lo,
-                     last_span.hi,
-                     ident,
-                     ItemExternCrate(maybe_path),
-                     visibility,
-                     attrs))
+                        last_span.hi,
+                        ident,
+                        ItemExternCrate(maybe_path),
+                        visibility,
+                        attrs))
     }
 
     /// Parse `extern` for foreign ABIs
@@ -5200,13 +5192,10 @@ impl<'a> Parser<'a> {
             let variant_attrs = self.parse_outer_attributes();
             let vlo = self.span.lo;
 
-            let vis = try!(self.parse_visibility());
-
-            let ident;
             let kind;
             let mut args = Vec::new();
             let mut disr_expr = None;
-            ident = try!(self.parse_ident());
+            let ident = try!(self.parse_ident());
             if try!(self.eat(&token::OpenDelim(token::Brace)) ){
                 // Parse a struct variant.
                 all_nullary = false;
@@ -5248,7 +5237,6 @@ impl<'a> Parser<'a> {
                 kind: kind,
                 id: ast::DUMMY_NODE_ID,
                 disr_expr: disr_expr,
-                vis: vis,
             };
             variants.push(P(spanned(vlo, self.last_span.hi, vr)));
 
