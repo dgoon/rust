@@ -8,18 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use target::Target;
-
-pub fn target() -> Target {
-    let base = super::linux_base::opts();
-    Target {
-        llvm_target: "aarch64-unknown-linux-gnu".to_string(),
-        target_endian: "little".to_string(),
-        target_pointer_width: "64".to_string(),
-        target_env: "gnu".to_string(),
-        arch: "aarch64".to_string(),
-        target_os: "linux".to_string(),
-        target_vendor: "unknown".to_string(),
-        options: base,
-    }
+pub trait Foo<RHS=Self> {
+    type Assoc;
 }
+
+pub trait Bar: Foo<Assoc=()> {
+    fn new(&self, b: &
+           Bar //~ ERROR the trait `Bar` cannot be made into an object
+              <Assoc=()>
+    );
+}
+
+fn main() {}
