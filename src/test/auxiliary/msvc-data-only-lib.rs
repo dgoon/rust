@@ -8,9 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// The rust-book JavaScript in string form.
+// no-prefer-dynamic
 
-pub static JAVASCRIPT: &'static str = r#"
-<script type="text/javascript" src="rust-book.js"></script>
-<script type="text/javascript" src="playpen.js"></script>
-"#;
+#![crate_type = "rlib"]
+
+pub static FOO: i32 = 42;
