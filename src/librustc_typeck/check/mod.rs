@@ -989,7 +989,6 @@ fn check_impl_items_against_trait<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
 
     // Check for missing items from trait
     let provided_methods = tcx.provided_trait_methods(impl_trait_ref.def_id);
-    let associated_consts = tcx.associated_consts(impl_trait_ref.def_id);
     let mut missing_items = Vec::new();
     let mut invalidated_items = Vec::new();
     let associated_type_overridden = overridden_associated_type.is_some();
@@ -1004,9 +1003,8 @@ fn check_impl_items_against_trait<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
                         _ => false,
                     }
                 });
-                let is_provided =
-                    associated_consts.iter().any(|ac| ac.default.is_some() &&
-                                                 ac.name == associated_const.name);
+                let is_provided = associated_const.has_value;
+
                 if !is_implemented {
                     if !is_provided {
                         missing_items.push(associated_const.name);
@@ -4126,8 +4124,13 @@ fn check_const_with_ty<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 
     check_expr_with_hint(fcx, e, declty);
     demand::coerce(fcx, e.span, declty, e);
-    fcx.select_all_obligations_or_error();
+
+    fcx.select_all_obligations_and_apply_defaults();
+    upvar::closure_analyze_const(&fcx, e);
+    fcx.select_obligations_where_possible();
     fcx.check_casts();
+    fcx.select_all_obligations_or_error();
+
     regionck::regionck_expr(fcx, e);
     writeback::resolve_type_vars_in_expr(fcx, e);
 }
