@@ -10,7 +10,6 @@
 
 // The Rust abstract syntax tree.
 
-pub use self::AttrStyle::*;
 pub use self::BindingMode::*;
 pub use self::BinOp_::*;
 pub use self::BlockCheckMode::*;
@@ -167,13 +166,13 @@ impl fmt::Display for Ident {
 
 impl Encodable for Ident {
     fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.emit_str(&self.name.as_str())
+        self.name.encode(s)
     }
 }
 
 impl Decodable for Ident {
     fn decode<D: Decoder>(d: &mut D) -> Result<Ident, D::Error> {
-        Ok(str_to_ident(&try!(d.read_str())[..]))
+        Ok(Ident::with_empty_ctxt(try!(Name::decode(d))))
     }
 }
 
@@ -1019,8 +1018,8 @@ impl TokenTree {
         match *self {
             TtToken(_, token::DocComment(name)) => {
                 match doc_comment_style(&name.as_str()) {
-                    AttrOuter => 2,
-                    AttrInner => 3
+                    AttrStyle::Outer => 2,
+                    AttrStyle::Inner => 3
                 }
             }
             TtToken(_, token::SpecialVarNt(..)) => 2,
@@ -1041,7 +1040,7 @@ impl TokenTree {
                 TtToken(sp, token::Pound)
             }
             (&TtToken(sp, token::DocComment(name)), 1)
-            if doc_comment_style(&name.as_str()) == AttrInner => {
+            if doc_comment_style(&name.as_str()) == AttrStyle::Inner => {
                 TtToken(sp, token::Not)
             }
             (&TtToken(sp, token::DocComment(name)), _) => {
@@ -1658,8 +1657,8 @@ pub type Attribute = Spanned<Attribute_>;
 /// distinguished for pretty-printing.
 #[derive(Clone, PartialEq, Eq, RustcEncodable, RustcDecodable, Hash, Debug, Copy)]
 pub enum AttrStyle {
-    AttrOuter,
-    AttrInner,
+    Outer,
+    Inner,
 }
 
 #[derive(Clone, PartialEq, Eq, RustcEncodable, RustcDecodable, Hash, Debug, Copy)]

@@ -139,8 +139,8 @@ impl LateLintPass for UnusedResults {
             ty::TyBool => return,
             ty::TyStruct(def, _) |
             ty::TyEnum(def, _) => {
-                if def.did.is_local() {
-                    if let hir_map::NodeItem(it) = cx.tcx.map.get(def.did.node) {
+                if let Some(def_node_id) = cx.tcx.map.as_local_node_id(def.did) {
+                    if let hir_map::NodeItem(it) = cx.tcx.map.get(def_node_id) {
                         check_must_use(cx, &it.attrs, s.span)
                     } else {
                         false
@@ -285,10 +285,10 @@ impl LateLintPass for UnusedAttributes {
                                                     }).is_some();
             if  known_crate || plugin_crate {
                 let msg = match attr.node.style {
-                    ast::AttrOuter => "crate-level attribute should be an inner \
-                                       attribute: add an exclamation mark: #![foo]",
-                    ast::AttrInner => "crate-level attribute should be in the \
-                                       root module",
+                    ast::AttrStyle::Outer => "crate-level attribute should be an inner \
+                                              attribute: add an exclamation mark: #![foo]",
+                    ast::AttrStyle::Inner => "crate-level attribute should be in the \
+                                              root module",
                 };
                 cx.span_lint(UNUSED_ATTRIBUTES, attr.span, msg);
             }
