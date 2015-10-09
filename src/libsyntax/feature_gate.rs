@@ -81,8 +81,8 @@ const KNOWN_FEATURES: &'static [(&'static str, &'static str, Option<u32>, Status
     ("associated_types", "1.0.0", None, Accepted),
     ("visible_private_types", "1.0.0", None, Active),
     ("slicing_syntax", "1.0.0", None, Accepted),
-    ("box_syntax", "1.0.0", None, Active),
-    ("placement_in_syntax", "1.0.0", None, Active),
+    ("box_syntax", "1.0.0", Some(27779), Active),
+    ("placement_in_syntax", "1.0.0", Some(27779), Active),
     ("pushpop_unsafe", "1.2.0", None, Active),
     ("on_unimplemented", "1.0.0", None, Active),
     ("simd_ffi", "1.0.0", None, Active),
@@ -726,7 +726,7 @@ impl<'a, 'v> Visitor<'v> for MacroVisitor<'a> {
 }
 
 struct PostExpansionVisitor<'a> {
-    context: &'a Context<'a>
+    context: &'a Context<'a>,
 }
 
 impl<'a> PostExpansionVisitor<'a> {
@@ -1107,8 +1107,7 @@ pub enum UnstableFeatures {
     /// Errors are bypassed for bootstrapping. This is required any time
     /// during the build that feature-related lints are set to warn or above
     /// because the build turns on warnings-as-errors and uses lots of unstable
-    /// features. As a result, this this is always required for building Rust
-    /// itself.
+    /// features. As a result, this is always required for building Rust itself.
     Cheat
 }
 
