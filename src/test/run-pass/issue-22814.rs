@@ -8,14 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Feature gate test for empty struct with braces
+trait Test {}
 
-struct Empty {} //~ ERROR empty structs with braces are unstable
-
-fn main() {
-    let e = Empty {}; //~ ERROR empty structs with braces are unstable
-
-    match e {
-        Empty {} => {} //~ ERROR empty structs with braces are unstable
+macro_rules! test {
+( $($name:ident)+) => (
+    impl<$($name: Test),*> Test for ($($name,)*) {
     }
+)
 }
+
+test!(A B C);
+
+fn main() {}

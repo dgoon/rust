@@ -1435,11 +1435,11 @@ struct Foo;
 
 trait Shape { fn area(&self) -> f64; }
 trait Circle : Shape { fn radius(&self) -> f64; }
-# impl Shape for Foo {
-#     fn area(&self) -> f64 {
-#         0.0
-#     }
-# }
+impl Shape for Foo {
+    fn area(&self) -> f64 {
+        0.0
+    }
+}
 impl Circle for Foo {
     fn radius(&self) -> f64 {
         println!("calling area: {}", self.area());
@@ -2357,7 +2357,7 @@ The currently implemented features of the reference compiler are:
                               terms of encapsulation).
 * - `default_type_parameter_fallback` - Allows type parameter defaults to
                                         influence type inference.
-* - `braced_empty_structs` - Allows use of empty structs with braces.
+* - `braced_empty_structs` - Allows use of empty structs and enum variants with braces.
 
 If a feature is promoted to a language feature, then all existing programs will
 start to receive compilation warnings about `#![feature]` directives which enabled
