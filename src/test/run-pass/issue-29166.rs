@@ -8,32 +8,23 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::cell::Cell;
+// This test ensures that vec.into_iter does not overconstrain element lifetime.
 
-#[derive(Debug)]
-struct B<'a> {
-    a: [Cell<Option<&'a B<'a>>>; 2]
+pub fn main() {
+    original_report();
+    revision_1();
+    revision_2();
 }
 
-impl<'a> B<'a> {
-    fn new() -> B<'a> {
-        B { a: [Cell::new(None), Cell::new(None)] }
-    }
+fn original_report() {
+    drop(vec![&()].into_iter())
 }
 
-fn f() {
-    let (b1, b2, b3);
-    b1 = B::new();
-    b2 = B::new();
-    b3 = B::new();
-    b1.a[0].set(Some(&b2));
-    b1.a[1].set(Some(&b3));
-    b2.a[0].set(Some(&b2));
-    b2.a[1].set(Some(&b3));
-    b3.a[0].set(Some(&b1));
-    b3.a[1].set(Some(&b2));
+fn revision_1() {
+    // below is what above `vec!` expands into at time of this writing.
+    drop(<[_]>::into_vec(::std::boxed::Box::new([&()])).into_iter())
 }
 
-fn main() {
-    f();
+fn revision_2() {
+    drop((match (Vec::new(), &()) { (mut v, b) => { v.push(b); v } }).into_iter())
 }
