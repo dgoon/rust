@@ -655,6 +655,11 @@ impl<'a, T> Default for &'a [T] {
     fn default() -> &'a [T] { &[] }
 }
 
+#[stable(feature = "mut_slice_default", since = "1.5.0")]
+impl<'a, T> Default for &'a mut [T] {
+    fn default() -> &'a mut [T] { &mut [] }
+}
+
 //
 // Iterators
 //
@@ -1430,7 +1435,7 @@ pub fn mut_ref_slice<A>(s: &mut A) -> &mut [A] {
 ///
 /// The `len` argument is the number of **elements**, not the number of bytes.
 ///
-/// # Unsafety
+/// # Safety
 ///
 /// This function is unsafe as there is no guarantee that the given pointer is
 /// valid for `len` elements, nor whether the lifetime inferred is a suitable
