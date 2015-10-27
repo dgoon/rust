@@ -8,24 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// A quick test of 'unsafe const fn' functionality
-
-#![feature(const_fn)]
-
-unsafe const fn dummy(v: u32) -> u32 {
-    !v
-}
-
-struct Type;
-impl Type {
-    unsafe const fn new() -> Type {
-        Type
+mod m {
+    trait Priv {
+        fn f(&self) {}
     }
+    impl Priv for super::S {}
+    pub trait Pub: Priv {}
 }
 
-const VAL: u32 = unsafe { dummy(0xFFFF) };
-const TYPE_INST: Type = unsafe { Type::new() };
+struct S;
+impl m::Pub for S {}
+
+fn g<T: m::Pub>(arg: T) {
+    arg.f(); //~ ERROR: source trait is private
+}
 
 fn main() {
-    assert_eq!(VAL, 0xFFFF0000);
+    g(S);
 }

@@ -8,17 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// A quick test of 'unsafe const fn' functionality
-
-#![feature(const_fn)]
-
-const unsafe fn dummy(v: u32) -> u32 {
-    !v
+fn test(&'a str) {
+    //~^ ERROR unexpected lifetime `'a` in pattern
 }
-
-const VAL: u32 = dummy(0xFFFF); //~ ERROR E0133
 
 fn main() {
-    assert_eq!(VAL, 0xFFFF0000);
 }
-

@@ -8,20 +8,24 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use outer::Foo;
+// A quick test of 'unsafe const fn' functionality
 
-mod outer {
-    pub use self::inner::Foo;
+#![feature(const_fn)]
 
-    mod inner {
-        pub trait Foo {
-            fn bar(&self) {}
-        }
-        impl Foo for i32 {}
+const unsafe fn dummy(v: u32) -> u32 {
+    !v
+}
+
+struct Type;
+impl Type {
+    const unsafe fn new() -> Type {
+        Type
     }
 }
 
+const VAL: u32 = unsafe { dummy(0xFFFF) };
+const TYPE_INST: Type = unsafe { Type::new() };
+
 fn main() {
-    let x: i32 = 0;
-    x.bar();
+    assert_eq!(VAL, 0xFFFF0000);
 }
