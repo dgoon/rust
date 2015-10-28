@@ -8,17 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that `in PLACE { EXPR }` is feature-gated.
-//
-// See also feature-gate-box-expr.rs
-//
-// (Note that the two tests are separated since the checks appear to
-// be performed at distinct phases, with an abort_if_errors call
-// separating them.)
+// test that certain things are disallowed in const fn signatures
 
-fn main() {
-    use std::boxed::HEAP;
+#![feature(const_fn)]
 
-    let x = HEAP <- 'c'; //~ ERROR placement-in expression syntax is experimental
-    println!("x: {}", x);
-}
+// no destructuring
+const fn i((a, b): (u32, u32)) -> u32 { a + b } //~ ERROR: E0022
+
+fn main() {}

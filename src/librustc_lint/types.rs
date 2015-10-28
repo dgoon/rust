@@ -120,7 +120,7 @@ impl LateLintPass for TypeLimits {
                             if let ast::LitInt(shift, _) = lit.node { shift >= bits }
                             else { false }
                         } else {
-                            match eval_const_expr_partial(cx.tcx, &r, ExprTypeChecked) {
+                            match eval_const_expr_partial(cx.tcx, &r, ExprTypeChecked, None) {
                                 Ok(ConstVal::Int(shift)) => { shift as u64 >= bits },
                                 Ok(ConstVal::Uint(shift)) => { shift >= bits },
                                 _ => { false }
@@ -659,10 +659,8 @@ impl LateLintPass for ImproperCTypes {
             }
         }
 
-        match it.node {
-            hir::ItemForeignMod(ref nmod)
-                if nmod.abi != abi::RustIntrinsic &&
-                   nmod.abi != abi::PlatformIntrinsic => {
+        if let hir::ItemForeignMod(ref nmod) = it.node {
+            if nmod.abi != abi::RustIntrinsic && nmod.abi != abi::PlatformIntrinsic {
                 for ni in &nmod.items {
                     match ni.node {
                         hir::ForeignItemFn(ref decl, _) => check_foreign_fn(cx, &**decl),
@@ -670,8 +668,6 @@ impl LateLintPass for ImproperCTypes {
                     }
                 }
             }
-            _ => (),
         }
     }
 }
-

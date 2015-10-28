@@ -8,17 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that `in PLACE { EXPR }` is feature-gated.
-//
-// See also feature-gate-box-expr.rs
-//
-// (Note that the two tests are separated since the checks appear to
-// be performed at distinct phases, with an abort_if_errors call
-// separating them.)
-
 fn main() {
-    use std::boxed::HEAP;
-
-    let x = HEAP <- 'c'; //~ ERROR placement-in expression syntax is experimental
-    println!("x: {}", x);
+    if let Some(b) = None { //~ ERROR: `if let` arms have incompatible types
+        ()
+    } else {                //~ NOTE: `if let` arm with an incompatible type
+        1
+    };
 }

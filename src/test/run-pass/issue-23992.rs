@@ -8,17 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that `in PLACE { EXPR }` is feature-gated.
-//
-// See also feature-gate-box-expr.rs
-//
-// (Note that the two tests are separated since the checks appear to
-// be performed at distinct phases, with an abort_if_errors call
-// separating them.)
+pub struct Outer<T: Trait>(T);
+pub struct Inner<'a> { value: &'a bool }
+
+pub trait Trait {
+    type Error;
+    fn ready(self) -> Self::Error;
+}
+
+impl<'a> Trait for Inner<'a> {
+    type Error = Outer<Inner<'a>>;
+    fn ready(self) -> Outer<Inner<'a>> { Outer(self) }
+}
 
 fn main() {
-    use std::boxed::HEAP;
-
-    let x = HEAP <- 'c'; //~ ERROR placement-in expression syntax is experimental
-    println!("x: {}", x);
+    let value = true;
+    let inner = Inner { value: &value };
+    assert_eq!(inner.ready().0.value, &value);
 }

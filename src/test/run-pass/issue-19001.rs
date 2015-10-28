@@ -8,17 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that `in PLACE { EXPR }` is feature-gated.
-//
-// See also feature-gate-box-expr.rs
-//
-// (Note that the two tests are separated since the checks appear to
-// be performed at distinct phases, with an abort_if_errors call
-// separating them.)
+// check that we handle recursive arrays correctly in `type_of`
+
+struct Loopy {
+    ptr: *mut [Loopy; 1]
+}
 
 fn main() {
-    use std::boxed::HEAP;
-
-    let x = HEAP <- 'c'; //~ ERROR placement-in expression syntax is experimental
-    println!("x: {}", x);
+    let _t = Loopy { ptr: 0 as *mut _ };
 }

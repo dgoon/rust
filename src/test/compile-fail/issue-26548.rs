@@ -8,17 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that `in PLACE { EXPR }` is feature-gated.
-//
-// See also feature-gate-box-expr.rs
-//
-// (Note that the two tests are separated since the checks appear to
-// be performed at distinct phases, with an abort_if_errors call
-// separating them.)
+// error-pattern: overflow representing the type `S`
+
+trait Mirror { type It; }
+impl<T> Mirror for T { type It = Self; }
+struct S(Option<<S as Mirror>::It>);
 
 fn main() {
-    use std::boxed::HEAP;
-
-    let x = HEAP <- 'c'; //~ ERROR placement-in expression syntax is experimental
-    println!("x: {}", x);
+    let _s = S(None);
 }
