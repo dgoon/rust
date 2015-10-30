@@ -429,7 +429,7 @@ impl<T> Vec<T> {
         }
     }
 
-    /// Shorten a vector, dropping excess elements.
+    /// Shorten a vector to be `len` elements long, dropping excess elements.
     ///
     /// If `len` is greater than the vector's current length, this has no
     /// effect.
@@ -437,7 +437,7 @@ impl<T> Vec<T> {
     /// # Examples
     ///
     /// ```
-    /// let mut vec = vec![1, 2, 3, 4];
+    /// let mut vec = vec![1, 2, 3, 4, 5];
     /// vec.truncate(2);
     /// assert_eq!(vec, [1, 2]);
     /// ```
@@ -859,8 +859,9 @@ impl<T> Vec<T> {
 impl<T: Clone> Vec<T> {
     /// Resizes the `Vec` in-place so that `len()` is equal to `new_len`.
     ///
-    /// Calls either `extend()` or `truncate()` depending on whether `new_len`
-    /// is larger than the current value of `len()` or not.
+    /// If `new_len` is greater than `len()`, the `Vec` is extended by the
+    /// difference, with each additional slot filled with `value`.
+    /// If `new_len` is less than `len()`, the `Vec` is simply truncated.
     ///
     /// # Examples
     ///
