@@ -8,13 +8,23 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:issue-11225-3.rs
+use std::thread;
 
-// pretty-expanded FIXME #23616
+struct Foo;
 
-extern crate issue_11225_3;
+impl Drop for Foo {
+    fn drop(&mut self) {
+        println!("test2");
+    }
+}
 
-pub fn main() {
-    issue_11225_3::public_inlinable_function();
-    issue_11225_3::public_inlinable_function_ufcs();
+thread_local!(static FOO: Foo = Foo);
+
+fn main() {
+    // Off the main thread due to #28129, be sure to initialize FOO first before
+    // calling `println!`
+    thread::spawn(|| {
+        FOO.with(|_| {});
+        println!("test1");
+    }).join().unwrap();
 }

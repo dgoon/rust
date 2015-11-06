@@ -8,13 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:issue-11225-3.rs
+#![feature(rustc_attrs)]
 
-// pretty-expanded FIXME #23616
+#[rustc_mir]
+fn foo((x, y): (i8, i8)) {
+}
 
-extern crate issue_11225_3;
-
-pub fn main() {
-    issue_11225_3::public_inlinable_function();
-    issue_11225_3::public_inlinable_function_ufcs();
+fn main() {
+    foo((0, 1));
 }
