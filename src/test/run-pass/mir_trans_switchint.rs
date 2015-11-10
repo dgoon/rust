@@ -7,30 +7,18 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-#![feature(libc)]
 
-extern crate libc;
+#![feature(rustc_attrs)]
 
-type DWORD = u32;
-type HANDLE = *mut u8;
-type BOOL = i32;
-
-#[cfg(windows)]
-extern "system" {
-    fn SetStdHandle(nStdHandle: DWORD, nHandle: HANDLE) -> BOOL;
+#[rustc_mir]
+pub fn foo(x: i8) -> i32 {
+  match x {
+    1 => 0,
+    _ => 1,
+  }
 }
 
-#[cfg(windows)]
-fn close_stdout() {
-    const STD_OUTPUT_HANDLE: DWORD = -11i32 as DWORD;
-    unsafe { SetStdHandle(STD_OUTPUT_HANDLE, 0 as HANDLE); }
-}
-
-#[cfg(windows)]
 fn main() {
-    close_stdout();
-    println!("hello world");
+  assert_eq!(foo(0), 1);
+  assert_eq!(foo(1), 0);
 }
-
-#[cfg(not(windows))]
-fn main() {}
