@@ -1013,6 +1013,21 @@ impl PathBuf {
     /// * if `path` has a root but no prefix (e.g. `\windows`), it
     ///   replaces everything except for the prefix (if any) of `self`.
     /// * if `path` has a prefix but no root, it replaces `self`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::PathBuf;
+    ///
+    /// let mut path = PathBuf::new();
+    /// path.push("/tmp");
+    /// path.push("file.bk");
+    /// assert_eq!(path, PathBuf::from("/tmp/file.bk"));
+    ///
+    /// // Pushing an absolute path replaces the current path
+    /// path.push("/etc/passwd");
+    /// assert_eq!(path, PathBuf::from("/etc/passwd"));
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn push<P: AsRef<Path>>(&mut self, path: P) {
         self._push(path.as_ref())
@@ -1817,7 +1832,8 @@ impl Path {
     }
 
     /// Boolean value indicator whether the underlying file exists on the local
-    /// filesystem. Returns false in exactly the cases where `fs::stat` fails.
+    /// filesystem. Returns false in exactly the cases where `fs::metadata`
+    /// fails.
     #[stable(feature = "path_ext", since = "1.5.0")]
     pub fn exists(&self) -> bool {
         fs::metadata(self).is_ok()

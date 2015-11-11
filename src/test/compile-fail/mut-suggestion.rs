@@ -8,19 +8,23 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct TS ( //~ ERROR empty tuple structs and enum variants are not allowed
-    #[cfg(untrue)]
-    i32,
-);
+#[derive(Copy, Clone)]
+struct S;
 
-enum E {
-    TV ( //~ ERROR empty tuple structs and enum variants are not allowed
-        #[cfg(untrue)]
-        i32,
-    )
+impl S {
+    fn mutate(&mut self) {
+    }
+}
+
+fn func(arg: S) {
+    //~^ HELP use `mut` as shown
+    //~| SUGGESTION fn func(mut arg: S) {
+    arg.mutate(); //~ ERROR cannot borrow immutable argument
 }
 
 fn main() {
-    let s = TS;
-    let tv = E::TV;
+    let local = S;
+    //~^ HELP use `mut` as shown
+    //~| SUGGESTION let mut local = S;
+    local.mutate(); //~ ERROR cannot borrow immutable local variable
 }

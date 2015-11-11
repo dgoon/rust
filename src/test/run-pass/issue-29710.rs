@@ -8,19 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct TS ( //~ ERROR empty tuple structs and enum variants are not allowed
-    #[cfg(untrue)]
-    i32,
-);
+#![deny(unused_results)]
+#![allow(dead_code)]
 
-enum E {
-    TV ( //~ ERROR empty tuple structs and enum variants are not allowed
-        #[cfg(untrue)]
-        i32,
-    )
-}
+#[derive(Debug)]
+struct A(usize);
 
-fn main() {
-    let s = TS;
-    let tv = E::TV;
-}
+#[derive(Debug)]
+struct B { a: usize }
+
+fn main() {}
