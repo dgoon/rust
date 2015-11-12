@@ -11,19 +11,17 @@
 use hair::*;
 use repr::*;
 use rustc_data_structures::fnv::FnvHashMap;
-use std::rc::Rc;
 use hair::cx::Cx;
 use hair::cx::block;
-use hair::cx::pattern::PatNode;
 use hair::cx::to_ref::ToRef;
 use rustc::front::map;
-use rustc::middle::const_eval;
 use rustc::middle::def;
 use rustc::middle::region::CodeExtent;
 use rustc::middle::pat_util;
 use rustc::middle::ty::{self, VariantDef, Ty};
 use rustc_front::hir;
 use rustc_front::util as hir_util;
+use syntax::ext::mtwt;
 use syntax::parse::token;
 use syntax::ptr::P;
 
@@ -81,10 +79,9 @@ impl<'tcx> Mirror<'tcx> for &'tcx hir::Expr {
                 }
             }
 
-            hir::ExprLit(..) => {
-                let value = const_eval::eval_const_expr(cx.tcx, self);
-                ExprKind::Literal { literal: Literal::Value { value: value } }
-            }
+            hir::ExprLit(..) => ExprKind::Literal {
+                literal: cx.const_eval_literal(self)
+            },
 
             hir::ExprBinary(op, ref lhs, ref rhs) => {
                 if cx.tcx.is_method_call(self.id) {
@@ -273,8 +270,17 @@ impl<'tcx> Mirror<'tcx> for &'tcx hir::Expr {
 
             // Now comes the rote stuff:
 
-            hir::ExprRepeat(ref v, ref c) =>
-                ExprKind::Repeat { value: v.to_ref(), count: c.to_ref() },
+            hir::ExprRepeat(ref v, ref c) => ExprKind::Repeat {
+                value: v.to_ref(),
+                count: Expr {
+                    ty: cx.tcx.expr_ty(c),
+                    temp_lifetime: None,
+                    span: c.span,
+                    kind: ExprKind::Literal {
+                        literal: cx.const_eval_literal(c)
+                    }
+                }.to_ref()
+            },
             hir::ExprRet(ref v) =>
                 ExprKind::Return { value: v.to_ref() },
             hir::ExprBreak(label) =>
@@ -486,19 +492,20 @@ fn to_borrow_kind(m: hir::Mutability) -> BorrowKind {
     }
 }
 
-fn convert_arm<'a, 'tcx: 'a>(cx: &Cx<'a, 'tcx>, arm: &'tcx hir::Arm) -> Arm<'tcx> {
-    let map = if arm.pats.len() == 1 {
+fn convert_arm<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>, arm: &'tcx hir::Arm) -> Arm<'tcx> {
+    let mut map;
+    let opt_map = if arm.pats.len() == 1 {
         None
     } else {
-        let mut map = FnvHashMap();
-        pat_util::pat_bindings(&cx.tcx.def_map, &arm.pats[0], |_, p_id, _, path| {
-            map.insert(path.node, p_id);
+        map = FnvHashMap();
+        pat_util::pat_bindings_hygienic(&cx.tcx.def_map, &arm.pats[0], |_, p_id, _, path| {
+            map.insert(mtwt::resolve(path.node), p_id);
         });
-        Some(Rc::new(map))
+        Some(&map)
     };
 
     Arm {
-        patterns: arm.pats.iter().map(|p| PatNode::new(p, map.clone()).to_ref()).collect(),
+        patterns: arm.pats.iter().map(|p| cx.refutable_pat(opt_map, p)).collect(),
         guard: arm.guard.to_ref(),
         body: arm.body.to_ref(),
     }
