@@ -512,6 +512,18 @@ fn initial_syntax_expander_table<'feat>(ecfg: &expand::ExpansionConfig<'feat>)
         syntax_expanders.insert(intern("quote_attr"),
                            builtin_normal_expander(
                                 ext::quote::expand_quote_attr));
+        syntax_expanders.insert(intern("quote_arg"),
+                           builtin_normal_expander(
+                                ext::quote::expand_quote_arg));
+        syntax_expanders.insert(intern("quote_block"),
+                           builtin_normal_expander(
+                                ext::quote::expand_quote_block));
+        syntax_expanders.insert(intern("quote_meta_item"),
+                           builtin_normal_expander(
+                                ext::quote::expand_quote_meta_item));
+        syntax_expanders.insert(intern("quote_path"),
+                           builtin_normal_expander(
+                                ext::quote::expand_quote_path));
     }
 
     syntax_expanders.insert(intern("line"),
@@ -809,7 +821,7 @@ pub fn get_single_str_from_tts(cx: &mut ExtCtxt,
         cx.span_err(sp, &format!("{} takes 1 argument", name));
         return None
     }
-    let ret = cx.expander().fold_expr(panictry!(p.parse_expr_nopanic()));
+    let ret = cx.expander().fold_expr(panictry!(p.parse_expr()));
     if p.token != token::Eof {
         cx.span_err(sp, &format!("{} takes 1 argument", name));
     }
@@ -826,7 +838,7 @@ pub fn get_exprs_from_tts(cx: &mut ExtCtxt,
     let mut p = cx.new_parser_from_tts(tts);
     let mut es = Vec::new();
     while p.token != token::Eof {
-        es.push(cx.expander().fold_expr(panictry!(p.parse_expr_nopanic())));
+        es.push(cx.expander().fold_expr(panictry!(p.parse_expr())));
         if panictry!(p.eat(&token::Comma)){
             continue;
         }
