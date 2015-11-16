@@ -8,15 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-macro_rules! Id {
-    ($T:tt) => ($T);
+trait Collection where for<'a> &'a Self: IntoIterator {
+    fn my_iter(&self) -> <&Self as IntoIterator>::IntoIter {
+        self.into_iter()
+    }
 }
 
-struct Foo<T> {
-    x: Id!(T)
-    //~^ ERROR: type macros are experimental (see issue #27336)
-}
+impl<T> Collection for [T] { }
 
 fn main() {
-    let foo = Foo { x: i32 };
+    let v = [0usize];
+    let _ = v.my_iter();
 }

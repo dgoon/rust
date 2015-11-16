@@ -8,15 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-macro_rules! Id {
-    ($T:tt) => ($T);
-}
+// aux-build:issue-28927-2.rs
+// aux-build:issue-28927-1.rs
+// ignore-cross-compile
 
-struct Foo<T> {
-    x: Id!(T)
-    //~^ ERROR: type macros are experimental (see issue #27336)
-}
-
-fn main() {
-    let foo = Foo { x: i32 };
-}
+extern crate issue_28927_1 as inner1;
+pub use inner1 as foo;

@@ -8,15 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-macro_rules! Id {
-    ($T:tt) => ($T);
+trait Inner {
+    type T;
 }
 
-struct Foo<T> {
-    x: Id!(T)
-    //~^ ERROR: type macros are experimental (see issue #27336)
+impl<'a> Inner for &'a i32 {
+    type T = i32;
 }
 
-fn main() {
-    let foo = Foo { x: i32 };
+fn f<'a>(x: &'a i32) -> <&'a i32 as Inner>::T {
+    *x
 }
+
+fn main() {}
