@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,13 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-
-use std::env::*;
+// compile-flags: -Z parse-only
+// ignore-tidy-linelength
 
 fn main() {
-    for (k, v) in vars_os() {
-        let v2 = var_os(&k);
-        assert!(v2.as_ref().map(|s| &**s) == Some(&*v),
-                "bad vars->var transition: {:?} {:?} {:?}", k, v, v2);
-    }
+    let y = 0;
+    //~^ ERROR unknown start of token: \u{37e}
+    //~^^ HELP unicode character ';' (Greek Question Mark) looks much like ';' (Semicolon), but it's not
 }

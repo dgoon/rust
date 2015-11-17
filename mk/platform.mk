@@ -14,7 +14,7 @@
 # would create a variable HOST_i686-darwin-macos with the value
 # i386.
 define DEF_HOST_VAR
-  HOST_$(1) = $(subst i686,i386,$(word 1,$(subst -, ,$(1))))
+  HOST_$(1) = $(patsubst i%86,i386,$(word 1,$(subst -, ,$(1))))
 endef
 $(foreach t,$(CFG_TARGET),$(eval $(call DEF_HOST_VAR,$(t))))
 $(foreach t,$(CFG_TARGET),$(info cfg: host for $(t) is $(HOST_$(t))))
@@ -214,9 +214,11 @@ define CFG_MAKE_TOOLCHAIN
   # On OpenBSD, we need to pass the path of libstdc++.so to the linker
   # (use path of libstdc++.a which is a known name for the same path)
   ifeq ($(OSTYPE_$(1)),unknown-openbsd)
-    RUSTC_FLAGS_$(1)=-L "$$(dir $$(shell $$(CC_$(1)) $$(CFG_GCCISH_CFLAGS_$(1)) \
-        -print-file-name=lib$(CFG_STDCPP_NAME).a))" \
-        $(RUSTC_FLAGS_$(1))
+    STDCPP_LIBDIR_RUSTFLAGS_$(1)= \
+        -L "$$(dir $$(shell $$(CC_$(1)) $$(CFG_GCCISH_CFLAGS_$(1)) \
+        -print-file-name=lib$(CFG_STDCPP_NAME).a))"
+  else
+    STDCPP_LIBDIR_RUSTFLAGS_$(1)=
   endif
 
   # On Bitrig, we need the relocation model to be PIC for everything

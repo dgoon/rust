@@ -167,22 +167,20 @@ impl StdError for JoinPathsError {
 #[cfg(target_os = "freebsd")]
 pub fn current_exe() -> io::Result<PathBuf> {
     unsafe {
-        use libc::funcs::bsd44::*;
-        use libc::consts::os::extra::*;
-        let mut mib = [CTL_KERN as c_int,
-                       KERN_PROC as c_int,
-                       KERN_PROC_PATHNAME as c_int,
+        let mut mib = [libc::CTL_KERN as c_int,
+                       libc::KERN_PROC as c_int,
+                       libc::KERN_PROC_PATHNAME as c_int,
                        -1 as c_int];
         let mut sz: libc::size_t = 0;
-        let err = sysctl(mib.as_mut_ptr(), mib.len() as ::libc::c_uint,
-                         ptr::null_mut(), &mut sz, ptr::null_mut(),
-                         0 as libc::size_t);
+        let err = libc::sysctl(mib.as_mut_ptr(), mib.len() as ::libc::c_uint,
+                               ptr::null_mut(), &mut sz, ptr::null_mut(),
+                               0 as libc::size_t);
         if err != 0 { return Err(io::Error::last_os_error()); }
         if sz == 0 { return Err(io::Error::last_os_error()); }
         let mut v: Vec<u8> = Vec::with_capacity(sz as usize);
-        let err = sysctl(mib.as_mut_ptr(), mib.len() as ::libc::c_uint,
-                         v.as_mut_ptr() as *mut libc::c_void, &mut sz,
-                         ptr::null_mut(), 0 as libc::size_t);
+        let err = libc::sysctl(mib.as_mut_ptr(), mib.len() as ::libc::c_uint,
+                               v.as_mut_ptr() as *mut libc::c_void, &mut sz,
+                               ptr::null_mut(), 0 as libc::size_t);
         if err != 0 { return Err(io::Error::last_os_error()); }
         if sz == 0 { return Err(io::Error::last_os_error()); }
         v.set_len(sz as usize - 1); // chop off trailing NUL
@@ -386,24 +384,33 @@ pub fn env() -> Env {
     let _g = ENV_LOCK.lock();
     return unsafe {
         let mut environ = *environ();
-        if environ as usize == 0 {
+        if environ == ptr::null() {
             panic!("os::env() failure getting env string from OS: {}",
                    io::Error::last_os_error());
         }
         let mut result = Vec::new();
         while *environ != ptr::null() {
-            result.push(parse(CStr::from_ptr(*environ).to_bytes()));
+            if let Some(key_value) = parse(CStr::from_ptr(*environ).to_bytes()) {
+                result.push(key_value);
+            }
             environ = environ.offset(1);
         }
         Env { iter: result.into_iter(), _dont_send_or_sync_me: ptr::null_mut() }
     };
 
-    fn parse(input: &[u8]) -> (OsString, OsString) {
-        let mut it = input.splitn(2, |b| *b == b'=');
-        let key = it.next().unwrap().to_vec();
-        let default: &[u8] = &[];
-        let val = it.next().unwrap_or(default).to_vec();
-        (OsStringExt::from_vec(key), OsStringExt::from_vec(val))
+    fn parse(input: &[u8]) -> Option<(OsString, OsString)> {
+        // Strategy (copied from glibc): Variable name and value are separated
+        // by an ASCII equals sign '='. Since a variable name must not be
+        // empty, allow variable names starting with an equals sign. Skip all
+        // malformed lines.
+        if input.is_empty() {
+            return None;
+        }
+        let pos = input[1..].iter().position(|&b| b == b'=').map(|p| p + 1);
+        pos.map(|p| (
+            OsStringExt::from_vec(input[..p].to_vec()),
+            OsStringExt::from_vec(input[p+1..].to_vec()),
+        ))
     }
 }
 
