@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,14 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// pretty-expanded FIXME #23616
+// Regression test for issue #28586
 
-#[forbid(raw_pointer_derive)]
-#[derive(Copy)]
-struct Test(*const i32);
+pub trait Foo {}
+impl Foo for [u8; usize::BYTES] {} //~ ERROR E0250
 
-impl Clone for Test {
-    fn clone(&self) -> Test { *self }
-}
-
-fn main() {}
+fn main() { }
