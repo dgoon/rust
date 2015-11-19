@@ -167,7 +167,7 @@ pub fn compile_input(sess: Session,
                                             tcx.print_debug_stats();
                                         }
                                         let trans = phase_4_translate_to_llvm(tcx,
-                                                                              &mir_map,
+                                                                              mir_map,
                                                                               analysis);
 
                                         if log_enabled!(::log::INFO) {
@@ -739,7 +739,6 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(sess: &'tcx Session,
                                lang_items,
                                stability::Index::new(krate),
                                |tcx| {
-
                                    // passes are timed inside typeck
                                    typeck::check_crate(tcx, trait_map);
 
@@ -756,7 +755,7 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(sess: &'tcx Session,
 
                                    // Do not move this check past lint
                                    time(time_passes, "stability index", || {
-                                       tcx.stability.borrow_mut().build(tcx, krate, &public_items)
+                                       tcx.stability.borrow_mut().build(tcx, krate, &exported_items)
                                    });
 
                                    time(time_passes,
@@ -828,7 +827,7 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(sess: &'tcx Session,
 
                                    time(time_passes,
                                         "lint checking",
-                                        || lint::check_crate(tcx, krate, &exported_items));
+                                        || lint::check_crate(tcx, &exported_items));
 
                                    // The above three passes generate errors w/o aborting
                                    tcx.sess.abort_if_errors();
@@ -849,7 +848,7 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(sess: &'tcx Session,
 /// Run the translation phase to LLVM, after which the AST and analysis can
 /// be discarded.
 pub fn phase_4_translate_to_llvm<'tcx>(tcx: &ty::ctxt<'tcx>,
-                                       mir_map: &MirMap<'tcx>,
+                                       mut mir_map: MirMap<'tcx>,
                                        analysis: ty::CrateAnalysis)
                                        -> trans::CrateTranslation {
     let time_passes = tcx.sess.time_passes();
@@ -858,10 +857,14 @@ pub fn phase_4_translate_to_llvm<'tcx>(tcx: &ty::ctxt<'tcx>,
          "resolving dependency formats",
          || dependency_format::calculate(&tcx.sess));
 
+    time(time_passes,
+         "erasing regions from MIR",
+         || mir::transform::erase_regions::erase_regions(tcx, &mut mir_map));
+
     // Option dance to work around the lack of stack once closures.
     time(time_passes,
          "translation",
-         move || trans::trans_crate(tcx, mir_map, analysis))
+         move || trans::trans_crate(tcx, &mir_map, analysis))
 }
 
 /// Run LLVM itself, producing a bitcode file, assembly file or object file
