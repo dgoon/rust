@@ -8,13 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![feature(const_fn)]
 
-use std::env::*;
+const unsafe fn g(x: usize) -> usize {
+    x
+}
+
+fn f(x: usize) -> usize {
+    x
+}
 
 fn main() {
-    for (k, v) in vars_os() {
-        let v2 = var_os(&k);
-        assert!(v2.as_ref().map(|s| &**s) == Some(&*v),
-                "bad vars->var transition: {:?} {:?} {:?}", k, v, v2);
-    }
+    let _ = [0; f(2)]; //~ ERROR: non-constant path in constant expression [E0307]
+    let _ = [0; g(2)]; //~ ERROR: non-constant path in constant expression [E0307]
 }

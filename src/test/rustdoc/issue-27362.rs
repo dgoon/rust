@@ -8,13 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// aux-build:issue-27362.rs
+// ignore-cross-compile
 
-use std::env::*;
+extern crate issue_27362;
+pub use issue_27362 as quux;
 
-fn main() {
-    for (k, v) in vars_os() {
-        let v2 = var_os(&k);
-        assert!(v2.as_ref().map(|s| &**s) == Some(&*v),
-                "bad vars->var transition: {:?} {:?} {:?}", k, v, v2);
-    }
-}
+// @matches issue_27362/quux/fn.foo.html '//pre' "pub const fn foo()"
+// @matches issue_27362/quux/fn.bar.html '//pre' "pub const unsafe fn bar()"
+// @matches issue_27362/quux/struct.Foo.html '//code' "const unsafe fn baz()"
