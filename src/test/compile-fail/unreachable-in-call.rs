@@ -8,24 +8,25 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_name="lint_output_format"]
-#![crate_type = "lib"]
-#![feature(staged_api)]
-#![staged_api]
-#![unstable(feature = "test_feature", issue = "0")]
+#![allow(dead_code)]
+#![deny(unreachable_code)]
 
-#[stable(feature = "test_feature", since = "1.0.0")]
-#[rustc_deprecated(since = "1.0.0", reason = "text")]
-pub fn foo() -> usize {
-    20
+fn diverge() -> ! { panic!() }
+
+fn get_u8() -> u8 {
+    1
+}
+fn call(_: u8, _: u8) {
+
+}
+fn diverge_first() {
+    call(diverge(),
+         get_u8()); //~ ERROR unreachable expression
+}
+fn diverge_second() {
+    call( //~ ERROR unreachable call
+        get_u8(),
+        diverge());
 }
 
-#[unstable(feature = "test_feature", issue = "0")]
-pub fn bar() -> usize {
-    40
-}
-
-#[unstable(feature = "test_feature", issue = "0")]
-pub fn baz() -> usize {
-    30
-}
+fn main() {}

@@ -600,7 +600,7 @@ impl<'a> ExtCtxt<'a> {
     }
 
     #[unstable(feature = "rustc_private", issue = "0")]
-    #[deprecated(since = "1.0.0",
+    #[rustc_deprecated(since = "1.0.0",
                  reason = "Replaced with `expander().fold_expr()`")]
     pub fn expand_expr(&mut self, e: P<ast::Expr>) -> P<ast::Expr> {
         self.expander().fold_expr(e)
@@ -678,9 +678,9 @@ impl<'a> ExtCtxt<'a> {
     pub fn bt_push(&mut self, ei: ExpnInfo) {
         self.recursion_count += 1;
         if self.recursion_count > self.ecfg.recursion_limit {
-            panic!(self.span_fatal(ei.call_site,
+            self.span_fatal(ei.call_site,
                             &format!("recursion limit reached while expanding the macro `{}`",
-                                    ei.callee.name())));
+                                    ei.callee.name()));
         }
 
         let mut call_site = ei.call_site;

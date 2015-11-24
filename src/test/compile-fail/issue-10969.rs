@@ -8,7 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[unstable] //~ ERROR: stability attributes may not be used
-#[stable] //~ ERROR: stability attributes may not be used
-#[rustc_deprecated] //~ ERROR: stability attributes may not be used
-fn main() { }
+fn func(i: i32) { //~NOTE defined here
+    i(); //~ERROR expected function, found `i32`
+}
+fn main() {
+    let i = 0i32; //~NOTE defined here
+    i(); //~ERROR expected function, found `i32`
+}
