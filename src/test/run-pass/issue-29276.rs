@@ -8,9 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-macro_rules! invalid {
-    _ => (); //~^ ERROR invalid macro matcher
-}
+struct S([u8; { struct Z; 0 }]);
 
-fn main() {
-}
+fn main() {}
