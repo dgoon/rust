@@ -8,6 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![staged_api] //~ ERROR staged_api is for use by rustc only
+macro_rules! m {
+    ( $( any_token $field_rust_type )* ) => {}; //~ ERROR missing fragment
+}
 
-fn main() { }
+fn main() {
+    m!();
+}
