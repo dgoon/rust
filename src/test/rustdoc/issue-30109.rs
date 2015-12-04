@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,9 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
+// build-aux-docs
+// aux-build:issue-30109-1.rs
+// ignore-cross-compile
 
-fn main() {
-    #[attr] //~ ERROR expected item
-    let __isize = 0;
+pub mod quux {
+    extern crate issue_30109_1 as bar;
+    use self::bar::Bar;
+
+    pub trait Foo {}
+
+    // @has issue_30109/quux/trait.Foo.html \
+    //          '//a/@href' '../issue_30109_1/struct.Bar.html'
+    impl Foo for Bar {}
 }
