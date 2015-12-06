@@ -13,8 +13,6 @@
                                       be stable",
             issue = "27709")]
 
-use prelude::v1::*;
-
 use cmp::Ordering;
 use fmt;
 use hash;
@@ -25,7 +23,10 @@ use sys_common::{AsInner, FromInner};
 
 /// An IP address, either an IPv4 or IPv6 address.
 #[unstable(feature = "ip_addr", reason = "recent addition", issue = "27801")]
+#[rustc_deprecated(reason = "too small a type to pull its weight",
+                   since = "1.6.0")]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, PartialOrd, Ord)]
+#[allow(deprecated)]
 pub enum IpAddr {
     /// Representation of an IPv4 address.
     V4(Ipv4Addr),
@@ -180,6 +181,7 @@ impl Ipv4Addr {
 }
 
 #[stable(feature = "rust1", since = "1.0.0")]
+#[allow(deprecated)]
 impl fmt::Display for IpAddr {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -446,17 +448,19 @@ impl fmt::Display for Ipv6Addr {
                 let (zeros_at, zeros_len) = find_zero_slice(&self.segments());
 
                 if zeros_len > 1 {
-                    fn fmt_subslice(segments: &[u16]) -> String {
-                        segments
-                            .iter()
-                            .map(|&seg| format!("{:x}", seg))
-                            .collect::<Vec<String>>()
-                            .join(":")
+                    fn fmt_subslice(segments: &[u16], fmt: &mut fmt::Formatter) -> fmt::Result {
+                        if !segments.is_empty() {
+                            try!(write!(fmt, "{:x}", segments[0]));
+                            for &seg in &segments[1..] {
+                                try!(write!(fmt, ":{:x}", seg));
+                            }
+                        }
+                        Ok(())
                     }
 
-                    write!(fmt, "{}::{}",
-                           fmt_subslice(&self.segments()[..zeros_at]),
-                           fmt_subslice(&self.segments()[zeros_at + zeros_len..]))
+                    try!(fmt_subslice(&self.segments()[..zeros_at], fmt));
+                    try!(fmt.write_str("::"));
+                    fmt_subslice(&self.segments()[zeros_at + zeros_len..], fmt)
                 } else {
                     let &[a, b, c, d, e, f, g, h] = &self.segments();
                     write!(fmt, "{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
