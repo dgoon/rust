@@ -8,17 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(repr_simd)]
-#![allow(dead_code)]
+mod foo {
+    pub fn f() {}
 
-#[repr(simd)]
-#[derive(Copy, Clone)]
-#[repr(C)]
-struct LocalSimd(u8, u8);
-
-extern {
-    fn baz() -> LocalSimd; //~ ERROR use of SIMD type
-    fn qux(x: LocalSimd); //~ ERROR use of SIMD type
+    pub use self::f as bar;
+    use foo as bar;
 }
 
-fn main() {}
+fn main() {
+    foo::bar();
+}
