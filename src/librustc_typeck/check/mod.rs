@@ -455,7 +455,7 @@ fn check_bare_fn<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
             let inh = Inherited::new(ccx.tcx, &tables, param_env);
 
             // Compute the fty from point of view of inside fn.
-            let fn_scope = ccx.tcx.region_maps.item_extent(body.id);
+            let fn_scope = ccx.tcx.region_maps.call_site_extent(fn_id, body.id);
             let fn_sig =
                 fn_ty.sig.subst(ccx.tcx, &inh.infcx.parameter_environment.free_substs);
             let fn_sig =
@@ -4327,7 +4327,6 @@ fn type_scheme_and_predicates_for_def<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
         def::DefTyParam(..) |
         def::DefMod(..) |
         def::DefForeignMod(..) |
-        def::DefUse(..) |
         def::DefLabel(..) |
         def::DefSelfTy(..) |
         def::DefErr => {
@@ -4498,7 +4497,6 @@ pub fn instantiate_path<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
         def::DefMod(..) |
         def::DefForeignMod(..) |
         def::DefLocal(..) |
-        def::DefUse(..) |
         def::DefLabel(..) |
         def::DefUpvar(..) |
         def::DefErr => {
