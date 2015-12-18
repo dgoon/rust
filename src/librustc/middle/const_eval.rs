@@ -357,14 +357,14 @@ pub fn const_expr_to_pat(tcx: &ty::ctxt, expr: &Expr, span: Span) -> P<hir::Pat>
 
         hir::ExprVec(ref exprs) => {
             let pats = exprs.iter().map(|expr| const_expr_to_pat(tcx, &**expr, span)).collect();
-            hir::PatVec(pats, None, vec![])
+            hir::PatVec(pats, None, hir::HirVec::new())
         }
 
         hir::ExprPath(_, ref path) => {
             let opt_def = tcx.def_map.borrow().get(&expr.id).map(|d| d.full_def());
             match opt_def {
                 Some(def::DefStruct(..)) =>
-                    hir::PatStruct(path.clone(), vec![], false),
+                    hir::PatStruct(path.clone(), hir::HirVec::new(), false),
                 Some(def::DefVariant(..)) =>
                     hir::PatEnum(path.clone(), None),
                 _ => {
@@ -1182,46 +1182,40 @@ pub fn eval_const_expr_partial<'tcx>(tcx: &ty::ctxt<'tcx>,
       },
       hir::ExprTupField(ref base, index) => {
         let base_hint = ty_hint.erase_hint();
-        if let Ok(c) = eval_const_expr_partial(tcx, base, base_hint, fn_args) {
-            if let Tuple(tup_id) = c {
-                if let hir::ExprTup(ref fields) = tcx.map.expect_expr(tup_id).node {
-                    if index.node < fields.len() {
-                        return eval_const_expr_partial(tcx, &fields[index.node], base_hint, fn_args)
-                    } else {
-                        signal!(e, TupleIndexOutOfBounds);
-                    }
+        let c = try!(eval_const_expr_partial(tcx, base, base_hint, fn_args));
+        if let Tuple(tup_id) = c {
+            if let hir::ExprTup(ref fields) = tcx.map.expect_expr(tup_id).node {
+                if index.node < fields.len() {
+                    return eval_const_expr_partial(tcx, &fields[index.node], base_hint, fn_args)
                 } else {
-                    unreachable!()
+                    signal!(e, TupleIndexOutOfBounds);
                 }
             } else {
-                signal!(base, ExpectedConstTuple);
+                unreachable!()
             }
         } else {
-            signal!(base, NonConstPath)
+            signal!(base, ExpectedConstTuple);
         }
       }
       hir::ExprField(ref base, field_name) => {
         let base_hint = ty_hint.erase_hint();
         // Get the base expression if it is a struct and it is constant
-        if let Ok(c) = eval_const_expr_partial(tcx, base, base_hint, fn_args) {
-            if let Struct(struct_id) = c {
-                if let hir::ExprStruct(_, ref fields, _) = tcx.map.expect_expr(struct_id).node {
-                    // Check that the given field exists and evaluate it
-                    // if the idents are compared run-pass/issue-19244 fails
-                    if let Some(f) = fields.iter().find(|f| f.name.node
-                                                         == field_name.node) {
-                        return eval_const_expr_partial(tcx, &*f.expr, base_hint, fn_args)
-                    } else {
-                        signal!(e, MissingStructField);
-                    }
+        let c = try!(eval_const_expr_partial(tcx, base, base_hint, fn_args));
+        if let Struct(struct_id) = c {
+            if let hir::ExprStruct(_, ref fields, _) = tcx.map.expect_expr(struct_id).node {
+                // Check that the given field exists and evaluate it
+                // if the idents are compared run-pass/issue-19244 fails
+                if let Some(f) = fields.iter().find(|f| f.name.node
+                                                     == field_name.node) {
+                    return eval_const_expr_partial(tcx, &*f.expr, base_hint, fn_args)
                 } else {
-                    unreachable!()
+                    signal!(e, MissingStructField);
                 }
             } else {
-                signal!(base, ExpectedConstStruct);
+                unreachable!()
             }
         } else {
-            signal!(base, NonConstPath);
+            signal!(base, ExpectedConstStruct);
         }
       }
       _ => signal!(e, MiscCatchAll)

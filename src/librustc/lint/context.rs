@@ -26,7 +26,7 @@
 use self::TargetLint::*;
 
 use middle::privacy::AccessLevels;
-use middle::ty::{self, Ty};
+use middle::ty;
 use session::{early_error, Session};
 use lint::{Level, LevelSource, Lint, LintId, LintArray, LintPass};
 use lint::{EarlyLintPass, EarlyLintPassObject, LateLintPass, LateLintPassObject};
@@ -47,7 +47,7 @@ use rustc_front::hir;
 use rustc_front::util;
 use rustc_front::intravisit as hir_visit;
 use syntax::visit as ast_visit;
-use syntax::diagnostic;
+use syntax::errors;
 
 /// Information about the registered lints.
 ///
@@ -167,7 +167,7 @@ impl LintStore {
                 match (sess, from_plugin) {
                     // We load builtin lints first, so a duplicate is a compiler bug.
                     // Use early_error when handling -W help with no crate.
-                    (None, _) => early_error(diagnostic::Auto, &msg[..]),
+                    (None, _) => early_error(errors::ColorConfig::Auto, &msg[..]),
                     (Some(sess), false) => sess.bug(&msg[..]),
 
                     // A duplicate name from a plugin is a user error.
@@ -191,7 +191,7 @@ impl LintStore {
             match (sess, from_plugin) {
                 // We load builtin lints first, so a duplicate is a compiler bug.
                 // Use early_error when handling -W help with no crate.
-                (None, _) => early_error(diagnostic::Auto, &msg[..]),
+                (None, _) => early_error(errors::ColorConfig::Auto, &msg[..]),
                 (Some(sess), false) => sess.bug(&msg[..]),
 
                 // A duplicate name from a plugin is a user error.

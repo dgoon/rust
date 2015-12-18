@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use ast::{Block, Crate, DeclLocal, ExprMac, PatMac};
+use ast::{Block, Crate, DeclLocal, PatMac};
 use ast::{Local, Ident, Mac_, Name};
 use ast::{ItemMac, MacStmtWithSemicolon, Mrk, Stmt, StmtDecl, StmtMac};
 use ast::{StmtExpr, StmtSemi};
@@ -1301,7 +1301,7 @@ pub fn expand_crate(mut cx: ExtCtxt,
 
         let mut ret = expander.fold_crate(c);
         ret.exported_macros = expander.cx.exported_macros.clone();
-        cx.parse_sess.span_diagnostic.handler().abort_if_errors();
+        cx.parse_sess.span_diagnostic.abort_if_errors();
         ret
     };
     return (ret, cx.syntax_env.names);

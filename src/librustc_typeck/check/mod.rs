@@ -93,7 +93,7 @@ use middle::pat_util::{self, pat_id_map};
 use middle::privacy::{AllPublic, LastMod};
 use middle::subst::{self, Subst, Substs, VecPerParamSpace, ParamSpace, TypeSpace};
 use middle::traits::{self, report_fulfillment_errors};
-use middle::ty::{FnSig, GenericPredicates, TypeScheme};
+use middle::ty::{GenericPredicates, TypeScheme};
 use middle::ty::{Disr, ParamTy, ParameterEnvironment};
 use middle::ty::{LvaluePreference, NoPreference, PreferMutLvalue};
 use middle::ty::{self, HasTypeFlags, RegionEscape, ToPolyTraitRef, Ty};
@@ -119,7 +119,6 @@ use syntax::ast;
 use syntax::attr;
 use syntax::attr::AttrMetaMethods;
 use syntax::codemap::{self, Span, Spanned};
-use syntax::owned_slice::OwnedSlice;
 use syntax::parse::token::{self, InternedString};
 use syntax::ptr::P;
 use syntax::util::lev_distance::lev_distance;
@@ -127,7 +126,6 @@ use syntax::util::lev_distance::lev_distance;
 use rustc_front::intravisit::{self, Visitor};
 use rustc_front::hir;
 use rustc_front::hir::Visibility;
-use rustc_front::hir::{Item, ItemImpl};
 use rustc_front::print::pprust;
 use rustc_back::slice;
 
@@ -4908,7 +4906,7 @@ pub fn may_break(cx: &ty::ctxt, id: ast::NodeId, b: &hir::Block) -> bool {
 }
 
 pub fn check_bounds_are_used<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
-                                       tps: &OwnedSlice<hir::TyParam>,
+                                       tps: &P<[hir::TyParam]>,
                                        ty: Ty<'tcx>) {
     debug!("check_bounds_are_used(n_tps={}, ty={:?})",
            tps.len(),  ty);

@@ -97,7 +97,11 @@ impl<'patcx, 'cx, 'tcx> PatCx<'patcx, 'cx, 'tcx> {
                                     Literal::Value { value: value }
                                 } else {
                                     let substs = self.cx.tcx.mk_substs(Substs::empty());
-                                    Literal::Item { def_id: def_id, substs: substs }
+                                    Literal::Item {
+                                        def_id: def_id,
+                                        kind: ItemKind::Constant,
+                                        substs: substs
+                                    }
                                 };
                                 PatternKind::Constant { value: literal }
                             }
@@ -252,7 +256,7 @@ impl<'patcx, 'cx, 'tcx> PatCx<'patcx, 'cx, 'tcx> {
         }
     }
 
-    fn to_pats(&mut self, pats: &'tcx Vec<P<hir::Pat>>) -> Vec<Pattern<'tcx>> {
+    fn to_pats(&mut self, pats: &'tcx [P<hir::Pat>]) -> Vec<Pattern<'tcx>> {
         pats.iter().map(|p| self.to_pat(p)).collect()
     }
 
@@ -263,9 +267,9 @@ impl<'patcx, 'cx, 'tcx> PatCx<'patcx, 'cx, 'tcx> {
     fn slice_or_array_pattern(&mut self,
                               pat: &'tcx hir::Pat,
                               ty: Ty<'tcx>,
-                              prefix: &'tcx Vec<P<hir::Pat>>,
+                              prefix: &'tcx [P<hir::Pat>],
                               slice: &'tcx Option<P<hir::Pat>>,
-                              suffix: &'tcx Vec<P<hir::Pat>>)
+                              suffix: &'tcx [P<hir::Pat>])
                               -> PatternKind<'tcx> {
         match ty.sty {
             ty::TySlice(..) => {

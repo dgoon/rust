@@ -23,7 +23,7 @@ use core::fmt;
 use core::hash;
 use core::iter::FromIterator;
 use core::mem;
-use core::ops::{self, Deref, Add, Index};
+use core::ops::{self, Add};
 use core::ptr;
 use core::slice;
 use core::str::pattern::Pattern;
@@ -1201,8 +1201,10 @@ impl String {
     }
 
     /// Create a draining iterator that removes the specified range in the string
-    /// and yields the removed chars from start to end. The element range is
-    /// removed even if the iterator is not consumed until the end.
+    /// and yields the removed chars.
+    ///
+    /// Note: The element range is removed even if the iterator is not
+    /// consumed until the end.
     ///
     /// # Panics
     ///
