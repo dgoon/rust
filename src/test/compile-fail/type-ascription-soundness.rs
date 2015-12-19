@@ -8,21 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Test that we properly check for private types in public signatures, even
-// inside a private module (#22261).
+// Type ascription doesn't lead to unsoundness
 
-mod a {
-    struct Priv;
+#![feature(type_ascription)]
 
-    pub fn expose_a() -> Priv { //~Error: private type in exported type signature
-        panic!();
+fn main() {
+    let arr = &[1u8, 2, 3];
+    let ref x = arr: &[u8]; //~ ERROR mismatched types
+    let ref mut x = arr: &[u8]; //~ ERROR mismatched types
+    match arr: &[u8] { //~ ERROR mismatched types
+        ref x => {}
     }
-
-    mod b {
-        pub fn expose_b() -> super::Priv { //~Error: private type in exported type signature
-            panic!();
-        }
-    }
+    let _len = (arr: &[u8]).len(); //~ ERROR mismatched types
 }
-
-pub fn main() {}

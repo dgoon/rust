@@ -1128,6 +1128,10 @@ pub fn lower_expr(lctx: &LoweringContext, e: &Expr) -> P<hir::Expr> {
                 let expr = lower_expr(lctx, expr);
                 hir::ExprCast(expr, lower_ty(lctx, ty))
             }
+            ExprType(ref expr, ref ty) => {
+                let expr = lower_expr(lctx, expr);
+                hir::ExprType(expr, lower_ty(lctx, ty))
+            }
             ExprAddrOf(m, ref ohs) => {
                 let m = lower_mutability(lctx, m);
                 let ohs = lower_expr(lctx, ohs);
@@ -1502,8 +1506,9 @@ pub fn lower_expr(lctx: &LoweringContext, e: &Expr) -> P<hir::Expr> {
                                                 hir::MatchSource::ForLoopDesugar,
                                                 None);
 
-                    // `{ let result = ...; result }`
-                    let result_ident = lctx.str_to_ident("result");
+                    // `{ let _result = ...; _result }`
+                    // underscore prevents an unused_variables lint if the head diverges
+                    let result_ident = lctx.str_to_ident("_result");
                     let let_stmt = stmt_let(lctx, e.span, false, result_ident, match_expr, None);
                     let result = expr_ident(lctx, e.span, result_ident, None);
                     let block = block_all(lctx, e.span, hir_vec![let_stmt], Some(result));

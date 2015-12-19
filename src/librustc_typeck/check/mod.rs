@@ -138,7 +138,6 @@ pub mod coercion;
 pub mod demand;
 pub mod method;
 mod upvar;
-mod wf;
 mod wfcheck;
 mod cast;
 mod closure;
@@ -380,21 +379,6 @@ impl<'a, 'tcx> Visitor<'tcx> for CheckItemBodiesVisitor<'a, 'tcx> {
     fn visit_item(&mut self, i: &'tcx hir::Item) {
         check_item_body(self.ccx, i);
     }
-}
-
-pub fn check_wf_old(ccx: &CrateCtxt) {
-    // If types are not well-formed, it leads to all manner of errors
-    // downstream, so stop reporting errors at this point.
-    ccx.tcx.sess.abort_if_new_errors(|| {
-        // FIXME(#25759). The new code below is much more reliable but (for now)
-        // only generates warnings. So as to ensure that we continue
-        // getting errors where we used to get errors, we run the old wf
-        // code first and abort if it encounters any errors. If no abort
-        // comes, we run the new code and issue warnings.
-        let krate = ccx.tcx.map.krate();
-        let mut visit = wf::CheckTypeWellFormedVisitor::new(ccx);
-        krate.visit_all_items(&mut visit);
-    });
 }
 
 pub fn check_wf_new(ccx: &CrateCtxt) {
@@ -2664,6 +2648,14 @@ fn check_lit<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
     }
 }
 
+fn check_expr_eq_type<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
+                                expr: &'tcx hir::Expr,
+                                expected: Ty<'tcx>) {
+    check_expr_with_unifier(
+        fcx, expr, ExpectHasType(expected), NoPreference,
+        || demand::eqtype(fcx, expr.span, expected, fcx.expr_ty(expr)));
+}
+
 pub fn check_expr_has_type<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                                      expr: &'tcx hir::Expr,
                                      expected: Ty<'tcx>) {
@@ -3525,6 +3517,11 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
             let cast_check = cast::CastCheck::new((**e).clone(), t_expr, t_cast, expr.span);
             deferred_cast_checks.push(cast_check);
         }
+      }
+      hir::ExprType(ref e, ref t) => {
+        let typ = fcx.to_ty(&**t);
+        check_expr_eq_type(fcx, &**e, typ);
+        fcx.write_ty(id, typ);
       }
       hir::ExprVec(ref args) => {
         let uty = expected.to_option(fcx).and_then(|uty| {

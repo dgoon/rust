@@ -2372,10 +2372,6 @@ The currently implemented features of the reference compiler are:
                    Such items should not be allowed by the compiler to exist,
                    so if you need this there probably is a compiler bug.
 
-* `visible_private_types` - Allows public APIs to expose otherwise private
-                            types, e.g. as the return type of a public function.
-                            This capability may be removed in the future.
-
 * `allow_internal_unstable` - Allows `macro_rules!` macros to be tagged with the
                               `#[allow_internal_unstable]` attribute, designed
                               to allow `std` macros to call
@@ -2391,6 +2387,8 @@ The currently implemented features of the reference compiler are:
                              non-item statements.
 
 * - `deprecated` - Allows using the `#[deprecated]` attribute.
+
+* - `type_ascription` - Allows type ascription expressions `expr: Type`.
 
 If a feature is promoted to a language feature, then all existing programs will
 start to receive compilation warnings about `#![feature]` directives which enabled
