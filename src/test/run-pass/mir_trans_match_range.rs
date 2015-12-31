@@ -8,9 +8,23 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
+#![feature(rustc_attrs)]
 
-fn that_odd_parse() {
-    // see assoc-oddities-1 for explanation
-    x + if c { a } else { b }[n]; //~ ERROR expected one of
+#[rustc_mir]
+pub fn foo(x: i8) -> i32 {
+  match x {
+    1...10 => 0,
+    _ => 1,
+  }
+}
+
+fn main() {
+  assert_eq!(foo(0), 1);
+  assert_eq!(foo(1), 0);
+  assert_eq!(foo(2), 0);
+  assert_eq!(foo(5), 0);
+  assert_eq!(foo(9), 0);
+  assert_eq!(foo(10), 0);
+  assert_eq!(foo(11), 1);
+  assert_eq!(foo(20), 1);
 }
