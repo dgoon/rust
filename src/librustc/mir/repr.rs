@@ -11,14 +11,15 @@
 use middle::const_eval::ConstVal;
 use middle::def_id::DefId;
 use middle::subst::Substs;
-use middle::ty::{AdtDef, ClosureSubsts, FnOutput, Region, Ty};
+use middle::ty::{self, AdtDef, ClosureSubsts, FnOutput, Region, Ty};
 use rustc_back::slice;
 use rustc_data_structures::tuple_slice::TupleSlice;
 use rustc_front::hir::InlineAsm;
 use syntax::ast::Name;
 use syntax::codemap::Span;
-use std::fmt::{Debug, Formatter, Error};
-use std::u32;
+use std::borrow::{Cow, IntoCow};
+use std::fmt::{self, Debug, Formatter, Write};
+use std::{iter, u32};
 
 /// Lowered representation of a single function.
 #[derive(RustcEncodable, RustcDecodable)]
@@ -182,8 +183,8 @@ impl BasicBlock {
 }
 
 impl Debug for BasicBlock {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
-        write!(fmt, "BB({})", self.0)
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write!(fmt, "bb{}", self.0)
     }
 }
 
@@ -316,24 +317,47 @@ impl<'tcx> BasicBlockData<'tcx> {
 }
 
 impl<'tcx> Debug for Terminator<'tcx> {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        try!(self.fmt_head(fmt));
+        let successors = self.successors();
+        let labels = self.fmt_successor_labels();
+        assert_eq!(successors.len(), labels.len());
+
+        match successors.len() {
+            0 => Ok(()),
+
+            1 => write!(fmt, " -> {:?}", successors[0]),
+
+            _ => {
+                try!(write!(fmt, " -> ["));
+                for (i, target) in successors.iter().enumerate() {
+                    if i > 0 {
+                        try!(write!(fmt, ", "));
+                    }
+                    try!(write!(fmt, "{}: {:?}", labels[i], target));
+                }
+                write!(fmt, "]")
+            }
+
+        }
+    }
+}
+
+impl<'tcx> Terminator<'tcx> {
+    /// Write the "head" part of the terminator; that is, its name and the data it uses to pick the
+    /// successor basic block, if any. The only information not inlcuded is the list of possible
+    /// successors, which may be rendered differently between the text and the graphviz format.
+    pub fn fmt_head<W: Write>(&self, fmt: &mut W) -> fmt::Result {
         use self::Terminator::*;
         match *self {
-            Goto { target } =>
-                write!(fmt, "goto -> {:?}", target),
-            Panic { target } =>
-                write!(fmt, "panic -> {:?}", target),
-            If { cond: ref lv, ref targets } =>
-                write!(fmt, "if({:?}) -> {:?}", lv, targets),
-            Switch { discr: ref lv, adt_def: _, ref targets } =>
-                write!(fmt, "switch({:?}) -> {:?}", lv, targets),
-            SwitchInt { discr: ref lv, switch_ty: _, ref values, ref targets } =>
-                write!(fmt, "switchInt({:?}, {:?}) -> {:?}", lv, values, targets),
-            Diverge =>
-                write!(fmt, "diverge"),
-            Return =>
-                write!(fmt, "return"),
-            Call { data: ref c, targets } => {
+            Goto { .. } => write!(fmt, "goto"),
+            Panic { .. } => write!(fmt, "panic"),
+            If { cond: ref lv, .. } => write!(fmt, "if({:?})", lv),
+            Switch { discr: ref lv, .. } => write!(fmt, "switch({:?})", lv),
+            SwitchInt { discr: ref lv, .. } => write!(fmt, "switchInt({:?})", lv),
+            Diverge => write!(fmt, "diverge"),
+            Return => write!(fmt, "return"),
+            Call { data: ref c, .. } => {
                 try!(write!(fmt, "{:?} = {:?}(", c.destination, c.func));
                 for (index, arg) in c.args.iter().enumerate() {
                     if index > 0 {
@@ -341,7 +365,34 @@ impl<'tcx> Debug for Terminator<'tcx> {
                     }
                     try!(write!(fmt, "{:?}", arg));
                 }
-                write!(fmt, ") -> {:?}", targets)
+                write!(fmt, ")")
+            }
+        }
+    }
+
+    /// Return the list of labels for the edges to the successor basic blocks.
+    pub fn fmt_successor_labels(&self) -> Vec<Cow<'static, str>> {
+        use self::Terminator::*;
+        match *self {
+            Diverge | Return => vec![],
+            Goto { .. } | Panic { .. } => vec!["".into_cow()],
+            If { .. } => vec!["true".into_cow(), "false".into_cow()],
+            Call { .. } => vec!["return".into_cow(), "unwind".into_cow()],
+            Switch { ref adt_def, .. } => {
+                adt_def.variants
+                       .iter()
+                       .map(|variant| variant.name.to_string().into_cow())
+                       .collect()
+            }
+            SwitchInt { ref values, .. } => {
+                values.iter()
+                      .map(|const_val| {
+                          let mut buf = String::new();
+                          fmt_const_val(&mut buf, const_val).unwrap();
+                          buf.into_cow()
+                      })
+                      .chain(iter::once(String::from("otherwise").into_cow()))
+                      .collect()
             }
         }
     }
@@ -370,7 +421,7 @@ pub enum DropKind {
 }
 
 impl<'tcx> Debug for Statement<'tcx> {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         use self::StatementKind::*;
         match self.kind {
             Assign(ref lv, ref rv) => write!(fmt, "{:?} = {:?}", lv, rv),
@@ -490,34 +541,34 @@ impl<'tcx> Lvalue<'tcx> {
 }
 
 impl<'tcx> Debug for Lvalue<'tcx> {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         use self::Lvalue::*;
 
         match *self {
             Var(id) =>
-                write!(fmt,"Var({:?})", id),
+                write!(fmt,"var{:?}", id),
             Arg(id) =>
-                write!(fmt,"Arg({:?})", id),
+                write!(fmt,"arg{:?}", id),
             Temp(id) =>
-                write!(fmt,"Temp({:?})", id),
-            Static(id) =>
-                write!(fmt,"Static({:?})", id),
+                write!(fmt,"tmp{:?}", id),
+            Static(def_id) =>
+                write!(fmt, "{}", ty::tls::with(|tcx| tcx.item_path_str(def_id))),
             ReturnPointer =>
-                write!(fmt,"ReturnPointer"),
+                write!(fmt, "return"),
             Projection(ref data) =>
                 match data.elem {
-                    ProjectionElem::Downcast(_, variant_index) =>
-                        write!(fmt,"({:?} as {:?})", data.base, variant_index),
+                    ProjectionElem::Downcast(ref adt_def, index) =>
+                        write!(fmt, "({:?} as {})", data.base, adt_def.variants[index].name),
                     ProjectionElem::Deref =>
-                        write!(fmt,"(*{:?})", data.base),
+                        write!(fmt, "(*{:?})", data.base),
                     ProjectionElem::Field(field) =>
-                        write!(fmt,"{:?}.{:?}", data.base, field.index()),
+                        write!(fmt, "{:?}.{:?}", data.base, field.index()),
                     ProjectionElem::Index(ref index) =>
-                        write!(fmt,"{:?}[{:?}]", data.base, index),
+                        write!(fmt, "{:?}[{:?}]", data.base, index),
                     ProjectionElem::ConstantIndex { offset, min_length, from_end: false } =>
-                        write!(fmt,"{:?}[{:?} of {:?}]", data.base, offset, min_length),
+                        write!(fmt, "{:?}[{:?} of {:?}]", data.base, offset, min_length),
                     ProjectionElem::ConstantIndex { offset, min_length, from_end: true } =>
-                        write!(fmt,"{:?}[-{:?} of {:?}]", data.base, offset, min_length),
+                        write!(fmt, "{:?}[-{:?} of {:?}]", data.base, offset, min_length),
                 },
         }
     }
@@ -537,7 +588,7 @@ pub enum Operand<'tcx> {
 }
 
 impl<'tcx> Debug for Operand<'tcx> {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         use self::Operand::*;
         match *self {
             Constant(ref a) => write!(fmt, "{:?}", a),
@@ -664,22 +715,87 @@ pub enum UnOp {
 }
 
 impl<'tcx> Debug for Rvalue<'tcx> {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         use self::Rvalue::*;
 
         match *self {
             Use(ref lvalue) => write!(fmt, "{:?}", lvalue),
             Repeat(ref a, ref b) => write!(fmt, "[{:?}; {:?}]", a, b),
-            Ref(ref a, bk, ref b) => write!(fmt, "&{:?} {:?} {:?}", a, bk, b),
-            Len(ref a) => write!(fmt, "LEN({:?})", a),
-            Cast(ref kind, ref lv, ref ty) => write!(fmt, "{:?} as {:?} ({:?}", lv, ty, kind),
-            BinaryOp(ref op, ref a, ref b) => write!(fmt, "{:?}({:?},{:?})", op, a, b),
+            Len(ref a) => write!(fmt, "Len({:?})", a),
+            Cast(ref kind, ref lv, ref ty) => write!(fmt, "{:?} as {:?} ({:?})", lv, ty, kind),
+            BinaryOp(ref op, ref a, ref b) => write!(fmt, "{:?}({:?}, {:?})", op, a, b),
             UnaryOp(ref op, ref a) => write!(fmt, "{:?}({:?})", op, a),
-            Box(ref t) => write!(fmt, "Box {:?}", t),
-            Aggregate(ref kind, ref lvs) => write!(fmt, "Aggregate<{:?}>({:?})", kind, lvs),
+            Box(ref t) => write!(fmt, "Box({:?})", t),
             InlineAsm(ref asm) => write!(fmt, "InlineAsm({:?})", asm),
             Slice { ref input, from_start, from_end } =>
                 write!(fmt, "{:?}[{:?}..-{:?}]", input, from_start, from_end),
+
+            Ref(_, borrow_kind, ref lv) => {
+                let kind_str = match borrow_kind {
+                    BorrowKind::Shared => "",
+                    BorrowKind::Mut | BorrowKind::Unique => "mut ",
+                };
+                write!(fmt, "&{}{:?}", kind_str, lv)
+            }
+
+            Aggregate(ref kind, ref lvs) => {
+                use self::AggregateKind::*;
+
+                fn fmt_tuple(fmt: &mut Formatter, name: &str, lvs: &[Operand]) -> fmt::Result {
+                    let mut tuple_fmt = fmt.debug_tuple(name);
+                    for lv in lvs {
+                        tuple_fmt.field(lv);
+                    }
+                    tuple_fmt.finish()
+                }
+
+                match *kind {
+                    Vec => write!(fmt, "{:?}", lvs),
+
+                    Tuple => {
+                        if lvs.len() == 1 {
+                            write!(fmt, "({:?},)", lvs[0])
+                        } else {
+                            fmt_tuple(fmt, "", lvs)
+                        }
+                    }
+
+                    Adt(adt_def, variant, _) => {
+                        let variant_def = &adt_def.variants[variant];
+                        let name = ty::tls::with(|tcx| tcx.item_path_str(variant_def.did));
+
+                        match variant_def.kind() {
+                            ty::VariantKind::Unit => write!(fmt, "{}", name),
+                            ty::VariantKind::Tuple => fmt_tuple(fmt, &name, lvs),
+                            ty::VariantKind::Struct => {
+                                let mut struct_fmt = fmt.debug_struct(&name);
+                                for (field, lv) in variant_def.fields.iter().zip(lvs) {
+                                    struct_fmt.field(&field.name.as_str(), lv);
+                                }
+                                struct_fmt.finish()
+                            }
+                        }
+                    }
+
+                    Closure(def_id, _) => ty::tls::with(|tcx| {
+                        if let Some(node_id) = tcx.map.as_local_node_id(def_id) {
+                            let name = format!("[closure@{:?}]", tcx.map.span(node_id));
+                            let mut struct_fmt = fmt.debug_struct(&name);
+
+                            tcx.with_freevars(node_id, |freevars| {
+                                for (freevar, lv) in freevars.iter().zip(lvs) {
+                                    let var_name = tcx.local_var_name_str(freevar.def.var_id());
+                                    struct_fmt.field(&var_name, lv);
+                                }
+                            });
+
+                            struct_fmt.finish()
+                        } else {
+                            write!(fmt, "[closure]")
+                        }
+                    }),
+                }
+            }
         }
     }
 }
@@ -691,7 +807,7 @@ impl<'tcx> Debug for Rvalue<'tcx> {
 // this does not necessarily mean that they are "==" in Rust -- in
 // particular one must be wary of `NaN`!
 
-#[derive(Clone, Debug, PartialEq, RustcEncodable, RustcDecodable)]
+#[derive(Clone, PartialEq, RustcEncodable, RustcDecodable)]
 pub struct Constant<'tcx> {
     pub span: Span,
     pub ty: Ty<'tcx>,
@@ -707,7 +823,7 @@ pub enum ItemKind {
     Method,
 }
 
-#[derive(Clone, Debug, PartialEq, RustcEncodable, RustcDecodable)]
+#[derive(Clone, PartialEq, RustcEncodable, RustcDecodable)]
 pub enum Literal<'tcx> {
     Item {
         def_id: DefId,
@@ -717,4 +833,39 @@ pub enum Literal<'tcx> {
     Value {
         value: ConstVal,
     },
+}
+
+impl<'tcx> Debug for Constant<'tcx> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write!(fmt, "{:?}", self.literal)
+    }
+}
+
+impl<'tcx> Debug for Literal<'tcx> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        use self::Literal::*;
+        match *self {
+            Item { def_id, .. } =>
+                write!(fmt, "{}", ty::tls::with(|tcx| tcx.item_path_str(def_id))),
+            Value { ref value } => fmt_const_val(fmt, value),
+        }
+    }
+}
+
+/// Write a `ConstVal` in a way closer to the original source code than the `Debug` output.
+pub fn fmt_const_val<W: Write>(fmt: &mut W, const_val: &ConstVal) -> fmt::Result {
+    use middle::const_eval::ConstVal::*;
+    match *const_val {
+        Float(f) => write!(fmt, "{:?}", f),
+        Int(n) => write!(fmt, "{:?}", n),
+        Uint(n) => write!(fmt, "{:?}", n),
+        Str(ref s) => write!(fmt, "Str({:?})", s),
+        ByteStr(ref bytes) => write!(fmt, "ByteStr{:?}", bytes),
+        Bool(b) => write!(fmt, "{:?}", b),
+        Struct(id) => write!(fmt, "Struct({:?})", id),
+        Tuple(id) => write!(fmt, "Tuple({:?})", id),
+        Function(def_id) => write!(fmt, "Function({:?})", def_id),
+        Array(id, n) => write!(fmt, "Array({:?}, {:?})", id, n),
+        Repeat(id, n) => write!(fmt, "Repeat({:?}, {:?})", id, n),
+    }
 }
