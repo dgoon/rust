@@ -22,6 +22,7 @@ use rustc::middle::const_eval::{self, ConstVal};
 use rustc::middle::infer::InferCtxt;
 use rustc::middle::ty::{self, Ty};
 use syntax::codemap::Span;
+use syntax::parse::token;
 use rustc_front::hir;
 
 #[derive(Copy, Clone)]
@@ -61,6 +62,10 @@ impl<'a,'tcx:'a> Cx<'a, 'tcx> {
         self.tcx.types.bool
     }
 
+    pub fn str_literal(&mut self, value: token::InternedString) -> Literal<'tcx> {
+        Literal::Value { value: ConstVal::Str(value) }
+    }
+
     pub fn true_literal(&mut self) -> Literal<'tcx> {
         Literal::Value { value: ConstVal::Bool(true) }
     }
@@ -90,17 +95,8 @@ impl<'a,'tcx:'a> Cx<'a, 'tcx> {
             .collect()
     }
 
-    pub fn needs_drop(&mut self, ty: Ty<'tcx>, span: Span) -> bool {
-        if self.infcx.type_moves_by_default(ty, span) {
-            // FIXME(#21859) we should do an add'l check here to determine if
-            // any dtor will execute, but the relevant fn
-            // (`type_needs_drop`) is currently factored into
-            // `librustc_trans`, so we can't easily do so.
-            true
-        } else {
-            // if type implements Copy, cannot require drop
-            false
-        }
+    pub fn needs_drop(&mut self, ty: Ty<'tcx>) -> bool {
+        self.tcx.type_needs_drop_given_env(ty, &self.infcx.parameter_environment)
     }
 
     pub fn span_bug(&mut self, span: Span, message: &str) -> ! {
