@@ -16,6 +16,42 @@
 //!
 //! [`String`]: struct.String.html
 //! [`ToString`]: trait.ToString.html
+//!
+//! # Examples
+//!
+//! There are multiple ways to create a new `String` from a string literal:
+//!
+//! ```rust
+//! let s = "Hello".to_string();
+//!
+//! let s = String::from("world");
+//! let s: String = "also this".into();
+//! ```
+//!
+//! You can create a new `String` from an existing one by concatenating with
+//! `+`:
+//!
+//! ```rust
+//! let s = "Hello".to_string();
+//!
+//! let message = s + " world!";
+//! ```
+//!
+//! If you have a vector of valid UTF-8 bytes, you can make a `String` out of
+//! it. You can do the reverse too.
+//!
+//! ```rust
+//! let sparkle_heart = vec![240, 159, 146, 150];
+//!
+//! // We know these bytes are valid, so we'll use `unwrap()`.
+//! let sparkle_heart = String::from_utf8(sparkle_heart).unwrap();
+//!
+//! assert_eq!("💖", sparkle_heart);
+//!
+//! let bytes = sparkle_heart.into_bytes();
+//!
+//! assert_eq!(bytes, [240, 159, 146, 150]);
+//! ```
 
 #![stable(feature = "rust1", since = "1.0.0")]
 
@@ -62,6 +98,7 @@ use boxed::Box;
 /// hello.push_str("orld!");
 /// ```
 ///
+/// [`char`]: ../primitive.char.html
 /// [`push()`]: #method.push
 /// [`push_str()`]: #method.push_str
 ///
@@ -163,8 +200,8 @@ use boxed::Box;
 /// ```
 ///
 /// [`as_ptr()`]: #method.as_ptr
-/// [`len()`]: # method.len
-/// [`capacity()`]: # method.capacity
+/// [`len()`]: #method.len
+/// [`capacity()`]: #method.capacity
 ///
 /// If a `String` has enough capacity, adding elements to it will not
 /// re-allocate. For example, consider this program:
@@ -444,7 +481,7 @@ impl String {
     /// Converts a slice of bytes to a `String`, including invalid characters.
     ///
     /// A string slice ([`&str`]) is made of bytes ([`u8`]), and a slice of
-    /// bytes ([`&[u8]`]) is made of bytes, so this function converts between
+    /// bytes ([`&[u8]`][byteslice]) is made of bytes, so this function converts between
     /// the two. Not all byte slices are valid string slices, however: [`&str`]
     /// requires that it is valid UTF-8. During this conversion,
     /// `from_utf8_lossy()` will replace any invalid UTF-8 sequences with
@@ -452,7 +489,7 @@ impl String {
     ///
     /// [`&str`]: ../primitive.str.html
     /// [`u8`]: ../primitive.u8.html
-    /// [`&[u8]`]: ../primitive.slice.html
+    /// [byteslice]: ../primitive.slice.html
     ///
     /// If you are sure that the byte slice is valid UTF-8, and you don't want
     /// to incur the overhead of the conversion, there is an unsafe version
@@ -1311,6 +1348,8 @@ impl FromUtf8Error {
     ///
     /// [`Utf8Error`]: ../str/struct.Utf8Error.html
     /// [`std::str`]: ../str/index.html
+    /// [`u8`]: ../primitive.u8.html
+    /// [`&str`]: ../primitive.str.html
     ///
     /// # Examples
     ///
