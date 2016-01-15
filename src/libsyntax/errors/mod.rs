@@ -24,6 +24,7 @@ use std::rc::Rc;
 use term;
 
 pub mod emitter;
+pub mod json;
 
 #[derive(Clone)]
 pub enum RenderSpan {
@@ -160,6 +161,17 @@ impl<'a> DiagnosticBuilder<'a> {
         self.sub(Level::Note, msg, Some(sp), None);
         self
     }
+    pub fn warn(&mut self, msg: &str) -> &mut DiagnosticBuilder<'a>  {
+        self.sub(Level::Warning, msg, None, None);
+        self
+    }
+    pub fn span_warn(&mut self,
+                     sp: Span,
+                     msg: &str)
+                     -> &mut DiagnosticBuilder<'a> {
+        self.sub(Level::Warning, msg, Some(sp), None);
+        self
+    }
     pub fn help(&mut self , msg: &str) -> &mut DiagnosticBuilder<'a>  {
         self.sub(Level::Help, msg, None, None);
         self
@@ -187,6 +199,13 @@ impl<'a> DiagnosticBuilder<'a> {
                          msg: &str)
                          -> &mut DiagnosticBuilder<'a>  {
         self.sub(Level::Note, msg, Some(sp), Some(EndSpan(sp)));
+        self
+    }
+    pub fn fileline_warn(&mut self ,
+                         sp: Span,
+                         msg: &str)
+                         -> &mut DiagnosticBuilder<'a>  {
+        self.sub(Level::Warning, msg, Some(sp), Some(FileLine(sp)));
         self
     }
     pub fn fileline_note(&mut self ,
@@ -275,12 +294,12 @@ pub struct Handler {
 }
 
 impl Handler {
-    pub fn new(color_config: ColorConfig,
-               registry: Option<diagnostics::registry::Registry>,
-               can_emit_warnings: bool,
-               treat_err_as_bug: bool,
-               cm: Rc<codemap::CodeMap>)
-               -> Handler {
+    pub fn with_tty_emitter(color_config: ColorConfig,
+                            registry: Option<diagnostics::registry::Registry>,
+                            can_emit_warnings: bool,
+                            treat_err_as_bug: bool,
+                            cm: Rc<codemap::CodeMap>)
+                            -> Handler {
         let emitter = Box::new(EmitterWriter::stderr(color_config, registry, cm));
         Handler::with_emitter(can_emit_warnings, treat_err_as_bug, emitter)
     }
@@ -547,14 +566,7 @@ impl fmt::Display for Level {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use std::fmt::Display;
 
-        match *self {
-            Bug => "error: internal compiler error".fmt(f),
-            Fatal | Error => "error".fmt(f),
-            Warning => "warning".fmt(f),
-            Note => "note".fmt(f),
-            Help => "help".fmt(f),
-            Cancelled => unreachable!(),
-        }
+        self.to_str().fmt(f)
     }
 }
 
@@ -566,6 +578,17 @@ impl Level {
             Note => term::color::BRIGHT_GREEN,
             Help => term::color::BRIGHT_CYAN,
             Cancelled => unreachable!(),
+        }
+    }
+
+    fn to_str(self) -> &'static str {
+        match self {
+            Bug => "error: internal compiler error",
+            Fatal | Error => "error",
+            Warning => "warning",
+            Note => "note",
+            Help => "help",
+            Cancelled => panic!("Shouldn't call on cancelled error"),
         }
     }
 }
