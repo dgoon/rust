@@ -119,11 +119,9 @@ pub fn type_is_zero_size<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, ty: Ty<'tcx>) -
 }
 
 /// Identifies types which we declare to be equivalent to `void` in C for the purpose of function
-/// return types. These are `()`, bot, and uninhabited enums. Note that all such types are also
-/// zero-size, but not all zero-size types use a `void` return type (in order to aid with C ABI
-/// compatibility).
-pub fn return_type_is_void(ccx: &CrateContext, ty: Ty) -> bool {
-    ty.is_nil() || ty.is_empty(ccx.tcx())
+/// return types. These are `()`, bot, uninhabited enums and all other zero-sized types.
+pub fn return_type_is_void<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, ty: Ty<'tcx>) -> bool {
+    ty.is_nil() || ty.is_empty(ccx.tcx()) || type_is_zero_size(ccx, ty)
 }
 
 /// Generates a unique symbol based off the name given. This is used to create
@@ -161,6 +159,8 @@ pub fn gensym_name(name: &str) -> ast::Name {
 *
 */
 
+use trans::Disr;
+
 #[derive(Copy, Clone)]
 pub struct NodeIdAndSpan {
     pub id: ast::NodeId,
@@ -177,7 +177,7 @@ pub struct Field<'tcx>(pub ast::Name, pub Ty<'tcx>);
 
 /// The concrete version of ty::VariantDef
 pub struct VariantInfo<'tcx> {
-    pub discr: ty::Disr,
+    pub discr: Disr,
     pub fields: Vec<Field<'tcx>>
 }
 
@@ -195,7 +195,7 @@ impl<'tcx> VariantInfo<'tcx> {
                 };
 
                 VariantInfo {
-                    discr: variant.disr_val,
+                    discr: Disr::from(variant.disr_val),
                     fields: variant.fields.iter().map(|f| {
                         Field(f.name, monomorphize::field_ty(tcx, substs, f))
                     }).collect()
@@ -204,7 +204,7 @@ impl<'tcx> VariantInfo<'tcx> {
 
             ty::TyTuple(ref v) => {
                 VariantInfo {
-                    discr: 0,
+                    discr: Disr(0),
                     fields: v.iter().enumerate().map(|(i, &t)| {
                         Field(token::intern(&i.to_string()), t)
                     }).collect()

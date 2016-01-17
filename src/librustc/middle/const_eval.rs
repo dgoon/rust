@@ -26,6 +26,7 @@ use middle::astconv_util::ast_ty_to_prim_ty;
 use util::num::ToPrimitive;
 use util::nodemap::NodeMap;
 
+use graphviz::IntoCow;
 use syntax::{ast, abi};
 use rustc_front::hir::Expr;
 use rustc_front::hir;
@@ -35,28 +36,13 @@ use syntax::parse::token::InternedString;
 use syntax::ptr::P;
 use syntax::codemap;
 
-use std::borrow::{Cow, IntoCow};
-use std::num::wrapping::OverflowingOps;
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::hash_map::Entry::Vacant;
 use std::hash;
 use std::mem::transmute;
 use std::{i8, i16, i32, i64, u8, u16, u32, u64};
 use std::rc::Rc;
-
-fn lookup_const<'a>(tcx: &'a ty::ctxt, e: &Expr) -> Option<&'a Expr> {
-    let opt_def = tcx.def_map.borrow().get(&e.id).map(|d| d.full_def());
-    match opt_def {
-        Some(def::DefConst(def_id)) |
-        Some(def::DefAssociatedConst(def_id)) => {
-            lookup_const_by_id(tcx, def_id, Some(e.id), None)
-        }
-        Some(def::DefVariant(enum_def, variant_def, _)) => {
-            lookup_variant_by_id(tcx, enum_def, variant_def)
-        }
-        _ => None
-    }
-}
 
 fn lookup_variant_by_id<'a>(tcx: &'a ty::ctxt,
                             enum_def: DefId,
@@ -382,12 +368,12 @@ pub fn const_expr_to_pat(tcx: &ty::ctxt, expr: &Expr, span: Span) -> P<hir::Pat>
                     hir::PatStruct(path.clone(), hir::HirVec::new(), false),
                 Some(def::DefVariant(..)) =>
                     hir::PatEnum(path.clone(), None),
-                _ => {
-                    match lookup_const(tcx, expr) {
-                        Some(actual) => return const_expr_to_pat(tcx, actual, span),
-                        _ => unreachable!()
-                    }
-                }
+                Some(def::DefConst(def_id)) |
+                Some(def::DefAssociatedConst(def_id)) => {
+                    let expr = lookup_const_by_id(tcx, def_id, Some(expr.id), None).unwrap();
+                    return const_expr_to_pat(tcx, expr, span);
+                },
+                _ => unreachable!(),
             }
         }
 
@@ -1262,7 +1248,7 @@ fn resolve_trait_associated_const<'a, 'tcx: 'a>(tcx: &'a ty::ctxt<'tcx>,
                                               substs: trait_substs });
 
     tcx.populate_implementations_for_trait_if_necessary(trait_ref.def_id());
-    let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, None, false);
+    let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, None);
 
     let mut selcx = traits::SelectionContext::new(&infcx);
     let obligation = traits::Obligation::new(traits::ObligationCause::dummy(),

@@ -27,6 +27,7 @@ use trans::monomorphize;
 use trans::type_::Type;
 use trans::type_of::*;
 use trans::type_of;
+use trans::Disr;
 use middle::infer;
 use middle::ty::{self, Ty};
 use middle::subst::Substs;
@@ -35,7 +36,8 @@ use std::cmp;
 use std::iter::once;
 use libc::c_uint;
 use syntax::abi::{Cdecl, Aapcs, C, Win64, Abi};
-use syntax::abi::{PlatformIntrinsic, RustIntrinsic, Rust, RustCall, Stdcall, Fastcall, System};
+use syntax::abi::{PlatformIntrinsic, RustIntrinsic, Rust, RustCall, Stdcall};
+use syntax::abi::{Fastcall, Vectorcall, System};
 use syntax::attr;
 use syntax::codemap::Span;
 use syntax::parse::token::{InternedString, special_idents};
@@ -104,6 +106,7 @@ pub fn llvm_calling_convention(ccx: &CrateContext,
 
         Stdcall => llvm::X86StdcallCallConv,
         Fastcall => llvm::X86FastcallCallConv,
+        Vectorcall => llvm::X86_VectorCall,
         C => llvm::CCallConv,
         Win64 => llvm::X86_64_Win64,
 
@@ -332,7 +335,7 @@ pub fn trans_native_call<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
             llarg_rust
         } else {
             if passed_arg_tys[i].is_bool() {
-                let val = LoadRangeAssert(bcx, llarg_rust, 0, 2, llvm::False);
+                let val = LoadRangeAssert(bcx, llarg_rust, Disr(0), Disr(2), llvm::False);
                 Trunc(bcx, val, Type::i1(bcx.ccx()))
             } else {
                 Load(bcx, llarg_rust)

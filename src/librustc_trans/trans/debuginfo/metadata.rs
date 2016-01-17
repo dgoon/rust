@@ -990,8 +990,8 @@ pub fn compile_unit_metadata(cx: &CrateContext) -> DIDescriptor {
                 cx.sess().warn("debuginfo: Invalid path to crate's local root source file!");
                 fallback_path(cx)
             } else {
-                match abs_path.relative_from(work_dir) {
-                    Some(ref p) if p.is_relative() => {
+                match abs_path.strip_prefix(work_dir) {
+                    Ok(ref p) if p.is_relative() => {
                         if p.starts_with(Path::new("./")) {
                             path2cstr(p)
                         } else {
@@ -1341,7 +1341,7 @@ impl<'tcx> EnumMemberDescriptionFactory<'tcx> {
                 // DWARF representation of enums uniform.
 
                 // First create a description of the artificial wrapper struct:
-                let non_null_variant = &adt.variants[non_null_variant_index as usize];
+                let non_null_variant = &adt.variants[non_null_variant_index.0 as usize];
                 let non_null_variant_name = non_null_variant.name.as_str();
 
                 // The llvm type and metadata of the pointer
@@ -1389,7 +1389,7 @@ impl<'tcx> EnumMemberDescriptionFactory<'tcx> {
 
                 // Encode the information about the null variant in the union
                 // member's name.
-                let null_variant_index = (1 - non_null_variant_index) as usize;
+                let null_variant_index = (1 - non_null_variant_index.0) as usize;
                 let null_variant_name = adt.variants[null_variant_index].name;
                 let union_member_name = format!("RUST$ENCODED$ENUM${}${}",
                                                 0,
@@ -1415,7 +1415,7 @@ impl<'tcx> EnumMemberDescriptionFactory<'tcx> {
                     describe_enum_variant(cx,
                                           self.enum_type,
                                           struct_def,
-                                          &adt.variants[nndiscr as usize],
+                                          &adt.variants[nndiscr.0 as usize],
                                           OptimizedDiscriminant,
                                           self.containing_scope,
                                           self.span);
@@ -1430,7 +1430,7 @@ impl<'tcx> EnumMemberDescriptionFactory<'tcx> {
 
                 // Encode the information about the null variant in the union
                 // member's name.
-                let null_variant_index = (1 - nndiscr) as usize;
+                let null_variant_index = (1 - nndiscr.0) as usize;
                 let null_variant_name = adt.variants[null_variant_index].name;
                 let discrfield = discrfield.iter()
                                            .skip(1)
