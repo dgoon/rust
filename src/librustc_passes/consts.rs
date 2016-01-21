@@ -24,20 +24,22 @@
 // - It's not possible to take the address of a static item with unsafe interior. This is enforced
 // by borrowck::gather_loans
 
-use dep_graph::DepNode;
-use middle::ty::cast::{CastKind};
-use middle::const_eval::{self, ConstEvalErr};
-use middle::const_eval::ErrKind::IndexOpFeatureGated;
-use middle::const_eval::EvalHint::ExprTypeChecked;
-use middle::def;
-use middle::def_id::DefId;
-use middle::expr_use_visitor as euv;
-use middle::infer;
-use middle::mem_categorization as mc;
-use middle::mem_categorization::Categorization;
-use middle::traits;
-use middle::ty::{self, Ty};
-use util::nodemap::NodeMap;
+use rustc::dep_graph::DepNode;
+use rustc::middle::ty::cast::{CastKind};
+use rustc::middle::const_eval::{self, ConstEvalErr};
+use rustc::middle::const_eval::ErrKind::IndexOpFeatureGated;
+use rustc::middle::const_eval::EvalHint::ExprTypeChecked;
+use rustc::middle::def::Def;
+use rustc::middle::def_id::DefId;
+use rustc::middle::expr_use_visitor as euv;
+use rustc::middle::infer;
+use rustc::middle::mem_categorization as mc;
+use rustc::middle::mem_categorization::Categorization;
+use rustc::middle::traits;
+use rustc::middle::ty::{self, Ty};
+use rustc::util::nodemap::NodeMap;
+use rustc::middle::const_qualif::ConstQualif;
+use rustc::lint::builtin::CONST_ERR;
 
 use rustc_front::hir;
 use syntax::ast;
@@ -47,41 +49,6 @@ use rustc_front::intravisit::{self, FnKind, Visitor};
 
 use std::collections::hash_map::Entry;
 use std::cmp::Ordering;
-
-// Const qualification, from partial to completely promotable.
-bitflags! {
-    #[derive(RustcEncodable, RustcDecodable)]
-    flags ConstQualif: u8 {
-        // Inner mutability (can not be placed behind a reference) or behind
-        // &mut in a non-global expression. Can be copied from static memory.
-        const MUTABLE_MEM        = 1 << 0,
-        // Constant value with a type that implements Drop. Can be copied
-        // from static memory, similar to MUTABLE_MEM.
-        const NEEDS_DROP         = 1 << 1,
-        // Even if the value can be placed in static memory, copying it from
-        // there is more expensive than in-place instantiation, and/or it may
-        // be too large. This applies to [T; N] and everything containing it.
-        // N.B.: references need to clear this flag to not end up on the stack.
-        const PREFER_IN_PLACE    = 1 << 2,
-        // May use more than 0 bytes of memory, doesn't impact the constness
-        // directly, but is not allowed to be borrowed mutably in a constant.
-        const NON_ZERO_SIZED     = 1 << 3,
-        // Actually borrowed, has to always be in static memory. Does not
-        // propagate, and requires the expression to behave like a 'static
-        // lvalue. The set of expressions with this flag is the minimum
-        // that have to be promoted.
-        const HAS_STATIC_BORROWS = 1 << 4,
-        // Invalid const for miscellaneous reasons (e.g. not implemented).
-        const NOT_CONST          = 1 << 5,
-
-        // Borrowing the expression won't produce &'static T if any of these
-        // bits are set, though the value could be copied from static memory
-        // if `NOT_CONST` isn't set.
-        const NON_STATIC_BORROWS = ConstQualif::MUTABLE_MEM.bits |
-                                   ConstQualif::NEEDS_DROP.bits |
-                                   ConstQualif::NOT_CONST.bits
-    }
-}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Mode {
@@ -463,7 +430,7 @@ impl<'a, 'tcx, 'v> Visitor<'v> for CheckCrateVisitor<'a, 'tcx> {
                                 Ok(_) => {}
                                 Err(ConstEvalErr { kind: IndexOpFeatureGated, ..}) => {},
                                 Err(msg) => {
-                                    self.tcx.sess.add_lint(::lint::builtin::CONST_ERR, ex.id,
+                                    self.tcx.sess.add_lint(CONST_ERR, ex.id,
                                                            msg.span,
                                                            msg.description().into_owned())
                                 }
@@ -610,21 +577,21 @@ fn check_expr<'a, 'tcx>(v: &mut CheckCrateVisitor<'a, 'tcx>,
         hir::ExprPath(..) => {
             let def = v.tcx.def_map.borrow().get(&e.id).map(|d| d.full_def());
             match def {
-                Some(def::DefVariant(_, _, _)) => {
+                Some(Def::Variant(..)) => {
                     // Count the discriminator or function pointer.
                     v.add_qualif(ConstQualif::NON_ZERO_SIZED);
                 }
-                Some(def::DefStruct(_)) => {
+                Some(Def::Struct(..)) => {
                     if let ty::TyBareFn(..) = node_ty.sty {
                         // Count the function pointer.
                         v.add_qualif(ConstQualif::NON_ZERO_SIZED);
                     }
                 }
-                Some(def::DefFn(..)) | Some(def::DefMethod(..)) => {
+                Some(Def::Fn(..)) | Some(Def::Method(..)) => {
                     // Count the function pointer.
                     v.add_qualif(ConstQualif::NON_ZERO_SIZED);
                 }
-                Some(def::DefStatic(..)) => {
+                Some(Def::Static(..)) => {
                     match v.mode {
                         Mode::Static | Mode::StaticMut => {}
                         Mode::Const | Mode::ConstFn => {
@@ -635,8 +602,8 @@ fn check_expr<'a, 'tcx>(v: &mut CheckCrateVisitor<'a, 'tcx>,
                         Mode::Var => v.add_qualif(ConstQualif::NOT_CONST)
                     }
                 }
-                Some(def::DefConst(did)) |
-                Some(def::DefAssociatedConst(did)) => {
+                Some(Def::Const(did)) |
+                Some(Def::AssociatedConst(did)) => {
                     if let Some(expr) = const_eval::lookup_const_by_id(v.tcx, did,
                                                                        Some(e.id),
                                                                        None) {
@@ -644,7 +611,7 @@ fn check_expr<'a, 'tcx>(v: &mut CheckCrateVisitor<'a, 'tcx>,
                         v.add_qualif(inner);
                     }
                 }
-                Some(def::DefLocal(..)) if v.mode == Mode::ConstFn => {
+                Some(Def::Local(..)) if v.mode == Mode::ConstFn => {
                     // Sadly, we can't determine whether the types are zero-sized.
                     v.add_qualif(ConstQualif::NOT_CONST | ConstQualif::NON_ZERO_SIZED);
                 }
@@ -672,16 +639,16 @@ fn check_expr<'a, 'tcx>(v: &mut CheckCrateVisitor<'a, 'tcx>,
             }
             let def = v.tcx.def_map.borrow().get(&callee.id).map(|d| d.full_def());
             let is_const = match def {
-                Some(def::DefStruct(..)) => true,
-                Some(def::DefVariant(..)) => {
+                Some(Def::Struct(..)) => true,
+                Some(Def::Variant(..)) => {
                     // Count the discriminator.
                     v.add_qualif(ConstQualif::NON_ZERO_SIZED);
                     true
                 }
-                Some(def::DefFn(did, _)) => {
+                Some(Def::Fn(did)) => {
                     v.handle_const_fn_call(e, did, node_ty)
                 }
-                Some(def::DefMethod(did)) => {
+                Some(Def::Method(did)) => {
                     match v.tcx.impl_or_trait_item(did).container() {
                         ty::ImplContainer(_) => {
                             v.handle_const_fn_call(e, did, node_ty)

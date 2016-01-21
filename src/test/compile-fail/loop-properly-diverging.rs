@@ -8,15 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// no-prefer-dynamic
-// ignore-windows no jemalloc on windows
-// ignore-bitrig no jemalloc on bitrig
-// ignore-openbsd no jemalloc on openbsd
-
-#![feature(alloc_jemalloc)]
-
-extern crate alloc_jemalloc;
-
-fn main() {
-    println!("{:?}", Box::new(3));
+fn forever2() -> ! { //~ ERROR computation may converge in a function marked as diverging
+  loop { break }
 }
+
+fn main() {}

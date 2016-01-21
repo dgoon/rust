@@ -8,15 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:xcrate_unit_struct.rs
-
-// Make sure that when we have cross-crate unit structs we don't accidentally
-// make values out of cross-crate structs that aren't unit.
-
-extern crate xcrate_unit_struct;
+use std::iter::Iterator;
+use std::vec::Vec;
 
 fn main() {
-    let _ = xcrate_unit_struct::StructWithFields;
-    //~^ ERROR: `xcrate_unit_struct::StructWithFields` is the name of a struct or struct variant
-    let _ = xcrate_unit_struct::Struct;
+    const N: usize = 8;
+
+    for len in 0..N {
+        let mut tester = Vec::with_capacity(len);
+        assert_eq!(tester.len(), 0);
+        assert!(tester.capacity() >= len);
+        for bit in 0..len {
+            tester.push(());
+        }
+        assert_eq!(tester.len(), len);
+        assert_eq!(tester.iter().count(), len);
+        tester.clear();
+    }
 }

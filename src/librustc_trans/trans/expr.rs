@@ -53,8 +53,8 @@ use self::lazy_binop_ty::*;
 
 use back::abi;
 use llvm::{self, ValueRef, TypeKind};
-use middle::check_const;
-use middle::def;
+use middle::const_qualif::ConstQualif;
+use middle::def::Def;
 use middle::lang_items::CoerceUnsizedTraitLangItem;
 use middle::subst::{Substs, VecPerParamSpace};
 use middle::traits;
@@ -128,11 +128,8 @@ pub fn trans_into<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
     }
 
     let qualif = *bcx.tcx().const_qualif_map.borrow().get(&expr.id).unwrap();
-    if !qualif.intersects(
-        check_const::ConstQualif::NOT_CONST |
-        check_const::ConstQualif::NEEDS_DROP
-    ) {
-        if !qualif.intersects(check_const::ConstQualif::PREFER_IN_PLACE) {
+    if !qualif.intersects(ConstQualif::NOT_CONST | ConstQualif::NEEDS_DROP) {
+        if !qualif.intersects(ConstQualif::PREFER_IN_PLACE) {
             if let SaveIn(lldest) = dest {
                 match consts::get_const_expr_as_global(bcx.ccx(), expr, qualif,
                                                        bcx.fcx.param_substs,
@@ -165,7 +162,7 @@ pub fn trans_into<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
             match expr.node {
                 hir::ExprPath(..) => {
                     match bcx.def(expr.id) {
-                        def::DefConst(did) => {
+                        Def::Const(did) => {
                             let empty_substs = bcx.tcx().mk_substs(Substs::trans_empty());
                             let const_expr = consts::get_const_expr(bcx.ccx(), did, expr,
                                                                     empty_substs);
@@ -231,16 +228,13 @@ pub fn trans<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
     let mut bcx = bcx;
     let fcx = bcx.fcx;
     let qualif = *bcx.tcx().const_qualif_map.borrow().get(&expr.id).unwrap();
-    let adjusted_global = !qualif.intersects(check_const::ConstQualif::NON_STATIC_BORROWS);
-    let global = if !qualif.intersects(
-        check_const::ConstQualif::NOT_CONST |
-        check_const::ConstQualif::NEEDS_DROP
-    ) {
+    let adjusted_global = !qualif.intersects(ConstQualif::NON_STATIC_BORROWS);
+    let global = if !qualif.intersects(ConstQualif::NOT_CONST | ConstQualif::NEEDS_DROP) {
         match consts::get_const_expr_as_global(bcx.ccx(), expr, qualif,
                                                             bcx.fcx.param_substs,
                                                             consts::TrueConst::No) {
             Ok(global) => {
-                if qualif.intersects(check_const::ConstQualif::HAS_STATIC_BORROWS) {
+                if qualif.intersects(ConstQualif::HAS_STATIC_BORROWS) {
                     // Is borrowed as 'static, must return lvalue.
 
                     // Cast pointer to global, because constants have different types.
@@ -903,25 +897,25 @@ fn trans_index<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
 
 fn trans_def<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
                          ref_expr: &hir::Expr,
-                         def: def::Def)
+                         def: Def)
                          -> DatumBlock<'blk, 'tcx, Expr> {
     //! Translates a reference to a path.
 
     let _icx = push_ctxt("trans_def_lvalue");
     match def {
-        def::DefFn(..) | def::DefMethod(..) |
-        def::DefStruct(_) | def::DefVariant(..) => {
+        Def::Fn(..) | Def::Method(..) |
+        Def::Struct(..) | Def::Variant(..) => {
             let datum = trans_def_fn_unadjusted(bcx.ccx(), ref_expr, def,
                                                 bcx.fcx.param_substs);
             DatumBlock::new(bcx, datum.to_expr_datum())
         }
-        def::DefStatic(did, _) => {
+        Def::Static(did, _) => {
             let const_ty = expr_ty(bcx, ref_expr);
             let val = get_static_val(bcx.ccx(), did, const_ty);
             let lval = Lvalue::new("expr::trans_def");
             DatumBlock::new(bcx, Datum::new(val, const_ty, LvalueExpr(lval)))
         }
-        def::DefConst(_) => {
+        Def::Const(_) => {
             bcx.sess().span_bug(ref_expr.span,
                 "constant expression should not reach expr::trans_def")
         }
@@ -1272,7 +1266,7 @@ fn trans_rvalue_dps_unadjusted<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
 
 fn trans_def_dps_unadjusted<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
                                         ref_expr: &hir::Expr,
-                                        def: def::Def,
+                                        def: Def,
                                         dest: Dest)
                                         -> Block<'blk, 'tcx> {
     let _icx = push_ctxt("trans_def_dps_unadjusted");
@@ -1283,7 +1277,7 @@ fn trans_def_dps_unadjusted<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
     };
 
     match def {
-        def::DefVariant(tid, vid, _) => {
+        Def::Variant(tid, vid) => {
             let variant = bcx.tcx().lookup_adt_def(tid).variant_with_id(vid);
             if let ty::VariantKind::Tuple = variant.kind() {
                 // N-ary variant.
@@ -1300,7 +1294,7 @@ fn trans_def_dps_unadjusted<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
                 return bcx;
             }
         }
-        def::DefStruct(_) => {
+        Def::Struct(..) => {
             let ty = expr_ty(bcx, ref_expr);
             match ty.sty {
                 ty::TyStruct(def, _) if def.has_dtor() => {
@@ -1321,17 +1315,17 @@ fn trans_def_dps_unadjusted<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
 
 pub fn trans_def_fn_unadjusted<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                                          ref_expr: &hir::Expr,
-                                         def: def::Def,
+                                         def: Def,
                                          param_substs: &'tcx Substs<'tcx>)
                                          -> Datum<'tcx, Rvalue> {
     let _icx = push_ctxt("trans_def_datum_unadjusted");
 
     match def {
-        def::DefFn(did, _) |
-        def::DefStruct(did) | def::DefVariant(_, did, _) => {
+        Def::Fn(did) |
+        Def::Struct(did) | Def::Variant(_, did) => {
             callee::trans_fn_ref(ccx, did, ExprId(ref_expr.id), param_substs)
         }
-        def::DefMethod(method_did) => {
+        Def::Method(method_did) => {
             match ccx.tcx().impl_or_trait_item(method_did).container() {
                 ty::ImplContainer(_) => {
                     callee::trans_fn_ref(ccx, method_did,
@@ -1356,12 +1350,12 @@ pub fn trans_def_fn_unadjusted<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
 
 /// Translates a reference to a local variable or argument. This always results in an lvalue datum.
 pub fn trans_local_var<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
-                                   def: def::Def)
+                                   def: Def)
                                    -> Datum<'tcx, Lvalue> {
     let _icx = push_ctxt("trans_local_var");
 
     match def {
-        def::DefUpvar(_, nid, _, _) => {
+        Def::Upvar(_, nid, _, _) => {
             // Can't move upvars, so this is never a ZeroMemLastUse.
             let local_ty = node_id_type(bcx, nid);
             let lval = Lvalue::new_with_hint("expr::trans_local_var (upvar)",
@@ -1375,7 +1369,7 @@ pub fn trans_local_var<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
                 }
             }
         }
-        def::DefLocal(_, nid) => {
+        Def::Local(_, nid) => {
             let datum = match bcx.fcx.lllocals.borrow().get(&nid) {
                 Some(&v) => v,
                 None => {
@@ -2587,7 +2581,7 @@ fn expr_kind(tcx: &ty::ctxt, expr: &hir::Expr) -> ExprKind {
     match expr.node {
         hir::ExprPath(..) => {
             match tcx.resolve_expr(expr) {
-                def::DefStruct(_) | def::DefVariant(..) => {
+                Def::Struct(..) | Def::Variant(..) => {
                     if let ty::TyBareFn(..) = tcx.node_id_to_type(expr.id).sty {
                         // ctor function
                         ExprKind::RvalueDatum
@@ -2596,24 +2590,18 @@ fn expr_kind(tcx: &ty::ctxt, expr: &hir::Expr) -> ExprKind {
                     }
                 }
 
-                // Special case: A unit like struct's constructor must be called without () at the
-                // end (like `UnitStruct`) which means this is an ExprPath to a DefFn. But in case
-                // of unit structs this is should not be interpreted as function pointer but as
-                // call to the constructor.
-                def::DefFn(_, true) => ExprKind::RvalueDps,
-
                 // Fn pointers are just scalar values.
-                def::DefFn(..) | def::DefMethod(..) => ExprKind::RvalueDatum,
+                Def::Fn(..) | Def::Method(..) => ExprKind::RvalueDatum,
 
                 // Note: there is actually a good case to be made that
                 // DefArg's, particularly those of immediate type, ought to
                 // considered rvalues.
-                def::DefStatic(..) |
-                def::DefUpvar(..) |
-                def::DefLocal(..) => ExprKind::Lvalue,
+                Def::Static(..) |
+                Def::Upvar(..) |
+                Def::Local(..) => ExprKind::Lvalue,
 
-                def::DefConst(..) |
-                def::DefAssociatedConst(..) => ExprKind::RvalueDatum,
+                Def::Const(..) |
+                Def::AssociatedConst(..) => ExprKind::RvalueDatum,
 
                 def => {
                     tcx.sess.span_bug(
