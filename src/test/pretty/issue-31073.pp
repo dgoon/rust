@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(const_fn)]
-
-fn f(x: usize) -> usize {
-    x
-}
+// pp-exact:issue-31073.pp
 
 fn main() {
-    let _ = [0; f(2)]; //~ ERROR: non-constant path in constant expression [E0307]
+    fn f1(x: i32, y: i32) -> i32 { y }
+    let f: fn(_, i32) -> i32 = f1;
+    f(1, 2);
 }

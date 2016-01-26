@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(const_fn)]
-
-fn f(x: usize) -> usize {
-    x
-}
+// Test that the parser is error correcting missing idents. Despite a parsing
+// error (or two), we still run type checking (and don't get extra errors there).
 
 fn main() {
-    let _ = [0; f(2)]; //~ ERROR: non-constant path in constant expression [E0307]
+    let y = 42;
+    let x = y.;  //~ ERROR unexpected token
+    let x = y.();  //~ ERROR unexpected token
+    let x = y.foo; //~ ERROR no field
 }

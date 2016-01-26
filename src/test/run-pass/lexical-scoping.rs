@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Test use of const fn from another crate without a feature gate.
+// Tests that items in subscopes can shadow type parameters and local variables (see issue #23880).
 
-// aux-build:const_fn_lib.rs
-
-extern crate const_fn_lib;
-
-use const_fn_lib::foo;
+#![allow(unused)]
+struct Foo<X> { x: Box<X> }
+impl<Bar> Foo<Bar> {
+    fn foo(&self) {
+        type Bar = i32;
+        let _: Bar = 42;
+    }
+}
 
 fn main() {
-    let x: [usize; foo()] = [];
-    //~^ ERROR unimplemented constant expression: calling non-local const fn [E0250]
+    let f = 1;
+    {
+        fn f() {}
+        f();
+    }
 }
