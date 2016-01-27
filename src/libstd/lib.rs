@@ -231,6 +231,7 @@
 #![feature(float_from_str_radix)]
 #![feature(fnbox)]
 #![feature(heap_api)]
+#![feature(hashmap_hasher)]
 #![feature(int_error_internals)]
 #![feature(into_cow)]
 #![feature(lang_items)]
@@ -273,6 +274,7 @@
 
 #![deny(missing_docs)]
 #![allow(unused_features)] // std may use features in a platform-specific way
+#![cfg_attr(not(stage0), deny(warnings))]
 
 #[cfg(test)] extern crate test;
 #[cfg(test)] #[macro_use] extern crate log;
