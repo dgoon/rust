@@ -73,6 +73,8 @@ pub enum Data {
     FunctionCallData(FunctionCallData),
     /// Data about a method call.
     MethodCallData(MethodCallData),
+    /// Data about a macro use.
+    MacroUseData(MacroUseData),
 }
 
 /// Data for all kinds of functions and methods.
@@ -173,6 +175,22 @@ pub struct MethodCallData {
     pub ref_id: Option<DefId>,
     pub decl_id: Option<DefId>,
 }
+
+/// Data about a macro use.
+#[derive(Debug)]
+pub struct MacroUseData {
+    pub span: Span,
+    pub name: String,
+    // Because macro expansion happens before ref-ids are determined,
+    // we use the callee span to reference the associated macro definition.
+    pub callee_span: Span,
+    pub scope: NodeId,
+    pub imported: bool,
+}
+
+macro_rules! option_try(
+    ($e:expr) => (match $e { Some(e) => e, None => return None })
+);
 
 
 
@@ -463,11 +481,15 @@ impl<'l, 'tcx: 'l> SaveContext<'l, 'tcx> {
     }
 
     pub fn get_expr_data(&self, expr: &ast::Expr) -> Option<Data> {
+        let hir_node = lowering::lower_expr(self.lcx, expr);
+        let ty = self.tcx.expr_ty_adjusted_opt(&hir_node);
+        if ty.is_none() || ty.unwrap().sty == ty::TyError {
+            return None;
+        }
         match expr.node {
             ast::ExprField(ref sub_ex, ident) => {
                 let hir_node = lowering::lower_expr(self.lcx, sub_ex);
-                let ty = &self.tcx.expr_ty_adjusted(&hir_node).sty;
-                match *ty {
+                match self.tcx.expr_ty_adjusted(&hir_node).sty {
                     ty::TyStruct(def, _) => {
                         let f = def.struct_variant().field_named(ident.node.name);
                         let sub_span = self.span_utils.span_for_last_ident(expr.span);
@@ -487,8 +509,7 @@ impl<'l, 'tcx: 'l> SaveContext<'l, 'tcx> {
             }
             ast::ExprStruct(ref path, _, _) => {
                 let hir_node = lowering::lower_expr(self.lcx, expr);
-                let ty = &self.tcx.expr_ty_adjusted(&hir_node).sty;
-                match *ty {
+                match self.tcx.expr_ty_adjusted(&hir_node).sty {
                     ty::TyStruct(def, _) => {
                         let sub_span = self.span_utils.span_for_last_ident(path.span);
                         filter!(self.span_utils, sub_span, path.span, None);
@@ -649,6 +670,51 @@ impl<'l, 'tcx: 'l> SaveContext<'l, 'tcx> {
             span: sub_span.unwrap(),
             scope: parent,
             ref_id: f.did,
+        })
+    }
+
+    /// Attempt to return MacroUseData for any AST node.
+    ///
+    /// For a given piece of AST defined by the supplied Span and NodeId,
+    /// returns None if the node is not macro-generated or the span is malformed,
+    /// else uses the expansion callsite and callee to return some MacroUseData.
+    pub fn get_macro_use_data(&self, span: Span, id: NodeId) -> Option<MacroUseData> {
+        if !generated_code(span) {
+            return None;
+        }
+        // Note we take care to use the source callsite/callee, to handle
+        // nested expansions and ensure we only generate data for source-visible
+        // macro uses.
+        let callsite = self.tcx.sess.codemap().source_callsite(span);
+        let callee = self.tcx.sess.codemap().source_callee(span);
+        let callee = option_try!(callee);
+        let callee_span = option_try!(callee.span);
+
+        // Ignore attribute macros, their spans are usually mangled
+        if let MacroAttribute(_) = callee.format {
+            return None;
+        }
+
+        // If the callee is an imported macro from an external crate, need to get
+        // the source span and name from the session, as their spans are localized
+        // when read in, and no longer correspond to the source.
+        if let Some(mac) = self.tcx.sess.imported_macro_spans.borrow().get(&callee_span) {
+            let &(ref mac_name, mac_span) = mac;
+            return Some(MacroUseData {
+                                        span: callsite,
+                                        name: mac_name.clone(),
+                                        callee_span: mac_span,
+                                        scope: self.enclosing_scope(id),
+                                        imported: true,
+                                    });
+        }
+
+        Some(MacroUseData {
+            span: callsite,
+            name: callee.name().to_string(),
+            callee_span: callee_span,
+            scope: self.enclosing_scope(id),
+            imported: false,
         })
     }
 

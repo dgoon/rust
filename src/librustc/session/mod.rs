@@ -30,7 +30,7 @@ use rustc_back::target::Target;
 
 use std::path::{Path, PathBuf};
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::rc::Rc;
 
@@ -76,6 +76,11 @@ pub struct Session {
     /// Names of all bang-style macros and syntax extensions
     /// available in this crate
     pub available_macros: RefCell<HashSet<Name>>,
+
+    /// Map from imported macro spans (which consist of
+    /// the localized span for the macro body) to the
+    /// macro name and defintion span in the source crate.
+    pub imported_macro_spans: RefCell<HashMap<Span, (String, Span)>>,
 
     next_node_id: Cell<ast::NodeId>,
 }
@@ -179,24 +184,13 @@ impl Session {
     pub fn track_errors<F, T>(&self, f: F) -> Result<T, usize>
         where F: FnOnce() -> T
     {
-        let count = self.err_count();
+        let old_count = self.err_count();
         let result = f();
-        let count = self.err_count() - count;
-        if count == 0 {
+        let errors = self.err_count() - old_count;
+        if errors == 0 {
             Ok(result)
         } else {
-            Err(count)
-        }
-    }
-    pub fn abort_if_new_errors<F, T>(&self, f: F) -> T
-        where F: FnOnce() -> T
-    {
-        match self.track_errors(f) {
-            Ok(result) => result,
-            Err(_) => {
-                self.abort_if_errors();
-                unreachable!();
-            }
+            Err(errors)
         }
     }
     pub fn span_warn<S: Into<MultiSpan>>(&self, sp: S, msg: &str) {
@@ -490,6 +484,7 @@ pub fn build_session_(sopts: config::Options,
         next_node_id: Cell::new(1),
         injected_allocator: Cell::new(None),
         available_macros: RefCell::new(HashSet::new()),
+        imported_macro_spans: RefCell::new(HashMap::new()),
     };
 
     sess
@@ -514,4 +509,16 @@ pub fn early_warn(output: config::ErrorOutputType, msg: &str) {
         config::ErrorOutputType::Json => Box::new(JsonEmitter::basic()),
     };
     emitter.emit(None, msg, None, errors::Level::Warning);
+}
+
+// Err(0) means compilation was stopped, but no errors were found.
+// This would be better as a dedicated enum, but using try! is so convenient.
+pub type CompileResult = Result<(), usize>;
+
+pub fn compile_result_from_err_count(err_count: usize) -> CompileResult {
+    if err_count == 0 {
+        Ok(())
+    } else {
+        Err(err_count)
+    }
 }
