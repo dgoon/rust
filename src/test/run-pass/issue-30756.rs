@@ -8,8 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[derive(FromPrimitive)] //~ERROR `#[derive]` for custom traits is not stable
-enum Foo {}
+#![deny(unsafe_code)]
 
-fn main() {}
+thread_local!(static FOO: u8 = 1);
 
+fn main() {
+}
