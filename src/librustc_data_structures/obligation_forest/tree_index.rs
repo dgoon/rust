@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,16 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-mod _common;
+use std::u32;
 
-use std::mem::transmute;
-use _common::validate;
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct TreeIndex {
+    index: u32
+}
 
-fn main() {
-    for bits in 0u32..(1 << 21) {
-        let single: f32 = unsafe { transmute(bits) };
-        validate(&format!("{:e}", single));
-        let double: f64 = unsafe { transmute(bits as u64) };
-        validate(&format!("{:e}", double));
+impl TreeIndex {
+    pub fn new(value: usize) -> TreeIndex {
+        assert!(value < (u32::MAX as usize));
+        TreeIndex { index: value as u32 }
+    }
+
+    pub fn get(self) -> usize {
+        self.index as usize
     }
 }
+
