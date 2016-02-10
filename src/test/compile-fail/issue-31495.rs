@@ -8,6 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod simplify_cfg;
-pub mod erase_regions;
-mod util;
+// compile-flags: --cfg foo(bar)
+// error-pattern: invalid predicate in --cfg command line argument: `foo`
+fn main() {}

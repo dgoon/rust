@@ -8,6 +8,5 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod simplify_cfg;
-pub mod erase_regions;
-mod util;
+#[cfg(foo(bar))] //~ ERROR invalid predicate `foo`
+fn main() {}
