@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,17 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-mod foo {
-    pub use self::bar::X;
-    use self::bar::X;
-    //~^ ERROR a value named `X` has already been imported in this module
-    //~| ERROR a type named `X` has already been imported in this module
+struct A<'a> {
+    a: &'a i32,
+    b: &'a i32,
+}
 
-    mod bar {
-        pub struct X;
+impl <'a> A<'a> {
+    fn foo<'b>(&'b self) {
+        A {
+            a: self.a,
+            b: self.b,
+        };
     }
 }
 
-fn main() {
-    let _ = foo::X;
-}
+fn main() { }
