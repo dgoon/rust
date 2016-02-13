@@ -203,7 +203,7 @@ pub fn run_compiler<'a>(args: &[String],
     let plugins = sess.opts.debugging_opts.extra_plugins.clone();
     let control = callbacks.build_controller(&sess);
     (driver::compile_input(&sess, &cstore, cfg, &input, &odir, &ofile,
-                           Some(plugins), control),
+                           Some(plugins), &control),
      Some(sess))
 }
 
@@ -532,6 +532,11 @@ impl RustcDefaultCalls {
         let attrs = input.map(|input| parse_crate_attrs(sess, input));
         for req in &sess.opts.prints {
             match *req {
+                PrintRequest::TargetList => {
+                    let mut targets = rustc_back::target::TARGETS.to_vec();
+                    targets.sort();
+                    println!("{}", targets.join("\n"));
+                },
                 PrintRequest::Sysroot => println!("{}", sess.sysroot().display()),
                 PrintRequest::FileNames |
                 PrintRequest::CrateName => {
@@ -1018,7 +1023,7 @@ pub fn diagnostics_registry() -> diagnostics::registry::Registry {
     all_errors.extend_from_slice(&rustc_privacy::DIAGNOSTICS);
     all_errors.extend_from_slice(&rustc_trans::DIAGNOSTICS);
 
-    Registry::new(&*all_errors)
+    Registry::new(&all_errors)
 }
 
 pub fn main() {

@@ -66,7 +66,7 @@ pub fn compile_input(sess: &Session,
                      outdir: &Option<PathBuf>,
                      output: &Option<PathBuf>,
                      addl_plugins: Option<Vec<String>>,
-                     control: CompileController) -> CompileResult {
+                     control: &CompileController) -> CompileResult {
     macro_rules! controller_entry_point {
         ($point: ident, $tsess: expr, $make_state: expr, $phase_result: expr) => {{
             let state = $make_state;
@@ -567,7 +567,7 @@ pub fn phase_2_configure_and_expand(sess: &Session,
 
     // Lint plugins are registered; now we can process command line flags.
     if sess.opts.describe_lints {
-        super::describe_lints(&*sess.lint_store.borrow(), true);
+        super::describe_lints(&sess.lint_store.borrow(), true);
         return Err(0);
     }
     try!(sess.track_errors(|| sess.lint_store.borrow_mut().process_command_line(sess)));

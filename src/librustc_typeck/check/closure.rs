@@ -83,7 +83,7 @@ fn check_closure<'a,'tcx>(fcx: &FnCtxt<'a,'tcx>,
              &fn_sig,
              decl,
              expr.id,
-             &*body,
+             &body,
              fcx.inh);
 
     // Tuple up the arguments and insert the resulting function type into
@@ -134,7 +134,7 @@ fn deduce_expectations_from_obligations<'a,'tcx>(
     expected_vid: ty::TyVid)
     -> (Option<ty::FnSig<'tcx>>, Option<ty::ClosureKind>)
 {
-    let fulfillment_cx = fcx.inh.infcx.fulfillment_cx.borrow();
+    let fulfillment_cx = fcx.inh.fulfillment_cx.borrow();
     // Here `expected_ty` is known to be a type inference variable.
 
     let expected_sig =

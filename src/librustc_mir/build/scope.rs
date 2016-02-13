@@ -488,7 +488,7 @@ impl<'a,'tcx> Builder<'a,'tcx> {
         let funcdid = match self.hir.tcx().lang_items.require(lang_item) {
             Ok(d) => d,
             Err(m) => {
-                self.hir.tcx().sess.fatal(&*m)
+                self.hir.tcx().sess.fatal(&m)
             }
         };
         Constant {
@@ -622,8 +622,8 @@ fn build_free<'tcx>(tcx: &ty::ctxt<'tcx>,
                     unit_temp: Lvalue<'tcx>,
                     data: &FreeData<'tcx>,
                     target: BasicBlock) -> Terminator<'tcx> {
-    let free_func = tcx.lang_items.box_free_fn()
-                       .expect("box_free language item is missing");
+    let free_func = tcx.lang_items.require(lang_items::BoxFreeFnLangItem)
+                       .unwrap_or_else(|e| tcx.sess.fatal(&e));
     let substs = tcx.mk_substs(Substs::new(
         VecPerParamSpace::new(vec![], vec![], vec![data.item_ty]),
         VecPerParamSpace::new(vec![], vec![], vec![])
