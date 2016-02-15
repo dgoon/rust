@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,13 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-enum Foo {
-    X
+#![crate_type = "rlib"]
+
+extern crate lib1;
+
+#[link(name = "bar", kind = "static")]
+extern {
+    fn foo() -> i32;
 }
 
-mod Foo { //~ ERROR duplicate definition of type or module `Foo`
-    pub static X: isize = 42;
-    fn f() { f() } // Check that this does not result in a resolution error
+pub fn foo2() -> i32 {
+    unsafe { foo() }
 }
 
-fn main() {}
