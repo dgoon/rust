@@ -1,4 +1,4 @@
-// Copyright 2013-2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:privacy_reexport.rs
+// ignore-windows
+// compile-flags: --no-defaults
 
-// pretty-expanded FIXME #23616
-
-extern crate privacy_reexport;
-
-pub fn main() {
-    // Check that public extern crates are visible to outside crates
-    privacy_reexport::core::cell::Cell::new(0);
-
-    privacy_reexport::bar::frob();
-}
+// @has src/issue_26995/dev/null.html
+// @has issue_26995/null/index.html '//a/@href' '../../src/issue_26995/dev/null.html'
+#[path="/dev/null"]
+pub mod null;

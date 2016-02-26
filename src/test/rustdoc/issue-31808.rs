@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,9 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(rustc_attrs)]
+#![feature(associated_consts, associated_types)]
 
-pub extern crate core; //~WARN `pub extern crate` does not work
+// Test that associated item impls on primitive types don't crash rustdoc
 
-#[rustc_error]
-fn main() {} //~ ERROR: compilation successful
+pub trait Foo {
+    const BAR: usize;
+    type BAZ;
+}
+
+impl Foo for () {
+    const BAR: usize = 0;
+    type BAZ = usize;
+}

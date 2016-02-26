@@ -731,8 +731,8 @@ enum RibKind<'a> {
     // We're in a constant item. Can't refer to dynamic stuff.
     ConstantItemRibKind,
 
-    // We passed through an anonymous module.
-    AnonymousModuleRibKind(Module<'a>),
+    // We passed through a module.
+    ModuleRibKind(Module<'a>),
 }
 
 #[derive(Copy, Clone)]
@@ -806,7 +806,10 @@ pub struct ModuleS<'a> {
     parent_link: ParentLink<'a>,
     def: Option<Def>,
     is_public: bool,
-    is_extern_crate: bool,
+
+    // If the module is an extern crate, `def` is root of the external crate and `extern_crate_did`
+    // is the DefId of the local `extern crate` item (otherwise, `extern_crate_did` is None).
+    extern_crate_did: Option<DefId>,
 
     resolutions: RefCell<HashMap<(Name, Namespace), NameResolution<'a>>>,
     unresolved_imports: RefCell<Vec<ImportDirective>>,
@@ -853,7 +856,7 @@ impl<'a> ModuleS<'a> {
             parent_link: parent_link,
             def: def,
             is_public: is_public,
-            is_extern_crate: false,
+            extern_crate_did: None,
             resolutions: RefCell::new(HashMap::new()),
             unresolved_imports: RefCell::new(Vec::new()),
             module_children: RefCell::new(NodeMap()),
@@ -915,6 +918,16 @@ impl<'a> ModuleS<'a> {
 
     fn def_id(&self) -> Option<DefId> {
         self.def.as_ref().map(Def::def_id)
+    }
+
+    // This returns the DefId of the crate local item that controls this module's visibility.
+    // It is only used to compute `LastPrivate` data, and it differs from `def_id` only for extern
+    // crates, whose `def_id` is the external crate's root, not the local `extern crate` item.
+    fn local_def_id(&self) -> Option<DefId> {
+        match self.extern_crate_did {
+            Some(def_id) => Some(def_id),
+            None => self.def_id(),
+        }
     }
 
     fn is_normal(&self) -> bool {
@@ -1027,6 +1040,14 @@ impl<'a> NameBinding<'a> {
         }
     }
 
+    fn local_def_id(&self) -> Option<DefId> {
+        match self.kind {
+            NameBindingKind::Def(def) => Some(def.def_id()),
+            NameBindingKind::Module(ref module) => module.local_def_id(),
+            NameBindingKind::Import { binding, .. } => binding.local_def_id(),
+        }
+    }
+
     fn defined_with(&self, modifiers: DefModifiers) -> bool {
         self.modifiers.contains(modifiers)
     }
@@ -1038,11 +1059,12 @@ impl<'a> NameBinding<'a> {
     fn def_and_lp(&self) -> (Def, LastPrivate) {
         let def = self.def().unwrap();
         if let Def::Err = def { return (def, LastMod(AllPublic)) }
-        (def, LastMod(if self.is_public() { AllPublic } else { DependsOn(def.def_id()) }))
+        let lp = if self.is_public() { AllPublic } else { DependsOn(self.local_def_id().unwrap()) };
+        (def, LastMod(lp))
     }
 
     fn is_extern_crate(&self) -> bool {
-        self.module().map(|module| module.is_extern_crate).unwrap_or(false)
+        self.module().and_then(|module| module.extern_crate_did).is_some()
     }
 
     fn is_import(&self) -> bool {
@@ -1236,9 +1258,14 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
         self.arenas.name_bindings.alloc(name_binding)
     }
 
-    fn new_extern_crate_module(&self, parent_link: ParentLink<'a>, def: Def) -> Module<'a> {
-        let mut module = ModuleS::new(parent_link, Some(def), false, true);
-        module.is_extern_crate = true;
+    fn new_extern_crate_module(&self,
+                               parent_link: ParentLink<'a>,
+                               def: Def,
+                               is_public: bool,
+                               local_def: DefId)
+                               -> Module<'a> {
+        let mut module = ModuleS::new(parent_link, Some(def), false, is_public);
+        module.extern_crate_did = Some(local_def);
         self.arenas.modules.alloc(module)
     }
 
@@ -1357,7 +1384,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                         // Keep track of the closest private module used
                         // when resolving this import chain.
                         if !binding.is_public() {
-                            if let Some(did) = search_module.def_id() {
+                            if let Some(did) = search_module.local_def_id() {
                                 closest_private = LastMod(DependsOn(did));
                             }
                         }
@@ -1462,7 +1489,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
             Success(PrefixFound(ref containing_module, index)) => {
                 search_module = containing_module;
                 start_index = index;
-                last_private = LastMod(DependsOn(containing_module.def_id()
+                last_private = LastMod(DependsOn(containing_module.local_def_id()
                                                                   .unwrap()));
             }
         }
@@ -1653,16 +1680,20 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
     fn with_scope<F>(&mut self, id: NodeId, f: F)
         where F: FnOnce(&mut Resolver)
     {
-        let orig_module = self.current_module;
+        if let Some(module) = self.current_module.module_children.borrow().get(&id) {
+            // Move down in the graph.
+            let orig_module = ::std::mem::replace(&mut self.current_module, module);
+            self.value_ribs.push(Rib::new(ModuleRibKind(module)));
+            self.type_ribs.push(Rib::new(ModuleRibKind(module)));
 
-        // Move down in the graph.
-        if let Some(module) = orig_module.module_children.borrow().get(&id) {
-            self.current_module = module;
+            f(self);
+
+            self.current_module = orig_module;
+            self.value_ribs.pop();
+            self.type_ribs.pop();
+        } else {
+            f(self);
         }
-
-        f(self);
-
-        self.current_module = orig_module;
     }
 
     /// Searches the current set of local scopes for labels.
@@ -2239,8 +2270,8 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
 
         if let Some(anonymous_module) = anonymous_module {
             debug!("(resolving block) found anonymous module, moving down");
-            self.value_ribs.push(Rib::new(AnonymousModuleRibKind(anonymous_module)));
-            self.type_ribs.push(Rib::new(AnonymousModuleRibKind(anonymous_module)));
+            self.value_ribs.push(Rib::new(ModuleRibKind(anonymous_module)));
+            self.type_ribs.push(Rib::new(ModuleRibKind(anonymous_module)));
             self.current_module = anonymous_module;
         } else {
             self.value_ribs.push(Rib::new(NormalRibKind));
@@ -2784,8 +2815,9 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
         }
 
         if check_ribs {
-            if let Some(def) = self.resolve_identifier_in_local_ribs(identifier, namespace) {
-                return Some(def);
+            match self.resolve_identifier_in_local_ribs(identifier, namespace, record_used) {
+                Some(def) => return Some(def),
+                None => {}
             }
         }
 
@@ -2817,7 +2849,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
             Def::Local(_, node_id) => {
                 for rib in ribs {
                     match rib.kind {
-                        NormalRibKind | AnonymousModuleRibKind(..) => {
+                        NormalRibKind | ModuleRibKind(..) => {
                             // Nothing to do. Continue.
                         }
                         ClosureRibKind(function_id) => {
@@ -2866,7 +2898,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                 for rib in ribs {
                     match rib.kind {
                         NormalRibKind | MethodRibKind | ClosureRibKind(..) |
-                        AnonymousModuleRibKind(..) => {
+                        ModuleRibKind(..) => {
                             // Nothing to do. Continue.
                         }
                         ItemRibKind => {
@@ -2997,7 +3029,8 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
 
     fn resolve_identifier_in_local_ribs(&mut self,
                                         ident: hir::Ident,
-                                        namespace: Namespace)
+                                        namespace: Namespace,
+                                        record_used: bool)
                                         -> Option<LocalDef> {
         // Check the local set of ribs.
         let name = match namespace { ValueNS => ident.name, TypeNS => ident.unhygienic_name };
@@ -3024,16 +3057,18 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                 }
             }
 
-            if let AnonymousModuleRibKind(module) = self.get_ribs(namespace)[i].kind {
+            if let ModuleRibKind(module) = self.get_ribs(namespace)[i].kind {
                 if let Success(binding) = self.resolve_name_in_module(module,
                                                                       ident.unhygienic_name,
                                                                       namespace,
                                                                       true,
-                                                                      true) {
+                                                                      record_used) {
                     if let Some(def) = binding.def() {
                         return Some(LocalDef::from_def(def));
                     }
                 }
+                // We can only see through anonymous modules
+                if module.def.is_some() { return None; }
             }
         }
 
@@ -3571,7 +3606,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
 
                     if !in_module_is_extern || name_binding.is_public() {
                         // add the module to the lookup
-                        let is_extern = in_module_is_extern || module.is_extern_crate;
+                        let is_extern = in_module_is_extern || name_binding.is_extern_crate();
                         worklist.push((module, path_segments, is_extern));
                     }
                 }

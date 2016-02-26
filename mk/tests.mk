@@ -135,7 +135,7 @@ $(info check: android device test dir $(CFG_ADB_TEST_DIR) ready \
  $(foreach target,$(CFG_TARGET), \
   $(if $(findstring android, $(target)), \
    $(shell $(CFG_ADB) shell mkdir $(CFG_ADB_TEST_DIR)/$(target)) \
-   $(foreach crate,$(TARGET_CRATES), \
+   $(foreach crate,$(TARGET_CRATES_$(target)), \
     $(shell $(CFG_ADB) push $(TLIB2_T_$(target)_H_$(CFG_BUILD))/$(call CFG_LIB_GLOB_$(target),$(crate)) \
                     $(CFG_ADB_TEST_DIR)/$(target))), \
  )))
@@ -364,7 +364,7 @@ define TEST_RUNNER
 # parent crates.
 ifeq ($(NO_REBUILD),)
 TESTDEP_$(1)_$(2)_$(3)_$(4) = $$(SREQ$(1)_T_$(2)_H_$(3)) \
-			    $$(foreach crate,$$(TARGET_CRATES), \
+			    $$(foreach crate,$$(TARGET_CRATES_$(2)), \
 				$$(TLIB$(1)_T_$(2)_H_$(3))/stamp.$$(crate)) \
 				$$(CRATE_FULLDEPS_$(1)_T_$(2)_H_$(3)_$(4))
 
@@ -458,21 +458,22 @@ $(foreach host,$(CFG_HOST), \
 # Rules for the compiletest tests (rpass, rfail, etc.)
 ######################################################################
 
-RPASS_RS := $(wildcard $(S)src/test/run-pass/*.rs)
-RPASS_VALGRIND_RS := $(wildcard $(S)src/test/run-pass-valgrind/*.rs)
-RPASS_FULL_RS := $(wildcard $(S)src/test/run-pass-fulldeps/*.rs)
-RFAIL_FULL_RS := $(wildcard $(S)src/test/run-fail-fulldeps/*.rs)
-CFAIL_FULL_RS := $(wildcard $(S)src/test/compile-fail-fulldeps/*.rs)
-RFAIL_RS := $(wildcard $(S)src/test/run-fail/*.rs)
-CFAIL_RS := $(wildcard $(S)src/test/compile-fail/*.rs)
-PFAIL_RS := $(wildcard $(S)src/test/parse-fail/*.rs)
-PRETTY_RS := $(wildcard $(S)src/test/pretty/*.rs)
-DEBUGINFO_GDB_RS := $(wildcard $(S)src/test/debuginfo/*.rs)
-DEBUGINFO_LLDB_RS := $(wildcard $(S)src/test/debuginfo/*.rs)
-CODEGEN_RS := $(wildcard $(S)src/test/codegen/*.rs)
-CODEGEN_CC := $(wildcard $(S)src/test/codegen/*.cc)
-CODEGEN_UNITS_RS := $(wildcard $(S)src/test/codegen-units/*.rs)
-RUSTDOCCK_RS := $(wildcard $(S)src/test/rustdoc/*.rs)
+RPASS_RS := $(call rwildcard,$(S)src/test/run-pass/,*.rs)
+RPASS_VALGRIND_RS := $(call rwildcard,$(S)src/test/run-pass-valgrind/,*.rs)
+RPASS_FULL_RS := $(call rwildcard,$(S)src/test/run-pass-fulldeps/,*.rs)
+RFAIL_FULL_RS := $(call rwildcard,$(S)src/test/run-fail-fulldeps/,*.rs)
+CFAIL_FULL_RS := $(call rwildcard,$(S)src/test/compile-fail-fulldeps/,*.rs)
+RFAIL_RS := $(call rwildcard,$(S)src/test/run-fail/,*.rs)
+RFAIL_RS := $(call rwildcard,$(S)src/test/run-fail/,*.rs)
+CFAIL_RS := $(call rwildcard,$(S)src/test/compile-fail/,*.rs)
+PFAIL_RS := $(call rwildcard,$(S)src/test/parse-fail/,*.rs)
+PRETTY_RS := $(call rwildcard,$(S)src/test/pretty/,*.rs)
+DEBUGINFO_GDB_RS := $(call rwildcard,$(S)src/test/debuginfo/,*.rs)
+DEBUGINFO_LLDB_RS := $(call rwildcard,$(S)src/test/debuginfo/,*.rs)
+CODEGEN_RS := $(call rwildcard,$(S)src/test/codegen/,*.rs)
+CODEGEN_CC := $(call rwildcard,$(S)src/test/codegen/,*.cc)
+CODEGEN_UNITS_RS := $(call rwildcard,$(S)src/test/codegen-units/,*.rs)
+RUSTDOCCK_RS := $(call rwildcard,$(S)src/test/rustdoc/,*.rs)
 
 RPASS_TESTS := $(RPASS_RS)
 RPASS_VALGRIND_TESTS := $(RPASS_VALGRIND_RS)

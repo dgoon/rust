@@ -1,4 +1,4 @@
-// Copyright 2013-2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:privacy_reexport.rs
+#![feature(thread_local)]
+#![feature(cfg_target_thread_local)]
+#![crate_type = "lib"]
 
-// pretty-expanded FIXME #23616
-
-extern crate privacy_reexport;
-
-pub fn main() {
-    // Check that public extern crates are visible to outside crates
-    privacy_reexport::core::cell::Cell::new(0);
-
-    privacy_reexport::bar::frob();
-}
+#[no_mangle]
+#[cfg_attr(target_thread_local, thread_local)]
+pub static FOO: u32 = 3;

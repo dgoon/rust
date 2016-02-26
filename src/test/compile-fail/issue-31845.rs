@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that extern crate declarations are excluded from glob imports.
+// Checks lexical scopes cannot see through normal module boundries
 
-#![feature(core)]
-extern crate core;
-
-mod T {
-    pub use super::*;
+fn f() {
+    fn g() {}
+    mod foo {
+        fn h() {
+           g(); //~ ERROR unresolved name
+        }
+    }
 }
 
-fn main() {
-    use T::core; //~ ERROR unresolved import `T::core`
-}
+fn main() {}
