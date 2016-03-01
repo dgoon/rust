@@ -8,17 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ops::AddAssign;
-//~^ error: use of unstable library feature 'op_assign_traits'
+// Feature gate test for empty struct with braces
+// Can't define an empty braced struct
 
-struct Int(i32);
+struct Empty1 {}
+struct Empty2;
 
-impl AddAssign for Int {
-    //~^ error: use of unstable library feature 'op_assign_traits'
-    fn add_assign(&mut self, _: Int) {
-        //~^ error: use of unstable library feature 'op_assign_traits'
-        unimplemented!()
-    }
+enum E {
+    Empty4 {},
+    Empty5,
 }
 
-fn main() {}
+fn main() {
+}

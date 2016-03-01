@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,19 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ops::AddAssign;
+#![feature(associated_consts)]
 
-struct Int(i32);
-
-impl AddAssign<i32> for Int {
-    fn add_assign(&mut self, _: i32) {
-        unimplemented!()
-    }
+enum Enum<T: Trait> {
+    X = Trait::Number, //~ ERROR constant evaluation error
 }
 
-fn main() {
-    let mut x = Int(0);
-    x += 1;
-    //~^ error: overloaded augmented assignments are not stable
-    //~| help: add #![feature(augmented_assignments)] to the crate root to enable
+trait Trait {
+    const Number: i32 = 1;
 }
+
+fn main() {}
