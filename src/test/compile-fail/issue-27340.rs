@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::sync::mpsc::Receiver;
+struct Foo;
+#[derive(Copy, Clone)]
+//~^ ERROR the trait `Copy` may not be implemented for this type; field `0` does not implement
+struct Bar(Foo);
 
-fn test<T: Sync>() {}
-
-fn main() {
-    test::<Receiver<isize>>();   //~ ERROR: `core::marker::Sync` is not implemented
-}
+fn main() {}
