@@ -91,13 +91,12 @@ use middle::def_id::DefId;
 use middle::infer;
 use middle::infer::{TypeOrigin, type_variable};
 use middle::pat_util::{self, pat_id_map};
-use middle::privacy::{AllPublic, LastMod};
 use middle::subst::{self, Subst, Substs, VecPerParamSpace, ParamSpace};
 use middle::traits::{self, report_fulfillment_errors};
 use middle::ty::{GenericPredicates, TypeScheme};
 use middle::ty::{Disr, ParamTy, ParameterEnvironment};
 use middle::ty::{LvaluePreference, NoPreference, PreferMutLvalue};
-use middle::ty::{self, ToPolyTraitRef, Ty};
+use middle::ty::{self, ToPolyTraitRef, Ty, TyCtxt};
 use middle::ty::{MethodCall, MethodCallee};
 use middle::ty::adjustment;
 use middle::ty::error::TypeError;
@@ -301,7 +300,7 @@ pub struct FnCtxt<'a, 'tcx: 'a> {
 }
 
 impl<'a, 'tcx> Inherited<'a, 'tcx> {
-    fn new(tcx: &'a ty::ctxt<'tcx>,
+    fn new(tcx: &'a TyCtxt<'tcx>,
            tables: &'a RefCell<ty::Tables<'tcx>>,
            param_env: ty::ParameterEnvironment<'a, 'tcx>)
            -> Inherited<'a, 'tcx> {
@@ -1092,7 +1091,7 @@ fn report_cast_to_unsized_type<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 
 
 impl<'a, 'tcx> AstConv<'tcx> for FnCtxt<'a, 'tcx> {
-    fn tcx(&self) -> &ty::ctxt<'tcx> { self.ccx.tcx }
+    fn tcx(&self) -> &TyCtxt<'tcx> { self.ccx.tcx }
 
     fn get_item_type_scheme(&self, _: Span, id: DefId)
                             -> Result<ty::TypeScheme<'tcx>, ErrorReported>
@@ -1200,7 +1199,7 @@ impl<'a, 'tcx> AstConv<'tcx> for FnCtxt<'a, 'tcx> {
 }
 
 impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
-    fn tcx(&self) -> &ty::ctxt<'tcx> { self.ccx.tcx }
+    fn tcx(&self) -> &TyCtxt<'tcx> { self.ccx.tcx }
 
     pub fn infcx(&self) -> &infer::InferCtxt<'a,'tcx> {
         &self.inh.infcx
@@ -2013,6 +2012,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             Err(errors) => { report_fulfillment_errors(self.infcx(), &errors); }
         }
     }
+
+    fn private_item_is_visible(&self, def_id: DefId) -> bool {
+        match self.tcx().map.as_local_node_id(def_id) {
+            Some(node_id) => self.tcx().map.private_item_is_visible_from(node_id, self.body_id),
+            None => false, // Private items from other crates are never visible
+        }
+    }
 }
 
 impl<'a, 'tcx> RegionScope for FnCtxt<'a, 'tcx> {
@@ -2576,7 +2582,7 @@ fn check_argument_types<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 }
 
 // FIXME(#17596) Ty<'tcx> is incorrectly invariant w.r.t 'tcx.
-fn err_args<'tcx>(tcx: &ty::ctxt<'tcx>, len: usize) -> Vec<Ty<'tcx>> {
+fn err_args<'tcx>(tcx: &TyCtxt<'tcx>, len: usize) -> Vec<Ty<'tcx>> {
     (0..len).map(|_| tcx.types.err).collect()
 }
 
@@ -3348,7 +3354,6 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
                 // Create some fake resolution that can't possibly be a type.
                 def::PathResolution {
                     base_def: Def::Mod(tcx.map.local_def_id(ast::CRATE_NODE_ID)),
-                    last_private: LastMod(AllPublic),
                     depth: path.segments.len()
                 }
             } else {
@@ -3787,12 +3792,11 @@ pub fn resolve_ty_and_def_ufcs<'a, 'b, 'tcx>(fcx: &FnCtxt<'b, 'tcx>,
         let item_segment = path.segments.last().unwrap();
         let item_name = item_segment.identifier.name;
         match method::resolve_ufcs(fcx, span, item_name, ty, node_id) {
-            Ok((def, lp)) => {
+            Ok(def) => {
                 // Write back the new resolution.
                 fcx.ccx.tcx.def_map.borrow_mut()
                        .insert(node_id, def::PathResolution {
                    base_def: def,
-                   last_private: path_res.last_private.or(lp),
                    depth: 0
                 });
                 Some((Some(ty), slice::ref_slice(item_segment), def))
@@ -3828,7 +3832,7 @@ impl<'tcx> Expectation<'tcx> {
     /// which still is useful, because it informs integer literals and the like.
     /// See the test case `test/run-pass/coerce-expect-unsized.rs` and #20169
     /// for examples of where this comes up,.
-    fn rvalue_hint(tcx: &ty::ctxt<'tcx>, ty: Ty<'tcx>) -> Expectation<'tcx> {
+    fn rvalue_hint(tcx: &TyCtxt<'tcx>, ty: Ty<'tcx>) -> Expectation<'tcx> {
         match tcx.struct_tail(ty).sty {
             ty::TySlice(_) | ty::TyStr | ty::TyTrait(..) => {
                 ExpectRvalueLikeUnsized(ty)
@@ -4110,7 +4114,7 @@ fn check_const_with_ty<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 /// Checks whether a type can be represented in memory. In particular, it
 /// identifies types that contain themselves without indirection through a
 /// pointer, which would mean their size is unbounded.
-pub fn check_representable(tcx: &ty::ctxt,
+pub fn check_representable(tcx: &TyCtxt,
                            sp: Span,
                            item_id: ast::NodeId,
                            _designation: &str) -> bool {
@@ -4132,7 +4136,7 @@ pub fn check_representable(tcx: &ty::ctxt,
     return true
 }
 
-pub fn check_simd(tcx: &ty::ctxt, sp: Span, id: ast::NodeId) {
+pub fn check_simd(tcx: &TyCtxt, sp: Span, id: ast::NodeId) {
     let t = tcx.node_id_to_type(id);
     match t.sty {
         ty::TyStruct(def, substs) => {
@@ -4848,7 +4852,7 @@ pub fn structurally_resolved_type<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 }
 
 // Returns true if b contains a break that can exit from b
-pub fn may_break(cx: &ty::ctxt, id: ast::NodeId, b: &hir::Block) -> bool {
+pub fn may_break(cx: &TyCtxt, id: ast::NodeId, b: &hir::Block) -> bool {
     // First: is there an unlabeled break immediately
     // inside the loop?
     (loop_query(&b, |e| {
