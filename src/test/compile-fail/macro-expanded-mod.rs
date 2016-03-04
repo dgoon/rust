@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait Foo {
-    fn foo(self);
+// Test that macro-expanded non-inline modules behave correctly
+
+macro_rules! mod_decl {
+    ($i:ident) => { mod $i; }
 }
 
-impl<'a> Foo for &'a [isize] {
-    fn foo(self) {}
+mod macro_expanded_mod_helper {
+    mod_decl!(foo); // This should search in the folder `macro_expanded_mod_helper`
 }
 
-pub fn main() {
-    let items = vec!( 3, 5, 1, 2, 4 );
-    items.foo();
+fn main() {
+    mod_decl!(foo); //~ ERROR Cannot declare a non-inline module inside a block
 }

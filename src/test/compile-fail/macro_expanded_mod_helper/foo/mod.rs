@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,16 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:coherence_lib.rs
+// ignore-test
 
-// Test that it's not ok for T to appear uncovered
-
-extern crate coherence_lib as lib;
-use lib::{Remote,Pair};
-
-pub struct Cover<T>(T);
-
-impl<T,U> Remote for Pair<Cover<T>,U> { }
-//~^ ERROR type parameter `T` must be used as the type parameter for some local type
-
-fn main() { }
+mod_decl!(bar);

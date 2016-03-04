@@ -8,15 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait Foo {
-    fn foo(self);
-}
+// Meta test for compiletest: check that when we give the wrong error
+// patterns, the test fails.
 
-impl<'a> Foo for &'a [isize] {
-    fn foo(self) {}
-}
+// revisions: foo bar
+// should-fail
+//[foo] error-pattern:bar
+//[bar] error-pattern:foo
 
-pub fn main() {
-    let items = vec!( 3, 5, 1, 2, 4 );
-    items.foo();
-}
+#[cfg(foo)] fn die() {panic!("foo");}
+#[cfg(bar)] fn die() {panic!("bar");}
+
+fn main() { die(); }
