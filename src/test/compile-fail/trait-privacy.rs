@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,23 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(alloc_jemalloc)]
+#![feature(rustc_attrs)]
+#![allow(dead_code)]
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-extern crate alloc_jemalloc;
-
-fn main() {
-    println!("{:?}", Box::new(3));
+mod foo {
+    pub use self::bar::T;
+    mod bar {
+        pub trait T {
+            fn f(&self) {}
+        }
+        impl T for () {}
+    }
 }
+
+fn g() {
+    use foo::T;
+    ().f(); // Check that this does not trigger a privacy error
+}
+
+#[rustc_error]
+fn main() {} //~ ERROR compilation successful

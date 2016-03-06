@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(alloc_jemalloc)]
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-extern crate alloc_jemalloc;
+enum Thing {
+    Foo(u8),
+    Bar,
+    Baz
+}
 
 fn main() {
-    println!("{:?}", Box::new(3));
+    let Thing::Foo(y) = Thing::Foo(1);
+    //~^ ERROR refutable pattern in local binding: `Bar` not covered
 }

@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(alloc_jemalloc)]
+// Make sure that inclusive ranges with no end point don't parse.
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-extern crate alloc_jemalloc;
+#![feature(inclusive_range_syntax, inclusive_range)]
 
-fn main() {
-    println!("{:?}", Box::new(3));
-}
+pub fn main() {
+    for _ in 1... {}
+} //~ ERROR expected one of
+
