@@ -8,13 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
 
-fn main() {
-    let foo =
-        match //~ NOTE did you mean to remove this `match` keyword?
-        Some(4).unwrap_or_else(5)
-        ; //~ ERROR expected one of `.`, `?`, `{`, or an operator, found `;`
+// Beware editing: it has numerous whitespace characters which are important.
+// It contains one ranges from the 'PATTERN_WHITE_SPACE' property outlined in
+// http://unicode.org/Public/UNIDATA/PropList.txt
+//
+// The characters in the first expression of the assertion can be generated
+// from: "4\u{0C}+\n\t\r7\t*\u{20}2\u{85}/\u{200E}3\u{200F}*\u{2028}2\u{2029}"
+pub fn main() {
+assert_eq!(4+
 
-    println!("{}", foo)
+7   * 2/‎3‏* 2 , 4 + 7 * 2 / 3 * 2);
 }
