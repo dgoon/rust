@@ -8,28 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(rustc_attrs, get_type_id)]
-#![allow(dead_code)]
+#![feature(rustc_attrs)]
+#![allow(unused_imports)]
 
-mod foo {
-    pub use self::bar::T;
-    mod bar {
-        pub trait T {
-            fn f(&self) {}
-        }
-        impl T for () {}
-    }
-}
+pub type Type = i32;
 
-fn g() {
-    use foo::T;
-    ().f(); // Check that this does not trigger a privacy error
-}
+mod one { use super::Type; }
+pub use self::one::*;
 
-fn f() {
-    let error = ::std::thread::spawn(|| {}).join().unwrap_err();
-    error.get_type_id(); // Regression test for #21670
-}
+mod two { use super::Type; }
+pub use self::two::*;
 
 #[rustc_error]
 fn main() {} //~ ERROR compilation successful
