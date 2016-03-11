@@ -8,7 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate rustbook;
+use target::Target;
 
-fn main() { rustbook::main() }
-
+pub fn target() -> Target {
+    let mut base = super::i686_pc_windows_msvc::target();
+    base.options.cpu = "pentium".to_string();
+    base.llvm_target = "i586-pc-windows-msvc".to_string();
+    return base
+}
