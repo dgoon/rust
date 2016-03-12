@@ -379,7 +379,7 @@ impl Test {
 
 fn main() {
     let x = Test;
-    let v = &[0i32];
+    let v = &[0];
 
     x.method::<i32, i32>(v); // error: only one type parameter is expected!
 }
@@ -398,7 +398,7 @@ impl Test {
 
 fn main() {
     let x = Test;
-    let v = &[0i32];
+    let v = &[0];
 
     x.method::<i32>(v); // OK, we're good!
 }
@@ -901,7 +901,7 @@ Example of erroneous code:
 ```compile_fail
 enum Foo { FirstValue(i32) };
 
-let u = Foo::FirstValue { value: 0i32 }; // error: Foo::FirstValue
+let u = Foo::FirstValue { value: 0 }; // error: Foo::FirstValue
                                          // isn't a structure!
 // or even simpler, if the name doesn't refer to a structure at all.
 let t = u32 { value: 4 }; // error: `u32` does not name a structure.
@@ -2283,6 +2283,21 @@ impl Baz for Foo {
 
     // error: duplicate associated type
     type Quux = u32;
+}
+```
+
+Note, however, that items with the same name are allowed for inherent `impl`
+blocks that don't overlap:
+
+```
+struct Foo<T>(T);
+
+impl Foo<u8> {
+    fn bar(&self) -> bool { self.0 > 5 }
+}
+
+impl Foo<bool> {
+    fn bar(&self) -> bool { self.0 }
 }
 ```
 "##,

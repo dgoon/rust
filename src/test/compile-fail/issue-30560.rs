@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,16 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_type = "lib"]
+type Alias = ();
+use Alias::*; //~ ERROR Not a module
+use std::io::Result::*; //~ ERROR Not a module
 
-mod m {
-    pub use self::a::Foo;
+trait T {}
+use T::*; //~ ERROR items in traits are not importable
 
-    mod a {
-        pub struct Foo;
-    }
-
-    mod b {
-        pub use super::*;
-    }
-}
+fn main() {}
