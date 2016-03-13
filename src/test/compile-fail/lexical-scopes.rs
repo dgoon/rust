@@ -1,4 +1,4 @@
-// Copyright 2012-2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(rustc_private)]
-
-extern crate arena;
-use arena::Arena;
-
-pub fn main() {
-    let mut arena = Arena::new();
-    let p = &mut arena;
-    let x = p.alloc(|| 4_usize);
-    println!("{}", *x);
-    assert_eq!(*x, 4_usize);
+struct T { i: i32 }
+fn f<T>() {
+    let t = T { i: 0 }; //~ ERROR `T` does not name a structure
 }
+
+mod Foo {
+    pub fn f() {}
+}
+fn g<Foo>() {
+    Foo::f(); //~ ERROR no associated item named `f`
+}
+
+fn main() {}
