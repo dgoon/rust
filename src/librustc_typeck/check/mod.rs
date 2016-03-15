@@ -92,9 +92,9 @@ use middle::infer;
 use middle::infer::{TypeOrigin, TypeTrace, type_variable};
 use middle::pat_util::{self, pat_id_map};
 use middle::subst::{self, Subst, Substs, VecPerParamSpace, ParamSpace};
-use middle::traits::{self, report_fulfillment_errors};
+use middle::traits::{self, report_fulfillment_errors, ProjectionMode};
 use middle::ty::{GenericPredicates, TypeScheme};
-use middle::ty::{Disr, ParamTy, ParameterEnvironment};
+use middle::ty::{ParamTy, ParameterEnvironment};
 use middle::ty::{LvaluePreference, NoPreference, PreferMutLvalue};
 use middle::ty::{self, ToPolyTraitRef, Ty, TyCtxt};
 use middle::ty::{MethodCall, MethodCallee};
@@ -102,7 +102,7 @@ use middle::ty::adjustment;
 use middle::ty::error::TypeError;
 use middle::ty::fold::{TypeFolder, TypeFoldable};
 use middle::ty::relate::TypeRelation;
-use middle::ty::util::Representability;
+use middle::ty::util::{Representability, IntTypeExt};
 use require_c_abi_if_variadic;
 use rscope::{ElisionFailureInfo, RegionScope};
 use session::{Session, CompileResult};
@@ -307,7 +307,7 @@ impl<'a, 'tcx> Inherited<'a, 'tcx> {
            -> Inherited<'a, 'tcx> {
 
         Inherited {
-            infcx: infer::new_infer_ctxt(tcx, tables, Some(param_env)),
+            infcx: infer::new_infer_ctxt(tcx, tables, Some(param_env), ProjectionMode::AnyFinal),
             fulfillment_cx: RefCell::new(traits::FulfillmentContext::new()),
             locals: RefCell::new(NodeMap()),
             tables: tables,
@@ -672,10 +672,12 @@ pub fn check_item_type<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>, it: &'tcx hir::Item) {
       hir::ItemFn(..) => {} // entirely within check_item_body
       hir::ItemImpl(_, _, _, _, _, ref impl_items) => {
           debug!("ItemImpl {} with id {}", it.name, it.id);
-          match ccx.tcx.impl_trait_ref(ccx.tcx.map.local_def_id(it.id)) {
+          let impl_def_id = ccx.tcx.map.local_def_id(it.id);
+          match ccx.tcx.impl_trait_ref(impl_def_id) {
               Some(impl_trait_ref) => {
                 check_impl_items_against_trait(ccx,
                                                it.span,
+                                               impl_def_id,
                                                &impl_trait_ref,
                                                impl_items);
               }
@@ -862,12 +864,71 @@ fn check_method_body<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
     check_bare_fn(ccx, &sig.decl, body, id, span, fty, param_env);
 }
 
+fn report_forbidden_specialization(tcx: &TyCtxt,
+                                   impl_item: &hir::ImplItem,
+                                   parent_impl: DefId)
+{
+    let mut err = struct_span_err!(
+        tcx.sess, impl_item.span, E0520,
+        "item `{}` is provided by an `impl` that specializes \
+         another, but the item in the parent `impl` is not \
+         marked `default` and so it cannot be specialized.",
+        impl_item.name);
+
+    match tcx.span_of_impl(parent_impl) {
+        Ok(span) => {
+            err.span_note(span, "parent implementation is here:");
+        }
+        Err(cname) => {
+            err.note(&format!("parent implementation is in crate `{}`", cname));
+        }
+    }
+
+    err.emit();
+}
+
+fn check_specialization_validity<'tcx>(tcx: &TyCtxt<'tcx>, trait_def: &ty::TraitDef<'tcx>,
+                                       impl_id: DefId, impl_item: &hir::ImplItem)
+{
+    let ancestors = trait_def.ancestors(impl_id);
+
+    let parent = match impl_item.node {
+        hir::ImplItemKind::Const(..) => {
+            ancestors.const_defs(tcx, impl_item.name).skip(1).next()
+                .map(|node_item| node_item.map(|parent| parent.defaultness))
+        }
+        hir::ImplItemKind::Method(..) => {
+            ancestors.fn_defs(tcx, impl_item.name).skip(1).next()
+                .map(|node_item| node_item.map(|parent| parent.defaultness))
+
+        }
+        hir::ImplItemKind::Type(_) => {
+            ancestors.type_defs(tcx, impl_item.name).skip(1).next()
+                .map(|node_item| node_item.map(|parent| parent.defaultness))
+        }
+    };
+
+    if let Some(parent) = parent {
+        if parent.item.is_final() {
+            report_forbidden_specialization(tcx, impl_item, parent.node.def_id());
+        }
+    }
+
+}
+
 fn check_impl_items_against_trait<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
                                             impl_span: Span,
+                                            impl_id: DefId,
                                             impl_trait_ref: &ty::TraitRef<'tcx>,
                                             impl_items: &[hir::ImplItem]) {
-    // Locate trait methods
+    // If the trait reference itself is erroneous (so the compilation is going
+    // to fail), skip checking the items here -- the `impl_item` table in `tcx`
+    // isn't populated for such impls.
+    if impl_trait_ref.references_error() { return; }
+
+    // Locate trait definition and items
     let tcx = ccx.tcx;
+    let trait_def = tcx.lookup_trait_def(impl_trait_ref.def_id);
     let trait_items = tcx.trait_items(impl_trait_ref.def_id);
     let mut overridden_associated_type = None;
 
@@ -878,6 +939,7 @@ fn check_impl_items_against_trait<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
         let ty_trait_item = trait_items.iter()
             .find(|ac| ac.name() == ty_impl_item.name());
 
+        // Check that impl definition matches trait definition
         if let Some(ty_trait_item) = ty_trait_item {
             match impl_item.node {
                 hir::ImplItemKind::Const(..) => {
@@ -944,6 +1006,8 @@ fn check_impl_items_against_trait<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
                 }
             }
         }
+
+        check_specialization_validity(tcx, trait_def, impl_id, impl_item);
     }
 
     // Check for missing items from trait
@@ -952,9 +1016,13 @@ fn check_impl_items_against_trait<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
     let mut invalidated_items = Vec::new();
     let associated_type_overridden = overridden_associated_type.is_some();
     for trait_item in trait_items.iter() {
+        let is_implemented;
+        let is_provided;
+
         match *trait_item {
             ty::ConstTraitItem(ref associated_const) => {
-                let is_implemented = impl_items.iter().any(|ii| {
+                is_provided = associated_const.has_value;
+                is_implemented = impl_items.iter().any(|ii| {
                     match ii.node {
                         hir::ImplItemKind::Const(..) => {
                             ii.name == associated_const.name
@@ -962,53 +1030,30 @@ fn check_impl_items_against_trait<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
                         _ => false,
                     }
                 });
-                let is_provided = associated_const.has_value;
-
-                if !is_implemented {
-                    if !is_provided {
-                        missing_items.push(associated_const.name);
-                    } else if associated_type_overridden {
-                        invalidated_items.push(associated_const.name);
-                    }
-                }
             }
             ty::MethodTraitItem(ref trait_method) => {
-                let is_implemented =
-                    impl_items.iter().any(|ii| {
-                        match ii.node {
-                            hir::ImplItemKind::Method(..) => {
-                                ii.name == trait_method.name
-                            }
-                            _ => false,
-                        }
-                    });
-                let is_provided =
-                    provided_methods.iter().any(|m| m.name == trait_method.name);
-                if !is_implemented {
-                    if !is_provided {
-                        missing_items.push(trait_method.name);
-                    } else if associated_type_overridden {
-                        invalidated_items.push(trait_method.name);
-                    }
-                }
+                is_provided = provided_methods.iter().any(|m| m.name == trait_method.name);
+                is_implemented = trait_def.ancestors(impl_id)
+                    .fn_defs(tcx, trait_method.name)
+                    .next()
+                    .map(|node_item| !node_item.node.is_from_trait())
+                    .unwrap_or(false);
             }
-            ty::TypeTraitItem(ref associated_type) => {
-                let is_implemented = impl_items.iter().any(|ii| {
-                    match ii.node {
-                        hir::ImplItemKind::Type(_) => {
-                            ii.name == associated_type.name
-                        }
-                        _ => false,
-                    }
-                });
-                let is_provided = associated_type.ty.is_some();
-                if !is_implemented {
-                    if !is_provided {
-                        missing_items.push(associated_type.name);
-                    } else if associated_type_overridden {
-                        invalidated_items.push(associated_type.name);
-                    }
-                }
+            ty::TypeTraitItem(ref trait_assoc_ty) => {
+                is_provided = trait_assoc_ty.ty.is_some();
+                is_implemented = trait_def.ancestors(impl_id)
+                    .type_defs(tcx, trait_assoc_ty.name)
+                    .next()
+                    .map(|node_item| !node_item.node.is_from_trait())
+                    .unwrap_or(false);
+            }
+        }
+
+        if !is_implemented {
+            if !is_provided {
+                missing_items.push(trait_item.name());
+            } else if associated_type_overridden {
+                invalidated_items.push(trait_item.name());
             }
         }
     }
@@ -4076,34 +4121,6 @@ pub fn check_enum_variants<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>,
                                     sp: Span,
                                     vs: &'tcx [hir::Variant],
                                     id: ast::NodeId) {
-    // disr_in_range should be removed once we have forced type hints for consts
-    fn disr_in_range(ccx: &CrateCtxt,
-                     ty: attr::IntType,
-                     disr: ty::Disr) -> bool {
-        fn uint_in_range(ccx: &CrateCtxt, ty: ast::UintTy, disr: ty::Disr) -> bool {
-            match ty {
-                ast::UintTy::U8 => disr as u8 as Disr == disr,
-                ast::UintTy::U16 => disr as u16 as Disr == disr,
-                ast::UintTy::U32 => disr as u32 as Disr == disr,
-                ast::UintTy::U64 => disr as u64 as Disr == disr,
-                ast::UintTy::Us => uint_in_range(ccx, ccx.tcx.sess.target.uint_type, disr)
-            }
-        }
-        fn int_in_range(ccx: &CrateCtxt, ty: ast::IntTy, disr: ty::Disr) -> bool {
-            match ty {
-                ast::IntTy::I8 => disr as i8 as Disr == disr,
-                ast::IntTy::I16 => disr as i16 as Disr == disr,
-                ast::IntTy::I32 => disr as i32 as Disr == disr,
-                ast::IntTy::I64 => disr as i64 as Disr == disr,
-                ast::IntTy::Is => int_in_range(ccx, ccx.tcx.sess.target.int_type, disr)
-            }
-        }
-        match ty {
-            attr::UnsignedInt(ty) => uint_in_range(ccx, ty, disr),
-            attr::SignedInt(ty) => int_in_range(ccx, ty, disr)
-        }
-    }
-
     fn do_check<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
                           vs: &'tcx [hir::Variant],
                           id: ast::NodeId,
@@ -4117,7 +4134,7 @@ pub fn check_enum_variants<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>,
         let inh = static_inherited_fields(ccx, &tables);
         let fcx = blank_fn_ctxt(ccx, &inh, ty::FnConverging(rty), id);
 
-        let (_, repr_type_ty) = ccx.tcx.enum_repr_type(Some(&hint));
+        let repr_type_ty = ccx.tcx.enum_repr_type(Some(&hint)).to_ty(&ccx.tcx);
         for v in vs {
             if let Some(ref e) = v.node.disr_expr {
                 check_const_with_ty(&fcx, e.span, e, repr_type_ty);
@@ -4142,23 +4159,7 @@ pub fn check_enum_variants<'a,'tcx>(ccx: &CrateCtxt<'a,'tcx>,
                 }
                 None => {}
             }
-            // Check for unrepresentable discriminant values
-            match hint {
-                attr::ReprAny | attr::ReprExtern => {
-                    disr_vals.push(current_disr_val);
-                }
-                attr::ReprInt(sp, ity) => {
-                    if !disr_in_range(ccx, ity, current_disr_val) {
-                        let mut err = struct_span_err!(ccx.tcx.sess, v.span, E0082,
-                            "discriminant value outside specified type");
-                        span_note!(&mut err, sp,
-                            "discriminant type specified here");
-                        err.emit();
-                    }
-                }
-                // Error reported elsewhere.
-                attr::ReprSimd | attr::ReprPacked => {}
-            }
+            disr_vals.push(current_disr_val);
         }
     }
 

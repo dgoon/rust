@@ -50,6 +50,8 @@ use syntax::attr::{self, AttrMetaMethods};
 use syntax::codemap::{DUMMY_SP, Span};
 use syntax::parse::token::InternedString;
 
+use rustc_const_eval::ConstInt;
+
 use rustc_front::hir;
 use rustc_front::hir::{ItemImpl, ItemTrait, PatKind};
 use rustc_front::intravisit::Visitor;
@@ -100,8 +102,7 @@ mod ivar;
 mod structural_impls;
 mod sty;
 
-pub type Disr = u64;
-pub const INITIAL_DISCRIMINANT_VALUE: Disr = 0;
+pub type Disr = ConstInt;
 
 // Data types
 
@@ -280,6 +281,7 @@ pub struct Method<'tcx> {
     pub fty: BareFnTy<'tcx>,
     pub explicit_self: ExplicitSelfCategory,
     pub vis: hir::Visibility,
+    pub defaultness: hir::Defaultness,
     pub def_id: DefId,
     pub container: ImplOrTraitItemContainer,
 }
@@ -291,16 +293,18 @@ impl<'tcx> Method<'tcx> {
                fty: BareFnTy<'tcx>,
                explicit_self: ExplicitSelfCategory,
                vis: hir::Visibility,
+               defaultness: hir::Defaultness,
                def_id: DefId,
                container: ImplOrTraitItemContainer)
                -> Method<'tcx> {
-       Method {
+        Method {
             name: name,
             generics: generics,
             predicates: predicates,
             fty: fty,
             explicit_self: explicit_self,
             vis: vis,
+            defaultness: defaultness,
             def_id: def_id,
             container: container,
         }
@@ -333,6 +337,7 @@ pub struct AssociatedConst<'tcx> {
     pub name: Name,
     pub ty: Ty<'tcx>,
     pub vis: hir::Visibility,
+    pub defaultness: hir::Defaultness,
     pub def_id: DefId,
     pub container: ImplOrTraitItemContainer,
     pub has_value: bool
@@ -343,6 +348,7 @@ pub struct AssociatedType<'tcx> {
     pub name: Name,
     pub ty: Option<Ty<'tcx>>,
     pub vis: hir::Visibility,
+    pub defaultness: hir::Defaultness,
     pub def_id: DefId,
     pub container: ImplOrTraitItemContainer,
 }
@@ -1580,7 +1586,7 @@ impl<'tcx, 'container> AdtDefData<'tcx, 'container> {
     /// Asserts this is a struct and returns the struct's unique
     /// variant.
     pub fn struct_variant(&self) -> &VariantDefData<'tcx, 'container> {
-        assert!(self.adt_kind() == AdtKind::Struct);
+        assert_eq!(self.adt_kind(), AdtKind::Struct);
         &self.variants[0]
     }
 
@@ -2450,8 +2456,13 @@ impl<'tcx> TyCtxt<'tcx> {
         for impl_def_id in self.sess.cstore.implementations_of_trait(trait_id) {
             let impl_items = self.sess.cstore.impl_items(impl_def_id);
             let trait_ref = self.impl_trait_ref(impl_def_id).unwrap();
+
             // Record the trait->implementation mapping.
-            def.record_impl(self, impl_def_id, trait_ref);
+            if let Some(parent) = self.sess.cstore.impl_parent(impl_def_id) {
+                def.record_remote_impl(self, impl_def_id, trait_ref, parent);
+            } else {
+                def.record_remote_impl(self, impl_def_id, trait_ref, trait_id);
+            }
 
             // For any methods that use a default implementation, add them to
             // the map. This is a bit unfortunate.
@@ -2659,13 +2670,22 @@ impl<'tcx> TyCtxt<'tcx> {
         Some(self.tables.borrow().upvar_capture_map.get(&upvar_id).unwrap().clone())
     }
 
-
     pub fn visit_all_items_in_krate<V,F>(&self,
                                          dep_node_fn: F,
                                          visitor: &mut V)
         where F: FnMut(DefId) -> DepNode, V: Visitor<'tcx>
     {
         dep_graph::visit_all_items_in_krate(self, dep_node_fn, visitor);
+    }
+    /// Looks up the span of `impl_did` if the impl is local; otherwise returns `Err`
+    /// with the name of the crate containing the impl.
+    pub fn span_of_impl(&self, impl_did: DefId) -> Result<Span, String> {
+        if impl_did.is_local() {
+            let node_id = self.map.as_local_node_id(impl_did).unwrap();
+            Ok(self.map.span(node_id))
+        } else {
+            Err(self.sess.cstore.crate_name(impl_did.krate))
+        }
     }
 }
 
@@ -2707,29 +2727,5 @@ impl<'tcx> TyCtxt<'tcx> {
             None => f(&[]),
             Some(d) => f(&d[..])
         }
-    }
-
-    pub fn make_substs_for_receiver_types(&self,
-                                          trait_ref: &ty::TraitRef<'tcx>,
-                                          method: &ty::Method<'tcx>)
-                                          -> subst::Substs<'tcx>
-    {
-        /*!
-         * Substitutes the values for the receiver's type parameters
-         * that are found in method, leaving the method's type parameters
-         * intact.
-         */
-
-        let meth_tps: Vec<Ty> =
-            method.generics.types.get_slice(subst::FnSpace)
-                  .iter()
-                  .map(|def| self.mk_param_from_def(def))
-                  .collect();
-        let meth_regions: Vec<ty::Region> =
-            method.generics.regions.get_slice(subst::FnSpace)
-                  .iter()
-                  .map(|def| def.to_early_bound_region())
-                  .collect();
-        trait_ref.substs.clone().with_method(meth_tps, meth_regions)
     }
 }
