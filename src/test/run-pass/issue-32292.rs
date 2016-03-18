@@ -7,17 +7,12 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//
-// error-pattern:already defined
 
+#![deny(warnings)]
 
-#![allow(warnings)]
+#[derive(Hash, Ord, PartialOrd, Eq, PartialEq, Debug, Clone, Copy)]
+struct Foo;
 
 fn main() {
-    {
-        extern fn fail() {}
-    }
-    {
-        extern fn fail() {}
-    }
+    let _ = Foo;
 }

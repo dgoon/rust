@@ -8,18 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-
-macro_rules! foo {
-    ($e:expr) => { $e.foo() }
-    //~^ ERROR no method named `foo` found for type `i32` in the current scope
-}
-
+// We used to have a __rust_abi shim that resulted in duplicated symbols
+// whenever the item path wasn't enough to disambiguate between them.
 fn main() {
-    let a = 1i32;
-    foo!(a);
-    //~^ NOTE in this expansion of foo!
+    let a = {
+        extern fn good() -> i32 { return 0; }
+        good as extern fn() -> i32
+    };
+    let b = {
+        extern fn good() -> i32 { return 5; }
+        good as extern fn() -> i32
+    };
 
-    foo!(1i32.foo());
-    //~^ ERROR no method named `foo` found for type `i32` in the current scope
-    //~^^ NOTE in this expansion of foo!
+    assert!(a != b);
+    assert_eq!((a(), b()), (0, 5));
 }
