@@ -589,15 +589,20 @@ pub fn trans_intrinsic_call<'a, 'blk, 'tcx>(mut bcx: Block<'blk, 'tcx>,
         },
         (_, "volatile_store") => {
             let tp_ty = *substs.types.get(FnSpace, 0);
-            let val = if fn_ty.args[1].is_indirect() {
-                Load(bcx, llargs[1])
+            if type_is_fat_ptr(bcx.tcx(), tp_ty) {
+                VolatileStore(bcx, llargs[1], expr::get_dataptr(bcx, llargs[0]));
+                VolatileStore(bcx, llargs[2], expr::get_meta(bcx, llargs[0]));
             } else {
-                from_immediate(bcx, llargs[1])
-            };
-            let ptr = PointerCast(bcx, llargs[0], val_ty(val).ptr_to());
-            let store = VolatileStore(bcx, val, ptr);
-            unsafe {
-                llvm::LLVMSetAlignment(store, type_of::align_of(ccx, tp_ty));
+                let val = if fn_ty.args[1].is_indirect() {
+                    Load(bcx, llargs[1])
+                } else {
+                    from_immediate(bcx, llargs[1])
+                };
+                let ptr = PointerCast(bcx, llargs[0], val_ty(val).ptr_to());
+                let store = VolatileStore(bcx, val, ptr);
+                unsafe {
+                    llvm::LLVMSetAlignment(store, type_of::align_of(ccx, tp_ty));
+                }
             }
             C_nil(ccx)
         },
@@ -653,6 +658,29 @@ pub fn trans_intrinsic_call<'a, 'blk, 'tcx>(mut bcx: Block<'blk, 'tcx>,
                         tcx.sess, span,
                         &format!("invalid monomorphization of `{}` intrinsic: \
                                   expected basic integer type, found `{}`", name, sty));
+                        C_null(llret_ty)
+                }
+            }
+
+        },
+        (_, "fadd_fast") | (_, "fsub_fast") | (_, "fmul_fast") | (_, "fdiv_fast") |
+        (_, "frem_fast") => {
+            let sty = &arg_tys[0].sty;
+            match float_type_width(sty) {
+                Some(_width) =>
+                    match &*name {
+                        "fadd_fast" => FAddFast(bcx, llargs[0], llargs[1], call_debug_location),
+                        "fsub_fast" => FSubFast(bcx, llargs[0], llargs[1], call_debug_location),
+                        "fmul_fast" => FMulFast(bcx, llargs[0], llargs[1], call_debug_location),
+                        "fdiv_fast" => FDivFast(bcx, llargs[0], llargs[1], call_debug_location),
+                        "frem_fast" => FRemFast(bcx, llargs[0], llargs[1], call_debug_location),
+                        _ => unreachable!(),
+                    },
+                None => {
+                    span_invalid_monomorphization_error(
+                        tcx.sess, span,
+                        &format!("invalid monomorphization of `{}` intrinsic: \
+                                  expected basic float type, found `{}`", name, sty));
                         C_null(llret_ty)
                 }
             }
@@ -1697,6 +1725,20 @@ fn int_type_width_signed<'tcx>(sty: &ty::TypeVariants<'tcx>, ccx: &CrateContext)
             ast::UintTy::U32 => 32,
             ast::UintTy::U64 => 64,
         }, false)),
+        _ => None,
+    }
+}
+
+// Returns the width of a float TypeVariant
+// Returns None if the type is not a float
+fn float_type_width<'tcx>(sty: &ty::TypeVariants<'tcx>)
+        -> Option<u64> {
+    use rustc::middle::ty::TyFloat;
+    match *sty {
+        TyFloat(t) => Some(match t {
+            ast::FloatTy::F32 => 32,
+            ast::FloatTy::F64 => 64,
+        }),
         _ => None,
     }
 }
