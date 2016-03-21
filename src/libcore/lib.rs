@@ -56,6 +56,7 @@
 
 #![no_core]
 #![deny(missing_docs)]
+#![deny(missing_debug_implementations)]
 #![cfg_attr(not(stage0), deny(warnings))]
 
 #![feature(allow_internal_unstable)]
@@ -64,6 +65,7 @@
 #![feature(const_fn)]
 #![feature(custom_attribute)]
 #![feature(fundamental)]
+#![feature(inclusive_range_syntax)]
 #![feature(intrinsics)]
 #![feature(lang_items)]
 #![feature(no_core)]
