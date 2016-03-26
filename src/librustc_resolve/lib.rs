@@ -349,7 +349,8 @@ fn resolve_struct_error<'b, 'a: 'b, 'tcx: 'a>(resolver: &'b Resolver<'a, 'tcx>,
             if let Some(sp) = resolver.ast_map.span_if_local(did) {
                 err.span_note(sp, "constant defined here");
             }
-            if let Success(binding) = resolver.current_module.resolve_name(name, ValueNS, true) {
+            if let Some(binding) = resolver.current_module
+                                           .resolve_name_in_lexical_scope(name, ValueNS) {
                 if binding.is_import() {
                     err.span_note(binding.span.unwrap(), "constant imported here");
                 }
@@ -820,7 +821,7 @@ pub struct ModuleS<'a> {
     // entry block for `f`.
     module_children: RefCell<NodeMap<Module<'a>>>,
 
-    shadowed_traits: RefCell<Vec<&'a NameBinding<'a>>>,
+    prelude: RefCell<Option<Module<'a>>>,
 
     glob_importers: RefCell<Vec<(Module<'a>, &'a ImportDirective)>>,
     resolved_globs: RefCell<(Vec<Module<'a>> /* public */, Vec<Module<'a>> /* private */)>,
@@ -855,7 +856,7 @@ impl<'a> ModuleS<'a> {
             resolutions: RefCell::new(HashMap::new()),
             unresolved_imports: RefCell::new(Vec::new()),
             module_children: RefCell::new(NodeMap()),
-            shadowed_traits: RefCell::new(Vec::new()),
+            prelude: RefCell::new(None),
             glob_importers: RefCell::new(Vec::new()),
             resolved_globs: RefCell::new((Vec::new(), Vec::new())),
             public_glob_count: Cell::new(0),
@@ -932,8 +933,7 @@ bitflags! {
         // Variants are considered `PUBLIC`, but some of them live in private enums.
         // We need to track them to prohibit reexports like `pub use PrivEnum::Variant`.
         const PRIVATE_VARIANT = 1 << 2,
-        const PRELUDE = 1 << 3,
-        const GLOB_IMPORTED = 1 << 4,
+        const GLOB_IMPORTED = 1 << 3,
     }
 }
 
@@ -1537,13 +1537,17 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                               module: Module<'a>,
                               name: Name,
                               namespace: Namespace,
-                              allow_private_imports: bool,
+                              use_lexical_scope: bool,
                               record_used: bool)
                               -> ResolveResult<&'a NameBinding<'a>> {
         debug!("(resolving name in module) resolving `{}` in `{}`", name, module_to_string(module));
 
         build_reduced_graph::populate_module_if_necessary(self, module);
-        module.resolve_name(name, namespace, allow_private_imports).and_then(|binding| {
+        match use_lexical_scope {
+            true => module.resolve_name_in_lexical_scope(name, namespace)
+                          .map(Success).unwrap_or(Failed(None)),
+            false => module.resolve_name(name, namespace, false),
+        }.and_then(|binding| {
             if record_used {
                 self.record_use(name, namespace, binding);
             }
@@ -1615,15 +1619,6 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
         intravisit::walk_crate(self, krate);
     }
 
-    fn check_if_primitive_type_name(&self, name: Name, span: Span) {
-        if let Some(_) = self.primitive_type_table.primitive_types.get(&name) {
-            span_err!(self.session,
-                      span,
-                      E0317,
-                      "user-defined types or type parameters cannot shadow the primitive types");
-        }
-    }
-
     fn resolve_item(&mut self, item: &Item) {
         let name = item.name;
 
@@ -1633,8 +1628,6 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
             ItemEnum(_, ref generics) |
             ItemTy(_, ref generics) |
             ItemStruct(_, ref generics) => {
-                self.check_if_primitive_type_name(name, item.span);
-
                 self.with_type_parameter_rib(HasTypeParameters(generics, TypeSpace, ItemRibKind),
                                              |this| intravisit::walk_item(this, item));
             }
@@ -1655,8 +1648,6 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
             }
 
             ItemTrait(_, ref generics, ref bounds, ref trait_items) => {
-                self.check_if_primitive_type_name(name, item.span);
-
                 // Create a new rib for the trait-wide type parameters.
                 self.with_type_parameter_rib(HasTypeParameters(generics,
                                                                TypeSpace,
@@ -1691,8 +1682,6 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                                     });
                                 }
                                 hir::TypeTraitItem(..) => {
-                                    this.check_if_primitive_type_name(trait_item.name,
-                                                                      trait_item.span);
                                     this.with_type_parameter_rib(NoTypeParameters, |this| {
                                         intravisit::walk_trait_item(this, trait_item)
                                     });
@@ -1716,28 +1705,8 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
             }
 
             ItemUse(ref view_path) => {
-                // check for imports shadowing primitive types
-                let check_rename = |this: &Self, id, name| {
-                    match this.def_map.borrow().get(&id).map(|d| d.full_def()) {
-                        Some(Def::Enum(..)) | Some(Def::TyAlias(..)) | Some(Def::Struct(..)) |
-                        Some(Def::Trait(..)) | None => {
-                            this.check_if_primitive_type_name(name, item.span);
-                        }
-                        _ => {}
-                    }
-                };
-
                 match view_path.node {
-                    hir::ViewPathSimple(name, _) => {
-                        check_rename(self, item.id, name);
-                    }
                     hir::ViewPathList(ref prefix, ref items) => {
-                        for item in items {
-                            if let Some(name) = item.node.rename() {
-                                check_rename(self, item.node.id(), name);
-                            }
-                        }
-
                         // Resolve prefix of an import with empty braces (issue #28388)
                         if items.is_empty() && !prefix.segments.is_empty() {
                             match self.resolve_crate_relative_path(prefix.span,
@@ -1918,9 +1887,6 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
     }
 
     fn resolve_generics(&mut self, generics: &Generics) {
-        for type_parameter in generics.ty_params.iter() {
-            self.check_if_primitive_type_name(type_parameter.name, type_parameter.span);
-        }
         for predicate in &generics.where_clause.predicates {
             match predicate {
                 &hir::WherePredicate::BoundPredicate(_) |
@@ -2654,15 +2620,37 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
 
         // Try to find a path to an item in a module.
         let last_ident = segments.last().unwrap().identifier;
-        if segments.len() <= 1 {
-            let unqualified_def = self.resolve_identifier(last_ident, namespace, true);
-            return unqualified_def.and_then(|def| self.adjust_local_def(def, span))
-                                  .map(|def| {
-                                      PathResolution::new(def, path_depth)
-                                  });
+        // Resolve a single identifier with fallback to primitive types
+        let resolve_identifier_with_fallback = |this: &mut Self, record_used| {
+            let def = this.resolve_identifier(last_ident, namespace, record_used);
+            match def {
+                None | Some(LocalDef{def: Def::Mod(..), ..}) if namespace == TypeNS =>
+                    this.primitive_type_table
+                        .primitive_types
+                        .get(&last_ident.unhygienic_name)
+                        .map_or(def, |prim_ty| Some(LocalDef::from_def(Def::PrimTy(*prim_ty)))),
+                _ => def
+            }
+        };
+
+        if segments.len() == 1 {
+            // In `a(::assoc_item)*` `a` cannot be a module. If `a` does resolve to a module we
+            // don't report an error right away, but try to fallback to a primitive type.
+            // So, we are still able to successfully resolve something like
+            //
+            // use std::u8; // bring module u8 in scope
+            // fn f() -> u8 { // OK, resolves to primitive u8, not to std::u8
+            //     u8::max_value() // OK, resolves to associated function <u8>::max_value,
+            //                     // not to non-existent std::u8::max_value
+            // }
+            //
+            // Such behavior is required for backward compatibility.
+            // The same fallback is used when `a` resolves to nothing.
+            let unqualified_def = resolve_identifier_with_fallback(self, true);
+            return unqualified_def.and_then(|def| self.adjust_local_def(def, span)).map(mk_res);
         }
 
-        let unqualified_def = self.resolve_identifier(last_ident, namespace, false);
+        let unqualified_def = resolve_identifier_with_fallback(self, false);
         let def = self.resolve_module_relative_path(span, segments, namespace);
         match (def, unqualified_def) {
             (Some(d), Some(ref ud)) if d == ud.def => {
@@ -2686,15 +2674,6 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                           -> Option<LocalDef> {
         if identifier.name == special_idents::invalid.name {
             return Some(LocalDef::from_def(Def::Err));
-        }
-
-        // First, check to see whether the name is a primitive type.
-        if namespace == TypeNS {
-            if let Some(&prim_ty) = self.primitive_type_table
-                                        .primitive_types
-                                        .get(&identifier.unhygienic_name) {
-                return Some(LocalDef::from_def(Def::PrimTy(prim_ty)));
-            }
         }
 
         self.resolve_identifier_in_local_ribs(identifier, namespace, record_used)
@@ -2962,7 +2941,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
             if name_path.len() == 1 {
                 match this.primitive_type_table.primitive_types.get(last_name) {
                     Some(_) => None,
-                    None => this.current_module.resolve_name(*last_name, TypeNS, true).success()
+                    None => this.current_module.resolve_name_in_lexical_scope(*last_name, TypeNS)
                                                .and_then(NameBinding::module)
                 }
             } else {
@@ -3019,7 +2998,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
 
         // Look for a method in the current self type's impl module.
         if let Some(module) = get_module(self, path.span, &name_path) {
-            if let Success(binding) = module.resolve_name(name, ValueNS, true) {
+            if let Some(binding) = module.resolve_name_in_lexical_scope(name, ValueNS) {
                 if let Some(Def::Method(did)) = binding.def() {
                     if is_static_method(self, did) {
                         return StaticMethod(path_names_to_string(&path, 0));
@@ -3336,33 +3315,25 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
             }
 
             // Look for trait children.
-            build_reduced_graph::populate_module_if_necessary(self, &search_module);
-
-            search_module.for_each_child(|_, ns, name_binding| {
+            let mut search_in_module = |module: Module<'a>| module.for_each_child(|_, ns, binding| {
                 if ns != TypeNS { return }
-                let trait_def_id = match name_binding.def() {
+                let trait_def_id = match binding.def() {
                     Some(Def::Trait(trait_def_id)) => trait_def_id,
                     Some(..) | None => return,
                 };
                 if self.trait_item_map.contains_key(&(name, trait_def_id)) {
                     add_trait_info(&mut found_traits, trait_def_id, name);
                     let trait_name = self.get_trait_name(trait_def_id);
-                    self.record_use(trait_name, TypeNS, name_binding);
-                }
-            });
-
-            // Look for shadowed traits.
-            for binding in search_module.shadowed_traits.borrow().iter() {
-                let did = binding.def().unwrap().def_id();
-                if self.trait_item_map.contains_key(&(name, did)) {
-                    add_trait_info(&mut found_traits, did, name);
-                    let trait_name = self.get_trait_name(did);
                     self.record_use(trait_name, TypeNS, binding);
                 }
-            }
+            });
+            search_in_module(search_module);
 
             match search_module.parent_link {
-                NoParentLink | ModuleParentLink(..) => break,
+                NoParentLink | ModuleParentLink(..) => {
+                    search_module.prelude.borrow().map(search_in_module);
+                    break;
+                }
                 BlockParentLink(parent_module, _) => {
                     search_module = parent_module;
                 }
