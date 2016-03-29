@@ -8,16 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:variant-struct.rs
-// build-aux-docs
-// ignore-cross-compile
+// Make sure that invalid ranges generate an error during HIR lowering, not an ICE
 
-// @has variant_struct/enum.Foo.html
-// @!has - 'pub qux'
-// @!has - 'pub Bar'
-extern crate variant_struct;
+#![feature(inclusive_range_syntax)]
 
-// @has issue_32395/enum.Foo.html
-// @!has - 'pub qux'
-// @!has - 'pub Bar'
-pub use variant_struct::Foo;
+pub fn main() {
+    ..;
+    0..;
+    ..1;
+    0..1;
+
+    ...; //~ERROR inclusive range with no end
+         //~^HELP bounded at the end
+    0...; //~ERROR inclusive range with no end
+          //~^HELP bounded at the end
+    ...1;
+    0...1;
+}
+
+
