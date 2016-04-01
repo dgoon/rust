@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
+mod foo {
+    pub struct Foo;
+    impl Foo {
+        fn bar(&self) {}
+    }
 
-// http://phpsadness.com/sad/1
+    pub trait Baz {
+        fn bar(&self) -> bool {}
+    }
+    impl Baz for Foo {}
+}
 
 fn main() {
-    ::; //~ ERROR expected identifier, found `;`
+    use foo::Baz;
+
+    // Check that `bar` resolves to the trait method, not the inherent impl method.
+    let _: () = foo::Foo.bar(); //~ ERROR mismatched types
 }
