@@ -44,7 +44,6 @@ extern crate syntax;
 extern crate rustc;
 #[macro_use]
 extern crate log;
-extern crate rustc_front;
 extern crate rustc_back;
 extern crate rustc_const_eval;
 
@@ -166,6 +165,10 @@ pub fn register_builtins(store: &mut lint::LintStore, sess: Option<&Session>) {
         FutureIncompatibleInfo {
             id: LintId::of(INVALID_TYPE_PARAM_DEFAULT),
             reference: "PR 30742 <https://github.com/rust-lang/rust/pull/30724>",
+        },
+        FutureIncompatibleInfo {
+            id: LintId::of(SUPER_OR_SELF_IN_GLOBAL_PATH),
+            reference: "PR #32403 <https://github.com/rust-lang/rust/pull/32403>",
         },
         FutureIncompatibleInfo {
             id: LintId::of(MATCH_OF_UNIT_VARIANT_VIA_PAREN_DOTDOT),

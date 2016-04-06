@@ -14,7 +14,6 @@
 pub use self::Type::*;
 pub use self::PrimitiveType::*;
 pub use self::TypeKind::*;
-pub use self::StructField::*;
 pub use self::VariantKind::*;
 pub use self::Mutability::*;
 pub use self::Import::*;
@@ -36,13 +35,13 @@ use syntax::ptr::P;
 
 use rustc_trans::back::link;
 use rustc::middle::cstore::{self, CrateStore};
-use rustc::middle::def::Def;
-use rustc::middle::def_id::{DefId, DefIndex};
+use rustc::hir::def::Def;
+use rustc::hir::def_id::{DefId, DefIndex};
 use rustc::ty::subst::{self, ParamSpace, VecPerParamSpace};
 use rustc::ty;
 use rustc::middle::stability;
 
-use rustc_front::hir;
+use rustc::hir;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -53,6 +52,7 @@ use std::env::current_dir;
 use core::DocContext;
 use doctree;
 use visit_ast;
+use html::item_type::ItemType;
 
 /// A stable identifier to the particular version of JSON output.
 /// Increment this when the `Crate` and related structures change.
@@ -273,36 +273,49 @@ impl Item {
     }
     pub fn is_crate(&self) -> bool {
         match self.inner {
-            ModuleItem(Module { items: _, is_crate: true }) => true,
-            _ => false
+            StrippedItem(box ModuleItem(Module { is_crate: true, ..})) |
+            ModuleItem(Module { is_crate: true, ..}) => true,
+            _ => false,
         }
     }
     pub fn is_mod(&self) -> bool {
-        match self.inner { ModuleItem(..) => true, _ => false }
+        ItemType::from_item(self) == ItemType::Module
     }
     pub fn is_trait(&self) -> bool {
-        match self.inner { TraitItem(..) => true, _ => false }
+        ItemType::from_item(self) == ItemType::Trait
     }
     pub fn is_struct(&self) -> bool {
-        match self.inner { StructItem(..) => true, _ => false }
+        ItemType::from_item(self) == ItemType::Struct
     }
     pub fn is_enum(&self) -> bool {
-        match self.inner { EnumItem(..) => true, _ => false }
+        ItemType::from_item(self) == ItemType::Module
     }
     pub fn is_fn(&self) -> bool {
-        match self.inner { FunctionItem(..) => true, _ => false }
+        ItemType::from_item(self) == ItemType::Function
     }
     pub fn is_associated_type(&self) -> bool {
-        match self.inner { AssociatedTypeItem(..) => true, _ => false }
+        ItemType::from_item(self) == ItemType::AssociatedType
     }
     pub fn is_associated_const(&self) -> bool {
-        match self.inner { AssociatedConstItem(..) => true, _ => false }
+        ItemType::from_item(self) == ItemType::AssociatedConst
     }
     pub fn is_method(&self) -> bool {
-        match self.inner { MethodItem(..) => true, _ => false }
+        ItemType::from_item(self) == ItemType::Method
     }
     pub fn is_ty_method(&self) -> bool {
-        match self.inner { TyMethodItem(..) => true, _ => false }
+        ItemType::from_item(self) == ItemType::TyMethod
+    }
+    pub fn is_stripped(&self) -> bool {
+        match self.inner { StrippedItem(..) => true, _ => false }
+    }
+    pub fn has_stripped_fields(&self) -> Option<bool> {
+        match self.inner {
+            StructItem(ref _struct) => Some(_struct.fields_stripped),
+            VariantItem(Variant { kind: StructVariant(ref vstruct)} ) => {
+                Some(vstruct.fields_stripped)
+            },
+            _ => None,
+        }
     }
 
     pub fn stability_class(&self) -> String {
@@ -341,7 +354,7 @@ pub enum ItemEnum {
     TyMethodItem(TyMethod),
     /// A method with a body.
     MethodItem(Method),
-    StructFieldItem(StructField),
+    StructFieldItem(Type),
     VariantItem(Variant),
     /// `fn`s from an extern block
     ForeignFunctionItem(Function),
@@ -352,6 +365,8 @@ pub enum ItemEnum {
     AssociatedConstItem(Type, Option<String>),
     AssociatedTypeItem(Vec<TyParamBound>, Option<Type>),
     DefaultImplItem(DefaultImpl),
+    /// An item that has been stripped by a rustdoc pass
+    StrippedItem(Box<ItemEnum>),
 }
 
 #[derive(Clone, RustcEncodable, RustcDecodable, Debug)]
@@ -548,7 +563,7 @@ pub enum TyParamBound {
 
 impl TyParamBound {
     fn maybe_sized(cx: &DocContext) -> TyParamBound {
-        use rustc_front::hir::TraitBoundModifier as TBM;
+        use rustc::hir::TraitBoundModifier as TBM;
         let mut sized_bound = ty::BoundSized.clean(cx);
         if let TyParamBound::TraitBound(_, ref mut tbm) = sized_bound {
             *tbm = TBM::Maybe
@@ -557,7 +572,7 @@ impl TyParamBound {
     }
 
     fn is_sized_bound(&self, cx: &DocContext) -> bool {
-        use rustc_front::hir::TraitBoundModifier as TBM;
+        use rustc::hir::TraitBoundModifier as TBM;
         if let Some(tcx) = cx.tcx_opt() {
             if let TyParamBound::TraitBound(PolyTrait { ref trait_, .. }, TBM::None) = *self {
                 if trait_.def_id() == tcx.lang_items.sized_trait() {
@@ -1594,7 +1609,7 @@ impl PrimitiveType {
 
 impl Clean<Type> for hir::Ty {
     fn clean(&self, cx: &DocContext) -> Type {
-        use rustc_front::hir::*;
+        use rustc::hir::*;
         match self.node {
             TyPtr(ref m) => RawPointer(m.mutbl.clean(cx), box m.ty.clean(cx)),
             TyRptr(ref l, ref m) =>
@@ -1733,12 +1748,6 @@ impl<'tcx> Clean<Type> for ty::Ty<'tcx> {
     }
 }
 
-#[derive(Clone, RustcEncodable, RustcDecodable, Debug)]
-pub enum StructField {
-    HiddenStructField, // inserted later by strip passes
-    TypedStructField(Type),
-}
-
 impl Clean<Item> for hir::StructField {
     fn clean(&self, cx: &DocContext) -> Item {
         Item {
@@ -1749,7 +1758,7 @@ impl Clean<Item> for hir::StructField {
             stability: get_stability(cx, cx.map.local_def_id(self.id)),
             deprecation: get_deprecation(cx, cx.map.local_def_id(self.id)),
             def_id: cx.map.local_def_id(self.id),
-            inner: StructFieldItem(TypedStructField(self.ty.clean(cx))),
+            inner: StructFieldItem(self.ty.clean(cx)),
         }
     }
 }
@@ -1766,7 +1775,7 @@ impl<'tcx> Clean<Item> for ty::FieldDefData<'tcx, 'static> {
             stability: get_stability(cx, self.did),
             deprecation: get_deprecation(cx, self.did),
             def_id: self.did,
-            inner: StructFieldItem(TypedStructField(self.unsubst_ty().clean(cx))),
+            inner: StructFieldItem(self.unsubst_ty().clean(cx)),
         }
     }
 }
@@ -1817,7 +1826,7 @@ pub struct VariantStruct {
     pub fields_stripped: bool,
 }
 
-impl Clean<VariantStruct> for ::rustc_front::hir::VariantData {
+impl Clean<VariantStruct> for ::rustc::hir::VariantData {
     fn clean(&self, cx: &DocContext) -> VariantStruct {
         VariantStruct {
             struct_type: doctree::struct_type_from_def(self),
@@ -1897,9 +1906,7 @@ impl<'tcx> Clean<Item> for ty::VariantDefData<'tcx, 'static> {
                             def_id: field.did,
                             stability: get_stability(cx, field.did),
                             deprecation: get_deprecation(cx, field.did),
-                            inner: StructFieldItem(
-                                TypedStructField(field.unsubst_ty().clean(cx))
-                            )
+                            inner: StructFieldItem(field.unsubst_ty().clean(cx))
                         }
                     }).collect()
                 })
@@ -2547,7 +2554,7 @@ fn lit_to_string(lit: &ast::Lit) -> String {
 }
 
 fn name_from_pat(p: &hir::Pat) -> String {
-    use rustc_front::hir::*;
+    use rustc::hir::*;
     debug!("Trying to get a name from pattern: {:?}", p);
 
     match p.node {
