@@ -119,6 +119,9 @@ pub struct SharedContext {
     /// The base-URL of the issue tracker for when an item has been tagged with
     /// an issue number.
     pub issue_tracker_base_url: Option<String>,
+    /// The given user css file which allow to customize the generated
+    /// documentation theme.
+    pub css_file_extension: Option<PathBuf>,
 }
 
 /// Indicates where an external crate can be found.
@@ -411,7 +414,8 @@ pub fn derive_id(candidate: String) -> String {
 pub fn run(mut krate: clean::Crate,
            external_html: &ExternalHtml,
            dst: PathBuf,
-           passes: HashSet<String>) -> Result<(), Error> {
+           passes: HashSet<String>,
+           css_file_extension: Option<PathBuf>) -> Result<(), Error> {
     let src_root = match krate.src.parent() {
         Some(p) => p.to_path_buf(),
         None => PathBuf::new(),
@@ -429,6 +433,7 @@ pub fn run(mut krate: clean::Crate,
             krate: krate.name.clone(),
             playground_url: "".to_string(),
         },
+        css_file_extension: css_file_extension.clone(),
     };
 
     // Crawl the crate attributes looking for attributes which control how we're
@@ -637,6 +642,7 @@ fn write_shared(cx: &Context,
 
     // Add all the static files. These may already exist, but we just
     // overwrite them anyway to make sure that they're fresh and up-to-date.
+
     write(cx.dst.join("jquery.js"),
           include_bytes!("static/jquery-2.1.4.min.js"))?;
     write(cx.dst.join("main.js"),
@@ -647,6 +653,17 @@ fn write_shared(cx: &Context,
           include_bytes!("static/rustdoc.css"))?;
     write(cx.dst.join("main.css"),
           include_bytes!("static/styles/main.css"))?;
+    if let Some(ref css) = cx.shared.css_file_extension {
+        let mut content = String::new();
+        let css = css.as_path();
+        let mut f = try_err!(File::open(css), css);
+
+        try_err!(f.read_to_string(&mut content), css);
+        let css = cx.dst.join("theme.css");
+        let css = css.as_path();
+        let mut f = try_err!(File::create(css), css);
+        try_err!(write!(f, "{}", &content), css);
+    }
     write(cx.dst.join("normalize.css"),
           include_bytes!("static/normalize.css"))?;
     write(cx.dst.join("FiraSans-Regular.woff"),
@@ -932,7 +949,8 @@ impl<'a> SourceCollector<'a> {
             keywords: BASIC_KEYWORDS,
         };
         layout::render(&mut w, &self.scx.layout,
-                       &page, &(""), &Source(contents))?;
+                       &page, &(""), &Source(contents),
+                       self.scx.css_file_extension.is_some())?;
         w.flush()?;
         self.scx.local_sources.insert(p, href);
         Ok(())
@@ -1294,8 +1312,8 @@ impl Context {
             if !cx.render_redirect_pages {
                 layout::render(&mut writer, &cx.shared.layout, &page,
                                &Sidebar{ cx: cx, item: it },
-                               &Item{ cx: cx, item: it })?;
-
+                               &Item{ cx: cx, item: it },
+                               cx.shared.css_file_extension.is_some())?;
             } else {
                 let mut url = repeat("../").take(cx.current.len())
                                            .collect::<String>();
@@ -1696,13 +1714,13 @@ fn item_module(w: &mut fmt::Formatter, cx: &Context,
                 match *src {
                     Some(ref src) => {
                         write!(w, "<tr><td><code>{}extern crate {} as {};",
-                               VisSpace(myitem.visibility),
+                               VisSpace(&myitem.visibility),
                                src,
                                name)?
                     }
                     None => {
                         write!(w, "<tr><td><code>{}extern crate {};",
-                               VisSpace(myitem.visibility), name)?
+                               VisSpace(&myitem.visibility), name)?
                     }
                 }
                 write!(w, "</code></td></tr>")?;
@@ -1710,7 +1728,7 @@ fn item_module(w: &mut fmt::Formatter, cx: &Context,
 
             clean::ImportItem(ref import) => {
                 write!(w, "<tr><td><code>{}{}</code></td></tr>",
-                       VisSpace(myitem.visibility), *import)?;
+                       VisSpace(&myitem.visibility), *import)?;
             }
 
             _ => {
@@ -1813,7 +1831,7 @@ fn item_constant(w: &mut fmt::Formatter, cx: &Context, it: &clean::Item,
                  c: &clean::Constant) -> fmt::Result {
     write!(w, "<pre class='rust const'>{vis}const \
                {name}: {typ}{init}</pre>",
-           vis = VisSpace(it.visibility),
+           vis = VisSpace(&it.visibility),
            name = it.name.as_ref().unwrap(),
            typ = c.type_,
            init = Initializer(&c.expr))?;
@@ -1824,7 +1842,7 @@ fn item_static(w: &mut fmt::Formatter, cx: &Context, it: &clean::Item,
                s: &clean::Static) -> fmt::Result {
     write!(w, "<pre class='rust static'>{vis}static {mutability}\
                {name}: {typ}{init}</pre>",
-           vis = VisSpace(it.visibility),
+           vis = VisSpace(&it.visibility),
            mutability = MutableSpace(s.mutability),
            name = it.name.as_ref().unwrap(),
            typ = s.type_,
@@ -1841,7 +1859,7 @@ fn item_function(w: &mut fmt::Formatter, cx: &Context, it: &clean::Item,
     };
     write!(w, "<pre class='rust fn'>{vis}{constness}{unsafety}{abi}fn \
                {name}{generics}{decl}{where_clause}</pre>",
-           vis = VisSpace(it.visibility),
+           vis = VisSpace(&it.visibility),
            constness = ConstnessSpace(vis_constness),
            unsafety = UnsafetySpace(f.unsafety),
            abi = AbiSpace(f.abi),
@@ -1869,7 +1887,7 @@ fn item_trait(w: &mut fmt::Formatter, cx: &Context, it: &clean::Item,
 
     // Output the trait definition
     write!(w, "<pre class='rust trait'>{}{}trait {}{}{}{} ",
-           VisSpace(it.visibility),
+           VisSpace(&it.visibility),
            UnsafetySpace(t.unsafety),
            it.name.as_ref().unwrap(),
            t.generics,
@@ -2196,7 +2214,7 @@ fn item_enum(w: &mut fmt::Formatter, cx: &Context, it: &clean::Item,
     write!(w, "<pre class='rust enum'>")?;
     render_attributes(w, it)?;
     write!(w, "{}enum {}{}{}",
-           VisSpace(it.visibility),
+           VisSpace(&it.visibility),
            it.name.as_ref().unwrap(),
            e.generics,
            WhereClause(&e.generics))?;
@@ -2308,7 +2326,7 @@ fn render_struct(w: &mut fmt::Formatter, it: &clean::Item,
                  tab: &str,
                  structhead: bool) -> fmt::Result {
     write!(w, "{}{}{}",
-           VisSpace(it.visibility),
+           VisSpace(&it.visibility),
            if structhead {"struct "} else {""},
            it.name.as_ref().unwrap())?;
     if let Some(g) = g {
@@ -2320,7 +2338,7 @@ fn render_struct(w: &mut fmt::Formatter, it: &clean::Item,
             for field in fields {
                 if let clean::StructFieldItem(ref ty) = field.inner {
                     write!(w, "    {}{}: {},\n{}",
-                           VisSpace(field.visibility),
+                           VisSpace(&field.visibility),
                            field.name.as_ref().unwrap(),
                            *ty,
                            tab)?;
@@ -2343,7 +2361,7 @@ fn render_struct(w: &mut fmt::Formatter, it: &clean::Item,
                         write!(w, "_")?
                     }
                     clean::StructFieldItem(ref ty) => {
-                        write!(w, "{}{}", VisSpace(field.visibility), *ty)?
+                        write!(w, "{}{}", VisSpace(&field.visibility), *ty)?
                     }
                     _ => unreachable!()
                 }
