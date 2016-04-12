@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// #[deprecated] can't be used in staged api
+// compile-flags: -Z parse-only -Z continue-parse-after-error
 
-#![feature(staged_api)]
+pub fn test() {
+    foo(|_|) //~ ERROR unexpected token: `)`
+}
 
-#![stable(feature = "test_feature", since = "1.0.0")]
-
-#[deprecated]
-fn main() { } //~ERROR `#[deprecated]` cannot be used in staged api
+fn main() { }

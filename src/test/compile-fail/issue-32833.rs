@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// #[deprecated] can't be used in staged api
+use bar::Foo; //~ ERROR There is no `Foo` in `bar` [E0432]
+mod bar {
+    use Foo; //~ ERROR There is no `Foo` in the crate root [E0432]
+}
 
-#![feature(staged_api)]
-
-#![stable(feature = "test_feature", since = "1.0.0")]
-
-#[deprecated]
-fn main() { } //~ERROR `#[deprecated]` cannot be used in staged api
+fn main() {}

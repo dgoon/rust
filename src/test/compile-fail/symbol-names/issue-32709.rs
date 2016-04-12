@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// #[deprecated] can't be used in staged api
+#![feature(question_mark)]
 
-#![feature(staged_api)]
+// Make sure that the span of try shorthand does not include the trailing
+// semicolon;
+fn a() -> Result<i32, ()> {
+    Err(5)?; //~ ERROR 16:5: 16:12
+    Ok(1)
+}
 
-#![stable(feature = "test_feature", since = "1.0.0")]
-
-#[deprecated]
-fn main() { } //~ERROR `#[deprecated]` cannot be used in staged api
+fn main() {}
