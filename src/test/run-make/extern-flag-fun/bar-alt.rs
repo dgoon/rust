@@ -1,4 +1,4 @@
-// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,4 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-macro_rules! id {
-    ($e:expr) => { $e }
-}
-
-fn main() {
-    id!(x?);  //~ error: the `?` operator is not stable (see issue #31436)
-    y?;  //~ error: the `?` operator is not stable (see issue #31436)
-}
+pub fn f() {}

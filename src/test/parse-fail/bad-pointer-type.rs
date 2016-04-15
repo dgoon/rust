@@ -8,11 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-macro_rules! id {
-    ($e:expr) => { $e }
-}
+// compile-flags: -Z parse-only
 
-fn main() {
-    id!(x?);  //~ error: the `?` operator is not stable (see issue #31436)
-    y?;  //~ error: the `?` operator is not stable (see issue #31436)
+fn foo(_: *()) {
+    //~^ expected mut or const in raw pointer type (use `*mut T` or `*const T` as appropriate)
 }

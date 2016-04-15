@@ -8,11 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-macro_rules! id {
-    ($e:expr) => { $e }
-}
+#![crate_name = "e"]
+#![crate_type = "rlib"]
 
-fn main() {
-    id!(x?);  //~ error: the `?` operator is not stable (see issue #31436)
-    y?;  //~ error: the `?` operator is not stable (see issue #31436)
-}
+pub fn f() {}
