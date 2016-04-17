@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,6 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
+pub(crate) //~ ERROR experimental
+mod foo {}
 
-use std::any::; //~ ERROR expected identifier, found `;`
+pub(self) //~ ERROR experimental
+mod bar {}
+
+struct S {
+    pub(self) x: i32, //~ ERROR experimental
+}
+impl S {
+    pub(self) fn f() {} //~ ERROR experimental
+}
+extern {
+    pub(self) fn f(); //~ ERROR experimental
+}

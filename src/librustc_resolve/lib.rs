@@ -29,9 +29,6 @@ extern crate log;
 extern crate syntax;
 extern crate arena;
 #[macro_use]
-#[no_link]
-extern crate rustc_bitflags;
-#[macro_use]
 extern crate rustc;
 
 use self::PatternBindingMode::*;
@@ -55,6 +52,7 @@ use rustc::middle::cstore::CrateStore;
 use rustc::hir::def::*;
 use rustc::hir::def_id::DefId;
 use rustc::hir::pat_util::pat_bindings;
+use rustc::ty;
 use rustc::ty::subst::{ParamSpace, FnSpace, TypeSpace};
 use rustc::hir::{Freevar, FreevarMap, TraitMap, GlobMap};
 use rustc::util::nodemap::{NodeMap, FnvHashMap, FnvHashSet};
@@ -820,7 +818,7 @@ enum ParentLink<'a> {
 pub struct ModuleS<'a> {
     parent_link: ParentLink<'a>,
     def: Option<Def>,
-    is_public: bool,
+    vis: ty::Visibility,
 
     // If the module is an extern crate, `def` is root of the external crate and `extern_crate_id`
     // is the NodeId of the local `extern crate` item (otherwise, `extern_crate_id` is None).
@@ -864,12 +862,12 @@ impl<'a> ModuleS<'a> {
     fn new(parent_link: ParentLink<'a>,
            def: Option<Def>,
            external: bool,
-           is_public: bool,
+           vis: ty::Visibility,
            arenas: &'a ResolverArenas<'a>) -> Self {
         ModuleS {
             parent_link: parent_link,
             def: def,
-            is_public: is_public,
+            vis: vis,
             extern_crate_id: None,
             resolutions: RefCell::new(HashMap::new()),
             unresolved_imports: RefCell::new(Vec::new()),
@@ -892,9 +890,10 @@ impl<'a> ModuleS<'a> {
         self.def.as_ref().map(Def::def_id)
     }
 
+    // `self` resolves to the first module ancestor that `is_normal`.
     fn is_normal(&self) -> bool {
         match self.def {
-            Some(Def::Mod(_)) | Some(Def::ForeignMod(_)) => true,
+            Some(Def::Mod(_)) => true,
             _ => false,
         }
     }
@@ -905,50 +904,20 @@ impl<'a> ModuleS<'a> {
             _ => false,
         }
     }
-
-    fn is_ancestor_of(&self, module: Module<'a>) -> bool {
-        if self.def_id() == module.def_id() { return true }
-        match module.parent_link {
-            ParentLink::BlockParentLink(parent, _) |
-            ParentLink::ModuleParentLink(parent, _) => self.is_ancestor_of(parent),
-            _ => false,
-        }
-    }
 }
 
 impl<'a> fmt::Debug for ModuleS<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "{:?}, {}",
-               self.def,
-               if self.is_public {
-                   "public"
-               } else {
-                   "private"
-               })
-    }
-}
-
-bitflags! {
-    #[derive(Debug)]
-    flags DefModifiers: u8 {
-        // Enum variants are always considered `PUBLIC`, this is needed for `use Enum::Variant`
-        // or `use Enum::*` to work on private enums.
-        const PUBLIC     = 1 << 0,
-        const IMPORTABLE = 1 << 1,
-        // Variants are considered `PUBLIC`, but some of them live in private enums.
-        // We need to track them to prohibit reexports like `pub use PrivEnum::Variant`.
-        const PRIVATE_VARIANT = 1 << 2,
-        const GLOB_IMPORTED = 1 << 3,
+        write!(f, "{:?}, {:?}", self.def, self.vis)
     }
 }
 
 // Records a possibly-private value, type, or module definition.
 #[derive(Clone, Debug)]
 pub struct NameBinding<'a> {
-    modifiers: DefModifiers,
     kind: NameBindingKind<'a>,
     span: Option<Span>,
+    vis: ty::Visibility,
 }
 
 #[derive(Clone, Debug)]
@@ -957,7 +926,7 @@ enum NameBindingKind<'a> {
     Module(Module<'a>),
     Import {
         binding: &'a NameBinding<'a>,
-        id: NodeId,
+        directive: &'a ImportDirective<'a>,
         // Some(error) if using this imported name causes the import to be a privacy error
         privacy_error: Option<Box<PrivacyError<'a>>>,
     },
@@ -968,13 +937,11 @@ struct PrivacyError<'a>(Span, Name, &'a NameBinding<'a>);
 
 impl<'a> NameBinding<'a> {
     fn create_from_module(module: Module<'a>, span: Option<Span>) -> Self {
-        let modifiers = if module.is_public {
-            DefModifiers::PUBLIC
-        } else {
-            DefModifiers::empty()
-        } | DefModifiers::IMPORTABLE;
-
-        NameBinding { modifiers: modifiers, kind: NameBindingKind::Module(module), span: span }
+        NameBinding {
+            kind: NameBindingKind::Module(module),
+            span: span,
+            vis: module.vis,
+        }
     }
 
     fn module(&self) -> Option<Module<'a>> {
@@ -993,12 +960,20 @@ impl<'a> NameBinding<'a> {
         }
     }
 
-    fn defined_with(&self, modifiers: DefModifiers) -> bool {
-        self.modifiers.contains(modifiers)
+    fn is_pseudo_public(&self) -> bool {
+        self.pseudo_vis() == ty::Visibility::Public
     }
 
-    fn is_public(&self) -> bool {
-        self.defined_with(DefModifiers::PUBLIC)
+    // We sometimes need to treat variants as `pub` for backwards compatibility
+    fn pseudo_vis(&self) -> ty::Visibility {
+        if self.is_variant() { ty::Visibility::Public } else { self.vis }
+    }
+
+    fn is_variant(&self) -> bool {
+        match self.kind {
+            NameBindingKind::Def(Def::Variant(..)) => true,
+            _ => false,
+        }
     }
 
     fn is_extern_crate(&self) -> bool {
@@ -1009,6 +984,20 @@ impl<'a> NameBinding<'a> {
         match self.kind {
             NameBindingKind::Import { .. } => true,
             _ => false,
+        }
+    }
+
+    fn is_glob_import(&self) -> bool {
+        match self.kind {
+            NameBindingKind::Import { directive, .. } => directive.is_glob(),
+            _ => false,
+        }
+    }
+
+    fn is_importable(&self) -> bool {
+        match self.def().unwrap() {
+            Def::AssociatedConst(..) | Def::Method(..) | Def::AssociatedTy(..) => false,
+            _ => true,
         }
     }
 }
@@ -1148,8 +1137,9 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
            arenas: &'a ResolverArenas<'a>)
            -> Resolver<'a, 'tcx> {
         let root_def_id = ast_map.local_def_id(CRATE_NODE_ID);
+        let vis = ty::Visibility::Public;
         let graph_root =
-            ModuleS::new(NoParentLink, Some(Def::Mod(root_def_id)), false, true, arenas);
+            ModuleS::new(NoParentLink, Some(Def::Mod(root_def_id)), false, vis, arenas);
         let graph_root = arenas.alloc_module(graph_root);
 
         Resolver {
@@ -1209,17 +1199,17 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                   parent_link: ParentLink<'a>,
                   def: Option<Def>,
                   external: bool,
-                  is_public: bool) -> Module<'a> {
-        self.arenas.alloc_module(ModuleS::new(parent_link, def, external, is_public, self.arenas))
+                  vis: ty::Visibility) -> Module<'a> {
+        self.arenas.alloc_module(ModuleS::new(parent_link, def, external, vis, self.arenas))
     }
 
     fn new_extern_crate_module(&self,
                                parent_link: ParentLink<'a>,
                                def: Def,
-                               is_public: bool,
+                               vis: ty::Visibility,
                                local_node_id: NodeId)
                                -> Module<'a> {
-        let mut module = ModuleS::new(parent_link, Some(def), false, is_public, self.arenas);
+        let mut module = ModuleS::new(parent_link, Some(def), false, vis, self.arenas);
         module.extern_crate_id = Some(local_node_id);
         self.arenas.modules.alloc(module)
     }
@@ -1235,12 +1225,13 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
             self.used_crates.insert(krate);
         }
 
-        let (import_id, privacy_error) = match binding.kind {
-            NameBindingKind::Import { id, ref privacy_error, .. } => (id, privacy_error),
+        let (directive, privacy_error) = match binding.kind {
+            NameBindingKind::Import { directive, ref privacy_error, .. } =>
+                (directive, privacy_error),
             _ => return,
         };
 
-        self.used_imports.insert((import_id, ns));
+        self.used_imports.insert((directive.id, ns));
         if let Some(error) = privacy_error.as_ref() {
             self.privacy_errors.push((**error).clone());
         }
@@ -1248,14 +1239,14 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
         if !self.make_glob_map {
             return;
         }
-        if self.glob_map.contains_key(&import_id) {
-            self.glob_map.get_mut(&import_id).unwrap().insert(name);
+        if self.glob_map.contains_key(&directive.id) {
+            self.glob_map.get_mut(&directive.id).unwrap().insert(name);
             return;
         }
 
         let mut new_set = FnvHashSet();
         new_set.insert(name);
-        self.glob_map.insert(import_id, new_set);
+        self.glob_map.insert(directive.id, new_set);
     }
 
     fn get_trait_name(&self, did: DefId) -> Name {
@@ -1335,7 +1326,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                     // Check to see whether there are type bindings, and, if
                     // so, whether there is a module within.
                     if let Some(module_def) = binding.module() {
-                        self.check_privacy(search_module, name, binding, span);
+                        self.check_privacy(name, binding, span);
                         search_module = module_def;
                     } else {
                         let msg = format!("Not a module `{}`", name);
@@ -1466,7 +1457,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
     }
 
     /// Returns the nearest normal module parent of the given module.
-    fn get_nearest_normal_module_parent(&mut self, module_: Module<'a>) -> Option<Module<'a>> {
+    fn get_nearest_normal_module_parent(&self, module_: Module<'a>) -> Option<Module<'a>> {
         let mut module_ = module_;
         loop {
             match module_.parent_link {
@@ -1485,7 +1476,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
 
     /// Returns the nearest normal module parent of the given module, or the
     /// module itself if it is a normal module.
-    fn get_nearest_normal_module_parent_or_self(&mut self, module_: Module<'a>) -> Module<'a> {
+    fn get_nearest_normal_module_parent_or_self(&self, module_: Module<'a>) -> Module<'a> {
         if module_.is_normal() {
             return module_;
         }
@@ -1617,7 +1608,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
 
     fn resolve_crate(&mut self, krate: &hir::Crate) {
         debug!("(resolving crate) starting");
-
+        self.current_module = self.graph_root;
         intravisit::walk_crate(self, krate);
     }
 
@@ -1980,6 +1971,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                 this.with_self_rib(Def::SelfTy(trait_id, Some((item_id, self_type.id))), |this| {
                     this.with_current_self_type(self_type, |this| {
                         for impl_item in impl_items {
+                            this.resolve_visibility(&impl_item.vis);
                             match impl_item.node {
                                 hir::ImplItemKind::Const(..) => {
                                     // If this is a trait impl, ensure the const
@@ -2414,7 +2406,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                                 }
                             }
                         }
-                    } else {
+                    } else if let Err(false) = self.resolve_path(pat_id, &path, 0, ValueNS) {
                         resolve_error(
                             self,
                             path.span,
@@ -2772,7 +2764,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
         let name = segments.last().unwrap().identifier.name;
         let result = self.resolve_name_in_module(containing_module, name, namespace, false, true);
         result.success().map(|binding| {
-            self.check_privacy(containing_module, name, binding, span);
+            self.check_privacy(name, binding, span);
             binding.def().unwrap()
         }).ok_or(false)
     }
@@ -2822,7 +2814,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
         let name = segments.last().unwrap().identifier.name;
         let result = self.resolve_name_in_module(containing_module, name, namespace, false, true);
         result.success().map(|binding| {
-            self.check_privacy(containing_module, name, binding, span);
+            self.check_privacy(name, binding, span);
             binding.def().unwrap()
         }).ok_or(false)
     }
@@ -3314,7 +3306,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                         // only if both the module is public and the entity is
                         // declared as public (due to pruning, we don't explore
                         // outside crate private modules => no need to check this)
-                        if !in_module_is_extern || name_binding.is_public() {
+                        if !in_module_is_extern || name_binding.vis == ty::Visibility::Public {
                             lookup_results.push(path);
                         }
                     }
@@ -3339,7 +3331,7 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
                         _ => bug!(),
                     };
 
-                    if !in_module_is_extern || name_binding.is_public() {
+                    if !in_module_is_extern || name_binding.vis == ty::Visibility::Public {
                         // add the module to the lookup
                         let is_extern = in_module_is_extern || name_binding.is_extern_crate();
                         worklist.push((module, path_segments, is_extern));
@@ -3379,16 +3371,51 @@ impl<'a, 'tcx> Resolver<'a, 'tcx> {
         }
     }
 
-    fn is_visible(&self, binding: &'a NameBinding<'a>, parent: Module<'a>) -> bool {
-        binding.is_public() || parent.is_ancestor_of(self.current_module)
+    fn resolve_visibility(&mut self, vis: &hir::Visibility) -> ty::Visibility {
+        let (path, id) = match *vis {
+            hir::Public => return ty::Visibility::Public,
+            hir::Visibility::Crate => return ty::Visibility::Restricted(ast::CRATE_NODE_ID),
+            hir::Visibility::Restricted { ref path, id } => (path, id),
+            hir::Inherited => {
+                let current_module =
+                    self.get_nearest_normal_module_parent_or_self(self.current_module);
+                let id = self.ast_map.as_local_node_id(current_module.def_id().unwrap()).unwrap();
+                return ty::Visibility::Restricted(id);
+            }
+        };
+
+        let segments: Vec<_> = path.segments.iter().map(|seg| seg.identifier.name).collect();
+        let vis = match self.resolve_module_path(&segments, DontUseLexicalScope, path.span) {
+            Success(module) => {
+                let def = module.def.unwrap();
+                let path_resolution = PathResolution { base_def: def, depth: 0 };
+                self.def_map.borrow_mut().insert(id, path_resolution);
+                ty::Visibility::Restricted(self.ast_map.as_local_node_id(def.def_id()).unwrap())
+            }
+            Failed(Some((span, msg))) => {
+                self.session.span_err(span, &format!("failed to resolve module path. {}", msg));
+                ty::Visibility::Public
+            }
+            _ => {
+                self.session.span_err(path.span, "unresolved module path");
+                ty::Visibility::Public
+            }
+        };
+        if !self.is_accessible(vis) {
+            let msg = format!("visibilities can only be restricted to ancestor modules");
+            self.session.span_err(path.span, &msg);
+        }
+        vis
     }
 
-    fn check_privacy(&mut self,
-                     module: Module<'a>,
-                     name: Name,
-                     binding: &'a NameBinding<'a>,
-                     span: Span) {
-        if !self.is_visible(binding, module) {
+    fn is_accessible(&self, vis: ty::Visibility) -> bool {
+        let current_module = self.get_nearest_normal_module_parent_or_self(self.current_module);
+        let node_id = self.ast_map.as_local_node_id(current_module.def_id().unwrap()).unwrap();
+        vis.is_accessible_from(node_id, &self.ast_map)
+    }
+
+    fn check_privacy(&mut self, name: Name, binding: &'a NameBinding<'a>, span: Span) {
+        if !self.is_accessible(binding.vis) {
             self.privacy_errors.push(PrivacyError(span, name, binding));
         }
     }

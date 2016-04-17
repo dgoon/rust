@@ -28,7 +28,6 @@ use syntax::attr;
 use syntax::attr::AttrMetaMethods;
 use syntax::errors::{ColorConfig, Handler};
 use syntax::parse;
-use syntax::parse::lexer::Reader;
 use syntax::parse::token::InternedString;
 use syntax::feature_gate::UnstableFeatures;
 
@@ -889,8 +888,9 @@ pub fn rustc_short_optgroups() -> Vec<RustcOptGroup> {
     vec![
         opt::flag_s("h", "help", "Display this message"),
         opt::multi_s("", "cfg", "Configure the compilation environment", "SPEC"),
-        opt::multi_s("L", "",   "Add a directory to the library search path",
-                   "[KIND=]PATH"),
+        opt::multi_s("L", "",   "Add a directory to the library search path. The
+                             optional KIND can be one of dependency, crate, native,
+                             framework or all (the default).", "[KIND=]PATH"),
         opt::multi_s("l", "",   "Link the generated crate(s) to the specified native
                              library NAME. The optional KIND can be one of
                              static, dylib, or framework. If omitted, dylib is

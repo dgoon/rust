@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,6 +8,24 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
+#![feature(pub_restricted)]
+#![deny(private_in_public)]
+#![allow(warnings)]
 
-use std::any::; //~ ERROR expected identifier, found `;`
+mod foo {
+    pub mod bar {
+        pub struct S {
+            pub(foo) x: i32,
+        }
+    }
+
+    fn f() {
+        use foo::bar::S;
+        S { x: 0 }; // ok
+    }
+}
+
+fn main() {
+    use foo::bar::S;
+    S { x: 0 }; //~ ERROR private
+}

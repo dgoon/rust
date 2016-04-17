@@ -21,14 +21,13 @@ pub use self::fold::TypeFoldable;
 use dep_graph::{self, DepNode};
 use hir::map as ast_map;
 use middle;
-use middle::cstore::{self, CrateStore, LOCAL_CRATE};
+use middle::cstore::{self, LOCAL_CRATE};
 use hir::def::{self, Def, ExportMap};
 use hir::def_id::DefId;
 use middle::lang_items::{FnTraitLangItem, FnMutTraitLangItem, FnOnceTraitLangItem};
 use middle::region::{CodeExtent};
 use traits;
 use ty;
-use ty::fold::TypeFolder;
 use ty::subst::{Subst, Substs, VecPerParamSpace};
 use ty::walk::TypeWalker;
 use util::common::MemoizationMap;
@@ -36,7 +35,7 @@ use util::nodemap::NodeSet;
 use util::nodemap::FnvHashMap;
 
 use serialize::{Encodable, Encoder, Decodable, Decoder};
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use std::cell::Cell;
 use std::hash::{Hash, Hasher};
 use std::iter;
@@ -287,6 +286,15 @@ impl Visibility {
     pub fn from_hir(visibility: &hir::Visibility, id: NodeId, tcx: &TyCtxt) -> Self {
         match *visibility {
             hir::Public => Visibility::Public,
+            hir::Visibility::Crate => Visibility::Restricted(ast::CRATE_NODE_ID),
+            hir::Visibility::Restricted { id, .. } => match tcx.def_map.borrow().get(&id) {
+                Some(resolution) => Visibility::Restricted({
+                    tcx.map.as_local_node_id(resolution.base_def.def_id()).unwrap()
+                }),
+                // If there is no resolution, `resolve` will have already reported an error, so
+                // assume that the visibility is public to avoid reporting more privacy errors.
+                None => Visibility::Public,
+            },
             hir::Inherited => Visibility::Restricted(tcx.map.get_module_parent(id)),
         }
     }
