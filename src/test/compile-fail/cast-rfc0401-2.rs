@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,8 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
+// RFC 401 test extracted into distinct file. This is because some the
+// change to suppress "derived" errors wound up suppressing this error
+// message, since the fallback for `3` doesn't occur.
 
-fn baz(a: &'self isize) { } //~ ERROR invalid lifetime name: 'self is no longer a special lifetime
-
-fn main() { }
+fn main() {
+    let _ = 3 as bool;
+    //~^ ERROR cannot cast as `bool`
+    //~| HELP compare with zero
+}
