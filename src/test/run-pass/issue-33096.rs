@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct Foo;
+// compile-flags: -g
 
-impl Foo {
-    fn orange(&self) {} //~ NOTE previous definition of `orange` here
-    fn orange(&self) {} //~ ERROR duplicate definitions with name `orange`
+use std::ops::Deref;
+
+trait Foo {
+    fn foo() {}
 }
 
-fn main() {}
+impl Foo for u8 {}
+
+fn bar<T: Deref>() where T::Target: Foo {
+    <<T as Deref>::Target as Foo>::foo()
+}
+
+fn main() {
+    bar::<&u8>();
+}
