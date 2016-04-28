@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,13 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Test that the trace_macros feature gate is on.
+// Tests that failing to syntax highlight a rust code-block doesn't cause
+// rustdoc to fail, while still rendering the code-block (without highlighting).
 
-fn main() {
-    // (Infrastructure does not attempt to detect uses in macro definitions.)
-    macro_rules! expando {
-        ($x: ident) => { trace_macros!($x) }
-    }
 
-    expando!(true); //~ ERROR `trace_macros` is not stable
-}
+// @has issue_12834/fn.foo.html
+// @has - //pre 'a + b '
+
+/// ```
+/// a + b ∈ Self ∀ a, b ∈ Self
+/// ```
+pub fn foo() {}

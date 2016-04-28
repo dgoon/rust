@@ -8,17 +8,26 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(pub_restricted)]
+#![allow(dead_code)]
+#![feature(rustc_attrs)]
 
-macro_rules! m {
-    ($p: path) => (pub($p) struct Z;)
-}
+macro_rules! foo (
+    () => (
+        #[derive_Clone] //~ WARN attributes of the form
+        struct T;
+    );
+);
 
-struct S<T>(T);
-m!{ S<u8> } //~ ERROR type or lifetime parameters in visibility path
+macro_rules! bar (
+    ($e:item) => ($e)
+);
 
-mod foo {
-    struct S(pub(foo<T>) ()); //~ ERROR type or lifetime parameters in visibility path
-}
+foo!();
 
-fn main() {}
+bar!(
+    #[derive_Clone] //~ WARN attributes of the form
+    struct S;
+);
+
+#[rustc_error]
+fn main() {} //~ ERROR compilation successful
