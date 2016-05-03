@@ -148,9 +148,7 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
             if is_fn_ty(&rcvr_ty, &fcx, span) {
                 macro_rules! report_function {
                     ($span:expr, $name:expr) => {
-                        err.fileline_note(
-                            $span,
-                            &format!("{} is a function, perhaps you wish to call it",
+                        err.note(&format!("{} is a function, perhaps you wish to call it",
                                      $name));
                     }
                 }
@@ -158,10 +156,6 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                 if let Some(expr) = rcvr_expr {
                     if let Ok (expr_string) = cx.sess.codemap().span_to_snippet(expr.span) {
                         report_function!(expr.span, expr_string);
-                        err.span_suggestion(expr.span,
-                                            "try calling the base function:",
-                                            format!("{}()",
-                                                    expr_string));
                     }
                     else if let Expr_::ExprPath(_, path) = expr.node.clone() {
                         if let Some(segment) = path.segments.last() {
@@ -172,8 +166,7 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
             }
 
             if !static_sources.is_empty() {
-                err.fileline_note(
-                    span,
+                err.note(
                     "found the following associated functions; to be used as \
                      methods, functions must have a `self` parameter");
 
@@ -187,8 +180,7 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                                      p))
                     .collect::<Vec<_>>()
                     .join(", ");
-                err.fileline_note(
-                    span,
+                err.note(
                     &format!("the method `{}` exists but the \
                              following trait bounds were not satisfied: {}",
                              item_name,
@@ -241,7 +233,7 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
             match *source {
                 CandidateSource::ImplSource(impl_did) => {
                     // Provide the best span we can. Use the item, if local to crate, else
-                    // the impl, if local to crate (item may be defaulted), else the call site.
+                    // the impl, if local to crate (item may be defaulted), else nothing.
                     let item = impl_item(fcx.tcx(), impl_did, item_name)
                         .or_else(|| {
                             trait_item(
@@ -250,8 +242,9 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                                 item_name
                             )
                         }).unwrap();
-                    let impl_span = fcx.tcx().map.def_id_span(impl_did, span);
-                    let item_span = fcx.tcx().map.def_id_span(item.def_id(), impl_span);
+                    let note_span = fcx.tcx().map.span_if_local(item.def_id()).or_else(|| {
+                        fcx.tcx().map.span_if_local(impl_did)
+                    });
 
                     let impl_ty = check::impl_self_ty(fcx, span, impl_did).ty;
 
@@ -263,11 +256,17 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                         }
                     };
 
-                    span_note!(err, item_span,
-                               "candidate #{} is defined in an impl{} for the type `{}`",
-                               idx + 1,
-                               insertion,
-                               impl_ty);
+                    let note_str = format!("candidate #{} is defined in an impl{} \
+                                            for the type `{}`",
+                                           idx + 1,
+                                           insertion,
+                                           impl_ty);
+                    if let Some(note_span) = note_span {
+                        // We have a span pointing to the method. Show note with snippet.
+                        err.span_note(note_span, &note_str);
+                    } else {
+                        err.note(&note_str);
+                    }
                 }
                 CandidateSource::TraitSource(trait_did) => {
                     let item = trait_item(fcx.tcx(), trait_did, item_name).unwrap();
@@ -306,13 +305,12 @@ fn suggest_traits_to_import<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
             traits_are = if candidates.len() == 1 {"trait is"} else {"traits are"},
             one_of_them = if candidates.len() == 1 {"it"} else {"one of them"});
 
-        err.fileline_help(span, &msg[..]);
+        err.help(&msg[..]);
 
         for (i, trait_did) in candidates.iter().enumerate() {
-            err.fileline_help(span,
-                              &format!("candidate #{}: `use {}`",
-                                        i + 1,
-                                        fcx.tcx().item_path_str(*trait_did)));
+            err.help(&format!("candidate #{}: `use {}`",
+                              i + 1,
+                              fcx.tcx().item_path_str(*trait_did)));
         }
         return
     }
@@ -351,13 +349,12 @@ fn suggest_traits_to_import<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
             one_of_them = if candidates.len() == 1 {"it"} else {"one of them"},
             name = item_name);
 
-        err.fileline_help(span, &msg[..]);
+        err.help(&msg[..]);
 
         for (i, trait_info) in candidates.iter().enumerate() {
-            err.fileline_help(span,
-                              &format!("candidate #{}: `{}`",
-                                        i + 1,
-                                        fcx.tcx().item_path_str(trait_info.def_id)));
+            err.help(&format!("candidate #{}: `{}`",
+                              i + 1,
+                              fcx.tcx().item_path_str(trait_info.def_id)));
         }
     }
 }
