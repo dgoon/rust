@@ -616,13 +616,12 @@ ifdef CFG_ENABLE_DEBUGINFO_TESTS
 CTEST_RUSTC_FLAGS += -g
 endif
 
-CTEST_COMMON_ARGS$(1)-T-$(2)-H-$(3) := \
+CTEST_COMMON_ARGS$(1)-T-$(2)-H-$(3) = \
 		--compile-lib-path $$(HLIB$(1)_H_$(3)) \
         --run-lib-path $$(TLIB$(1)_T_$(2)_H_$(3)) \
         --rustc-path $$(HBIN$(1)_H_$(3))/rustc$$(X_$(3)) \
         --rustdoc-path $$(HBIN$(1)_H_$(3))/rustdoc$$(X_$(3)) \
         --llvm-filecheck $(CFG_LLVM_INST_DIR_$(CFG_BUILD))/bin/FileCheck \
-        --aux-base $$(S)src/test/auxiliary/ \
         --stage-id stage$(1)-$(2) \
         --target $(2) \
         --host $(3) \
@@ -686,7 +685,7 @@ $(foreach host,$(CFG_HOST), \
 
 define DEF_RUN_COMPILETEST
 
-CTEST_ARGS$(1)-T-$(2)-H-$(3)-$(4) := \
+CTEST_ARGS$(1)-T-$(2)-H-$(3)-$(4) = \
         $$(CTEST_COMMON_ARGS$(1)-T-$(2)-H-$(3)) \
         --src-base $$(S)src/test/$$(CTEST_SRC_BASE_$(4))/ \
         --build-base $(3)/test/$$(CTEST_BUILD_BASE_$(4))/ \
@@ -779,7 +778,7 @@ $(foreach host,$(CFG_HOST), \
 
 define DEF_RUN_PRETTY_TEST
 
-PRETTY_ARGS$(1)-T-$(2)-H-$(3)-$(4) := \
+PRETTY_ARGS$(1)-T-$(2)-H-$(3)-$(4) = \
 		$$(CTEST_COMMON_ARGS$(1)-T-$(2)-H-$(3)) \
         --src-base $$(S)src/test/$$(PRETTY_DIRNAME_$(4))/ \
         --build-base $(3)/test/$$(PRETTY_DIRNAME_$(4))/ \
