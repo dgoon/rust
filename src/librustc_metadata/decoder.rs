@@ -43,7 +43,6 @@ use rustc::mir;
 use rustc::mir::visit::MutVisitor;
 
 use std::cell::Cell;
-use std::io::prelude::*;
 use std::io;
 use std::rc::Rc;
 use std::str;
@@ -855,6 +854,9 @@ pub fn maybe_get_item_mir<'tcx>(cdata: Cmd,
         };
 
         def_id_and_span_translator.visit_mir(&mut mir);
+        for promoted in &mut mir.promoted {
+            def_id_and_span_translator.visit_mir(promoted);
+        }
 
         mir
     });
