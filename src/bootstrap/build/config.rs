@@ -8,6 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Serialized configuration of a build.
+//!
+//! This module implements parsing `config.mk` and `config.toml` configuration
+//! files to tweak how the build runs.
+
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -27,7 +32,9 @@ use toml::{Parser, Decoder, Value};
 /// is generated from `./configure`.
 ///
 /// Note that this structure is not decoded directly into, but rather it is
-/// filled out from the decoded forms of the structs below.
+/// filled out from the decoded forms of the structs below. For documentation
+/// each field, see the corresponding fields in
+/// `src/bootstrap/config.toml.example`.
 #[derive(Default)]
 pub struct Config {
     pub ccache: bool,
@@ -250,6 +257,11 @@ impl Config {
         return config
     }
 
+    /// "Temporary" routine to parse `config.mk` into this configuration.
+    ///
+    /// While we still have `./configure` this implements the ability to decode
+    /// that configuration into this. This isn't exactly a full-blown makefile
+    /// parser, but hey it gets the job done!
     pub fn update_with_config_mk(&mut self) {
         let mut config = String::new();
         File::open("config.mk").unwrap().read_to_string(&mut config).unwrap();
@@ -334,6 +346,12 @@ impl Config {
                 }
                 "CFG_ARM_LINUX_ANDROIDEABI_NDK" if value.len() > 0 => {
                     let target = "arm-linux-androideabi".to_string();
+                    let target = self.target_config.entry(target)
+                                     .or_insert(Target::default());
+                    target.ndk = Some(PathBuf::from(value));
+                }
+                "CFG_ARMV7_LINUX_ANDROIDEABI_NDK" if value.len() > 0 => {
+                    let target = "armv7-linux-androideabi".to_string();
                     let target = self.target_config.entry(target)
                                      .or_insert(Target::default());
                     target.ndk = Some(PathBuf::from(value));
