@@ -55,6 +55,8 @@ impl<'bcx, 'tcx> MirContext<'bcx, 'tcx> {
            }
 
             mir::Rvalue::Cast(mir::CastKind::Unsize, ref source, cast_ty) => {
+                let cast_ty = bcx.monomorphize(&cast_ty);
+
                 if common::type_is_fat_ptr(bcx.tcx(), cast_ty) {
                     // into-coerce of a thin pointer to a fat pointer - just
                     // use the operand path.
@@ -154,7 +156,7 @@ impl<'bcx, 'tcx> MirContext<'bcx, 'tcx> {
                                                             span: DUMMY_SP
                                                         },
                                                         DUMMY_NODE_ID, def_id,
-                                                        &bcx.monomorphize(substs));
+                                                        bcx.monomorphize(&substs));
                         }
 
                         for (i, operand) in operands.iter().enumerate() {
