@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,24 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[allow(unused)]
+// Test new Index error message for slices
+
+#![feature(rustc_attrs)]
+
+#[rustc_error]
 fn main() {
-    || {
-        'label: loop {
-        }
-    };
-
-    // More cases added from issue 31754
-
-    'label2: loop {
-        break;
-    }
-
-    let closure = || {
-        'label2: loop {}
-    };
-
-    fn inner_fn() {
-        'label2: loop {}
-    }
+    let x = &[1, 2, 3] as &[i32];
+    x[1i32]; //~ ERROR E0277
+             //~| NOTE a usize is required
 }
