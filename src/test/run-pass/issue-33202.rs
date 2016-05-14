@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod remove_dead_blocks;
-pub mod simplify_cfg;
-pub mod erase_regions;
-pub mod no_landing_pads;
-pub mod type_check;
-pub mod break_cleanup_edges;
-pub mod promote_consts;
-pub mod qualify_consts;
+#[repr(C)]
+pub enum CPOption<T> {
+    PSome(T),
+}
+
+fn main() {
+  println!("sizeof CPOption<i32> {}", std::mem::size_of::<CPOption<i32>>());
+}
