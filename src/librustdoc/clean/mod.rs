@@ -795,7 +795,17 @@ impl Clean<Lifetime> for hir::Lifetime {
 
 impl Clean<Lifetime> for hir::LifetimeDef {
     fn clean(&self, _: &DocContext) -> Lifetime {
-        Lifetime(self.lifetime.name.to_string())
+        if self.bounds.len() > 0 {
+            let mut s = format!("{}: {}",
+                                self.lifetime.name.to_string(),
+                                self.bounds[0].name.to_string());
+            for bound in self.bounds.iter().skip(1) {
+                s.push_str(&format!(" + {}", bound.name.to_string()));
+            }
+            Lifetime(s)
+        } else {
+            Lifetime(self.lifetime.name.to_string())
+        }
     }
 }
 
@@ -1626,7 +1636,7 @@ impl Clean<Type> for hir::Ty {
                     segments: segments.into(),
                 };
                 Type::QPath {
-                    name: p.segments.last().unwrap().identifier.name.clean(cx),
+                    name: p.segments.last().unwrap().name.clean(cx),
                     self_type: box qself.ty.clean(cx),
                     trait_: box resolve_type(cx, trait_path.clean(cx), self.id)
                 }
@@ -2064,7 +2074,7 @@ pub struct PathSegment {
 impl Clean<PathSegment> for hir::PathSegment {
     fn clean(&self, cx: &DocContext) -> PathSegment {
         PathSegment {
-            name: self.identifier.name.clean(cx),
+            name: self.name.clean(cx),
             params: self.parameters.clean(cx)
         }
     }
@@ -2073,7 +2083,7 @@ impl Clean<PathSegment> for hir::PathSegment {
 fn path_to_string(p: &hir::Path) -> String {
     let mut s = String::new();
     let mut first = true;
-    for i in p.segments.iter().map(|x| x.identifier.name.as_str()) {
+    for i in p.segments.iter().map(|x| x.name.as_str()) {
         if !first || p.global {
             s.push_str("::");
         } else {
