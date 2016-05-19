@@ -1,4 +1,4 @@
-// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Test new Index error message for slices
+#![crate_type="rlib"]
 
-#![feature(rustc_attrs)]
+#[cfg(rpass1)]
+pub type X = u32;
 
-use std::ops::Index;
+#[cfg(rpass2)]
+pub type X = i32;
 
-#[rustc_error]
-fn main() {
-    let x = &[1, 2, 3] as &[i32];
-    x[1i32]; //~ ERROR E0277
-             //~| NOTE a usize is required
-}
+pub type Y = char;
+
+pub fn foo() { }

@@ -63,10 +63,6 @@ pub fn run(config: Config, testpaths: &TestPaths) {
         for revision in &base_props.revisions {
             let mut revision_props = base_props.clone();
             revision_props.load_from(&testpaths.file, Some(&revision));
-            revision_props.compile_flags.extend(vec![
-                format!("--cfg"),
-                format!("{}", revision),
-            ]);
             let rev_cx = TestCx {
                 config: &config,
                 props: &revision_props,
@@ -383,6 +379,12 @@ actual:\n\
                             self.config.build_base.to_str().unwrap().to_owned(),
                             "-L".to_owned(),
                             aux_dir.to_str().unwrap().to_owned());
+        if let Some(revision) = self.revision {
+            args.extend(vec![
+                format!("--cfg"),
+                format!("{}", revision),
+            ]);
+        }
         args.extend(self.split_maybe_args(&self.config.target_rustcflags));
         args.extend(self.props.compile_flags.iter().cloned());
         // FIXME (#9639): This needs to handle non-utf8 paths
@@ -1001,7 +1003,7 @@ actual:\n\
         let expect_note = expected_errors.iter().any(|ee| ee.kind == Some(ErrorKind::Note));
 
         // Parse the JSON output from the compiler and extract out the messages.
-        let actual_errors = json::parse_output(&file_name, &proc_res.stderr);
+        let actual_errors = json::parse_output(&file_name, &proc_res.stderr, &proc_res);
         let mut unexpected = 0;
         let mut not_found = 0;
         let mut found = vec![false; expected_errors.len()];
@@ -1102,7 +1104,7 @@ actual:\n\
         if self.props.build_aux_docs {
             for rel_ab in &self.props.aux_builds {
                 let aux_testpaths = self.compute_aux_test_paths(rel_ab);
-                let aux_props = TestProps::from_file(&aux_testpaths.file);
+                let aux_props = self.props.from_aux_file(&aux_testpaths.file, self.revision);
                 let aux_cx = TestCx {
                     config: self.config,
                     props: &aux_props,
@@ -1186,7 +1188,7 @@ actual:\n\
 
         for rel_ab in &self.props.aux_builds {
             let aux_testpaths = self.compute_aux_test_paths(rel_ab);
-            let aux_props = TestProps::from_file(&aux_testpaths.file);
+            let aux_props = self.props.from_aux_file(&aux_testpaths.file, self.revision);
             let mut crate_type = if aux_props.no_prefer_dynamic {
                 Vec::new()
             } else {
@@ -1290,6 +1292,21 @@ actual:\n\
                             "-L".to_owned(),
                             self.config.build_base.to_str().unwrap().to_owned(),
                             format!("--target={}", target));
+
+        if let Some(revision) = self.revision {
+            args.extend(vec![
+                format!("--cfg"),
+                format!("{}", revision),
+            ]);
+        }
+
+        if let Some(ref incremental_dir) = self.props.incremental_dir {
+            args.extend(vec![
+                format!("-Z"),
+                format!("incremental={}", incremental_dir.display()),
+            ]);
+        }
+
 
         match self.config.mode {
             CompileFail |
@@ -1530,21 +1547,7 @@ actual:\n\
 
     fn fatal_proc_rec(&self, err: &str, proc_res: &ProcRes) -> ! {
         self.error(err);
-        print!("\
-            status: {}\n\
-            command: {}\n\
-            stdout:\n\
-            ------------------------------------------\n\
-            {}\n\
-            ------------------------------------------\n\
-            stderr:\n\
-            ------------------------------------------\n\
-            {}\n\
-            ------------------------------------------\n\
-            \n",
-               proc_res.status, proc_res.cmdline, proc_res.stdout,
-               proc_res.stderr);
-        panic!();
+        proc_res.fatal(None);
     }
 
     fn _arm_exec_compiled_test(&self, env: Vec<(String, String)>) -> ProcRes {
@@ -1980,10 +1983,7 @@ actual:\n\
 
         // Add an extra flag pointing at the incremental directory.
         let mut revision_props = self.props.clone();
-        revision_props.compile_flags.extend(vec![
-            format!("-Z"),
-            format!("incremental={}", incremental_dir.display()),
-        ]);
+        revision_props.incremental_dir = Some(incremental_dir);
 
         let revision_cx = TestCx {
             config: self.config,
@@ -2197,7 +2197,7 @@ struct ProcArgs {
     args: Vec<String>,
 }
 
-struct ProcRes {
+pub struct ProcRes {
     status: Status,
     stdout: String,
     stderr: String,
@@ -2207,6 +2207,29 @@ struct ProcRes {
 enum Status {
     Parsed(i32),
     Normal(ExitStatus),
+}
+
+impl ProcRes {
+    pub fn fatal(&self, err: Option<&str>) -> ! {
+        if let Some(e) = err {
+            println!("\nerror: {}", e);
+        }
+        print!("\
+            status: {}\n\
+            command: {}\n\
+            stdout:\n\
+            ------------------------------------------\n\
+            {}\n\
+            ------------------------------------------\n\
+            stderr:\n\
+            ------------------------------------------\n\
+            {}\n\
+            ------------------------------------------\n\
+            \n",
+               self.status, self.cmdline, self.stdout,
+               self.stderr);
+        panic!();
+    }
 }
 
 impl Status {
