@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,21 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct X {
-    x: String,
-}
+#![crate_type = "rlib"]
 
-impl Drop for X {
-    fn drop(&mut self) {
-        println!("value: {}", self.x);
-    }
-}
+#[macro_use]
+extern crate foo1;
 
-fn main() {
-    let x = X { x: "hello".to_string() };
-
-    match x {
-        X { x: y } => println!("contents: {}", y)
-        //~^ ERROR cannot move out of type `X`, which implements the `Drop` trait
-    }
+pub fn foo2(a: foo1::A) {
+    foo1::foo1(a);
 }
