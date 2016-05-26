@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_type="rlib"]
+// compile-flags: -O
+// Regression test for https://github.com/rust-lang/rust/issues/33868
 
-#[cfg(rpass1)]
-pub type X = u32;
+#[repr(C)]
+pub struct S {
+    a: u32,
+    b: f32,
+    c: u32
+}
 
-#[cfg(rpass2)]
-pub type X = i32;
+#[no_mangle]
+#[inline(never)]
+pub extern "C" fn test(s: S) -> u32 {
+    s.c
+}
 
-pub type Y = char;
+fn main() {
+    assert_eq!(test(S{a: 0, b: 0.0, c: 42}), 42);
+}
