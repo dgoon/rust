@@ -274,7 +274,10 @@ declare_features! (
     (active, drop_types_in_const, "1.9.0", Some(33156)),
 
     // Allows cfg(target_has_atomic = "...").
-    (active, cfg_target_has_atomic, "1.9.0", Some(32976))
+    (active, cfg_target_has_atomic, "1.9.0", Some(32976)),
+
+    // Allows `..` in tuple (struct) patterns
+    (active, dotdot_in_tuple_patterns, "1.10.0", Some(33627))
 );
 
 declare_features! (
@@ -315,7 +318,6 @@ declare_features! (
     // Allows `#[deprecated]` attribute
     (accepted, deprecated, "1.9.0", Some(29935))
 );
-
 // (changing above list without updating src/doc/reference.md makes @cmr sad)
 
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -997,6 +999,9 @@ impl<'a, 'v> Visitor<'v> for PostExpansionVisitor<'a> {
             ast::ExprKind::Try(..) => {
                 gate_feature_post!(&self, question_mark, e.span, "the `?` operator is not stable");
             }
+            ast::ExprKind::InPlace(..) => {
+                gate_feature_post!(&self, placement_in_syntax, e.span, EXPLAIN_PLACEMENT_IN);
+            }
             _ => {}
         }
         visit::walk_expr(self, e);
@@ -1020,6 +1025,24 @@ impl<'a, 'v> Visitor<'v> for PostExpansionVisitor<'a> {
                 gate_feature_post!(&self, box_patterns,
                                   pattern.span,
                                   "box pattern syntax is experimental");
+            }
+            PatKind::Tuple(_, ddpos)
+                    if ddpos.is_some() => {
+                gate_feature_post!(&self, dotdot_in_tuple_patterns,
+                                  pattern.span,
+                                  "`..` in tuple patterns is experimental");
+            }
+            PatKind::TupleStruct(_, ref fields, ddpos)
+                    if ddpos.is_some() && !fields.is_empty() => {
+                gate_feature_post!(&self, dotdot_in_tuple_patterns,
+                                  pattern.span,
+                                  "`..` in tuple struct patterns is experimental");
+            }
+            PatKind::TupleStruct(_, ref fields, ddpos)
+                    if ddpos.is_none() && fields.is_empty() => {
+                self.context.span_handler.struct_span_err(pattern.span,
+                                                          "nullary enum variants are written with \
+                                                           no trailing `( )`").emit();
             }
             _ => {}
         }

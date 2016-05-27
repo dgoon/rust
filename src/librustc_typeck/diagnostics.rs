@@ -62,31 +62,6 @@ Check how many fields the enum was declared with and ensure that your pattern
 uses the same number.
 "##,
 
-E0024: r##"
-This error indicates that a pattern attempted to extract the fields of an enum
-variant with no fields. Here's a tiny example of this error:
-
-```compile_fail
-// This enum has two variants.
-enum Number {
-    // This variant has no fields.
-    Zero,
-    // This variant has one field.
-    One(u32)
-}
-
-// Assuming x is a Number we can pattern match on its contents.
-match x {
-    Number::Zero(inside) => {},
-    Number::One(inside) => {},
-}
-```
-
-The pattern match `Zero(inside)` is incorrect because the `Zero` variant
-contains no fields, yet the `inside` name attempts to bind the first field of
-the enum.
-"##,
-
 E0025: r##"
 Each field of a struct can only be bound once in a pattern. Erroneous code
 example:
@@ -1193,12 +1168,32 @@ discriminant values so that they fit within the existing type.
 "##,
 
 E0084: r##"
+An unsupported representation was attempted on a zero-variant enum.
+
+Erroneous code example:
+
+```compile_fail
+#[repr(i32)]
+enum NightWatch {} // error: unsupported representation for zero-variant enum
+```
+
 It is impossible to define an integer type to be used to represent zero-variant
 enum values because there are no zero-variant enum values. There is no way to
-construct an instance of the following type using only safe code:
+construct an instance of the following type using only safe code. So you have
+two solutions. Either you add variants in your enum:
 
 ```
-enum Empty {}
+#[repr(i32)]
+enum NightWatch {
+    JohnSnow,
+    Commander,
+}
+```
+
+or you remove the integer represention of your enum:
+
+```
+enum NightWatch {}
 ```
 "##,
 
