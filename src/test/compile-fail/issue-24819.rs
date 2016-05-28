@@ -8,25 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(custom_attribute, rustc_attrs)]
+use std::collections::HashSet;
 
-macro_rules! mac {
-    {} => {
-        #[cfg(attr)]
-        mod m {
-            #[lang_item]
-            fn f() {}
-
-            #[cfg_attr(target_thread_local, custom)]
-            fn g() {}
-        }
-
-        #[cfg(attr)]
-        unconfigured_invocation!();
-    }
+fn main() {
+    let mut v = Vec::new();
+    foo(&mut v);
+    //~^ ERROR mismatched types
+    //~| expected struct `std::collections::HashSet`, found struct `std::vec::Vec`
 }
 
-mac! {}
-
-#[rustc_error]
-fn main() {} //~ ERROR compilation successful
+fn foo(h: &mut HashSet<u32>) {
+}

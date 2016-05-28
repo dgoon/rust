@@ -7,26 +7,12 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
-#![feature(custom_attribute, rustc_attrs)]
-
-macro_rules! mac {
-    {} => {
-        #[cfg(attr)]
-        mod m {
-            #[lang_item]
-            fn f() {}
-
-            #[cfg_attr(target_thread_local, custom)]
-            fn g() {}
-        }
-
-        #[cfg(attr)]
-        unconfigured_invocation!();
+fn main() {
+    let mut op = Some(2);
+    match op {
+        Some(ref v) => { let a = &mut v; },
+        //~^ ERROR:cannot borrow immutable
+        //~| use `ref mut v` here to make mutable
+        None => {},
     }
 }
-
-mac! {}
-
-#[rustc_error]
-fn main() {} //~ ERROR compilation successful
