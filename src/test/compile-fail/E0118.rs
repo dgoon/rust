@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,19 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct A { pub i: isize }
-
-pub trait E {
-    fn foo(&self);
+impl (u8, u8) { //~ ERROR E0118
+    fn get_state(&self) -> String {
+        String::new()
+    }
 }
 
-impl E for A {
-    pub fn foo(&self) {} //~ ERROR: unnecessary visibility qualifier
+fn main() {
 }
-
-enum Foo {
-    V1 { pub f: i32 }, //~ ERROR unnecessary visibility qualifier
-    V2(pub i32), //~ ERROR unnecessary visibility qualifier
-}
-
-fn main() {}

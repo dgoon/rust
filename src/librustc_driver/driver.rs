@@ -38,13 +38,12 @@ use rustc_privacy;
 use rustc_plugin::registry::Registry;
 use rustc_plugin as plugin;
 use rustc::hir::lowering::lower_crate;
-use rustc_passes::{no_asm, loops, consts, rvalues, static_recursion};
+use rustc_passes::{ast_validation, no_asm, loops, consts, rvalues, static_recursion};
 use rustc_const_eval::check_match;
 use super::Compilation;
 
 use serialize::json;
 
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::{OsString, OsStr};
@@ -165,6 +164,10 @@ pub fn compile_input(sess: &Session,
         time(sess.time_passes(),
              "early lint checks",
              || lint::check_ast_crate(sess, &expanded_crate));
+
+        time(sess.time_passes(),
+             "AST validation",
+             || ast_validation::check_crate(sess, &expanded_crate));
 
         let (analysis, resolutions, mut hir_forest) = {
             lower_and_resolve(sess, &id, &mut defs, &expanded_crate,
@@ -893,7 +896,7 @@ pub fn phase_3_run_analysis_passes<'tcx, F, R>(sess: &'tcx Session,
     let trait_map = resolutions.trait_map;
     TyCtxt::create_and_enter(sess,
                              arenas,
-                             RefCell::new(resolutions.def_map),
+                             resolutions.def_map,
                              named_region_map,
                              hir_map,
                              resolutions.freevars,
