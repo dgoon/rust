@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![allow(dead_code)]
+trait Trait {
+    fn bar<'a,'b:'a>(x: &'a str, y: &'b str);
+}
 
-use std::panic::UnwindSafe;
-use std::cell::RefCell;
+struct Foo;
 
-fn assert<T: UnwindSafe + ?Sized>() {}
+impl Trait for Foo {
+    fn bar<'a,'b>(x: &'a str, y: &'b str) { //~ ERROR E0195
+    }
+}
 
 fn main() {
-    assert::<&RefCell<i32>>();
-    //~^ ERROR `std::cell::UnsafeCell<i32>: std::panic::RefUnwindSafe` is not satisfied
-    //~^^ ERROR `std::cell::UnsafeCell<usize>: std::panic::RefUnwindSafe` is not satisfied
 }
