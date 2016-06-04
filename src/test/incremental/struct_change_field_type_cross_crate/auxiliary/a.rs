@@ -8,7 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Tests that dep info can be emitted without resolving external crates.
-extern crate not_there;
+#![crate_type="rlib"]
 
-fn main() {}
+ #[cfg(rpass1)]
+pub struct X {
+    pub x: u32
+}
+
+#[cfg(rpass2)]
+pub struct X {
+    pub x: i32
+}
+
+pub struct EmbedX {
+    pub x: X
+}
+
+pub struct Y {
+    pub y: char
+}
