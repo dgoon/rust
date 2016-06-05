@@ -10,7 +10,7 @@
 
 use graphviz::IntoCow;
 use middle::const_val::ConstVal;
-use rustc_const_math::{ConstUsize, ConstInt};
+use rustc_const_math::{ConstUsize, ConstInt, ConstMathErr};
 use hir::def_id::DefId;
 use ty::subst::Substs;
 use ty::{self, AdtDef, ClosureSubsts, FnOutput, Region, Ty};
@@ -330,9 +330,17 @@ pub enum TerminatorKind<'tcx> {
 
     /// Drop the Lvalue
     Drop {
-        value: Lvalue<'tcx>,
+        location: Lvalue<'tcx>,
         target: BasicBlock,
         unwind: Option<BasicBlock>
+    },
+
+    /// Drop the Lvalue and assign the new value over it
+    DropAndReplace {
+        location: Lvalue<'tcx>,
+        value: Operand<'tcx>,
+        target: BasicBlock,
+        unwind: Option<BasicBlock>,
     },
 
     /// Block ends with a call of a converging function
@@ -346,6 +354,16 @@ pub enum TerminatorKind<'tcx> {
         /// Cleanups to be done if the call unwinds.
         cleanup: Option<BasicBlock>
     },
+
+    /// Jump to the target if the condition has the expected value,
+    /// otherwise panic with a message and a cleanup target.
+    Assert {
+        cond: Operand<'tcx>,
+        expected: bool,
+        msg: AssertMessage<'tcx>,
+        target: BasicBlock,
+        cleanup: Option<BasicBlock>
+    }
 }
 
 impl<'tcx> Terminator<'tcx> {
@@ -373,8 +391,16 @@ impl<'tcx> TerminatorKind<'tcx> {
                 slice::ref_slice(t).into_cow(),
             Call { destination: None, cleanup: Some(ref c), .. } => slice::ref_slice(c).into_cow(),
             Call { destination: None, cleanup: None, .. } => (&[]).into_cow(),
-            Drop { target, unwind: Some(unwind), .. } => vec![target, unwind].into_cow(),
-            Drop { ref target, .. } => slice::ref_slice(target).into_cow(),
+            DropAndReplace { target, unwind: Some(unwind), .. } |
+            Drop { target, unwind: Some(unwind), .. } => {
+                vec![target, unwind].into_cow()
+            }
+            DropAndReplace { ref target, unwind: None, .. } |
+            Drop { ref target, unwind: None, .. } => {
+                slice::ref_slice(target).into_cow()
+            }
+            Assert { target, cleanup: Some(unwind), .. } => vec![target, unwind].into_cow(),
+            Assert { ref target, .. } => slice::ref_slice(target).into_cow(),
         }
     }
 
@@ -393,8 +419,14 @@ impl<'tcx> TerminatorKind<'tcx> {
             Call { destination: Some((_, ref mut t)), cleanup: None, .. } => vec![t],
             Call { destination: None, cleanup: Some(ref mut c), .. } => vec![c],
             Call { destination: None, cleanup: None, .. } => vec![],
+            DropAndReplace { ref mut target, unwind: Some(ref mut unwind), .. } |
             Drop { ref mut target, unwind: Some(ref mut unwind), .. } => vec![target, unwind],
-            Drop { ref mut target, .. } => vec![target]
+            DropAndReplace { ref mut target, unwind: None, .. } |
+            Drop { ref mut target, unwind: None, .. } => {
+                vec![target]
+            }
+            Assert { ref mut target, cleanup: Some(ref mut unwind), .. } => vec![target, unwind],
+            Assert { ref mut target, .. } => vec![target]
         }
     }
 }
@@ -461,7 +493,9 @@ impl<'tcx> TerminatorKind<'tcx> {
             SwitchInt { discr: ref lv, .. } => write!(fmt, "switchInt({:?})", lv),
             Return => write!(fmt, "return"),
             Resume => write!(fmt, "resume"),
-            Drop { ref value, .. } => write!(fmt, "drop({:?})", value),
+            Drop { ref location, .. } => write!(fmt, "drop({:?})", location),
+            DropAndReplace { ref location, ref value, .. } =>
+                write!(fmt, "replace({:?} <- {:?})", location, value),
             Call { ref func, ref args, ref destination, .. } => {
                 if let Some((ref destination, _)) = *destination {
                     write!(fmt, "{:?} = ", destination)?;
@@ -473,6 +507,26 @@ impl<'tcx> TerminatorKind<'tcx> {
                     }
                     write!(fmt, "{:?}", arg)?;
                 }
+                write!(fmt, ")")
+            }
+            Assert { ref cond, expected, ref msg, .. } => {
+                write!(fmt, "assert(")?;
+                if !expected {
+                    write!(fmt, "!")?;
+                }
+                write!(fmt, "{:?}, ", cond)?;
+
+                match *msg {
+                    AssertMessage::BoundsCheck { ref len, ref index } => {
+                        write!(fmt, "{:?}, {:?}, {:?}",
+                               "index out of bounds: the len is {} but the index is {}",
+                               len, index)?;
+                    }
+                    AssertMessage::Math(ref err) => {
+                        write!(fmt, "{:?}", err.description())?;
+                    }
+                }
+
                 write!(fmt, ")")
             }
         }
@@ -506,12 +560,27 @@ impl<'tcx> TerminatorKind<'tcx> {
             Call { destination: Some(_), cleanup: None, .. } => vec!["return".into_cow()],
             Call { destination: None, cleanup: Some(_), .. } => vec!["unwind".into_cow()],
             Call { destination: None, cleanup: None, .. } => vec![],
+            DropAndReplace { unwind: None, .. } |
             Drop { unwind: None, .. } => vec!["return".into_cow()],
-            Drop { .. } => vec!["return".into_cow(), "unwind".into_cow()],
+            DropAndReplace { unwind: Some(_), .. } |
+            Drop { unwind: Some(_), .. } => {
+                vec!["return".into_cow(), "unwind".into_cow()]
+            }
+            Assert { cleanup: None, .. } => vec!["".into()],
+            Assert { .. } =>
+                vec!["success".into_cow(), "unwind".into_cow()]
         }
     }
 }
 
+#[derive(Clone, Debug, RustcEncodable, RustcDecodable)]
+pub enum AssertMessage<'tcx> {
+    BoundsCheck {
+        len: Operand<'tcx>,
+        index: Operand<'tcx>
+    },
+    Math(ConstMathErr)
+}
 
 ///////////////////////////////////////////////////////////////////////////
 // Statements
@@ -763,6 +832,7 @@ pub enum Rvalue<'tcx> {
     Cast(CastKind, Operand<'tcx>, Ty<'tcx>),
 
     BinaryOp(BinOp, Operand<'tcx>, Operand<'tcx>),
+    CheckedBinaryOp(BinOp, Operand<'tcx>, Operand<'tcx>),
 
     UnaryOp(UnOp, Operand<'tcx>),
 
@@ -856,6 +926,16 @@ pub enum BinOp {
     Gt,
 }
 
+impl BinOp {
+    pub fn is_checkable(self) -> bool {
+        use self::BinOp::*;
+        match self {
+            Add | Sub | Mul | Shl | Shr => true,
+            _ => false
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, RustcEncodable, RustcDecodable)]
 pub enum UnOp {
     /// The `!` operator for logical inversion
@@ -874,6 +954,9 @@ impl<'tcx> Debug for Rvalue<'tcx> {
             Len(ref a) => write!(fmt, "Len({:?})", a),
             Cast(ref kind, ref lv, ref ty) => write!(fmt, "{:?} as {:?} ({:?})", lv, ty, kind),
             BinaryOp(ref op, ref a, ref b) => write!(fmt, "{:?}({:?}, {:?})", op, a, b),
+            CheckedBinaryOp(ref op, ref a, ref b) => {
+                write!(fmt, "Checked{:?}({:?}, {:?})", op, a, b)
+            }
             UnaryOp(ref op, ref a) => write!(fmt, "{:?}({:?})", op, a),
             Box(ref t) => write!(fmt, "Box({:?})", t),
             InlineAsm { ref asm, ref outputs, ref inputs } => {
@@ -918,7 +1001,7 @@ impl<'tcx> Debug for Rvalue<'tcx> {
                         ppaux::parameterized(fmt, substs, variant_def.did,
                                              ppaux::Ns::Value, &[],
                                              |tcx| {
-                            tcx.lookup_item_type(variant_def.did).generics
+                            Some(tcx.lookup_item_type(variant_def.did).generics)
                         })?;
 
                         match variant_def.kind() {
@@ -1010,8 +1093,9 @@ impl<'tcx> Debug for Literal<'tcx> {
         use self::Literal::*;
         match *self {
             Item { def_id, substs } => {
-                ppaux::parameterized(fmt, substs, def_id, ppaux::Ns::Value, &[],
-                                     |tcx| tcx.lookup_item_type(def_id).generics)
+                ppaux::parameterized(
+                    fmt, substs, def_id, ppaux::Ns::Value, &[],
+                    |tcx| Some(tcx.lookup_item_type(def_id).generics))
             }
             Value { ref value } => {
                 write!(fmt, "const ")?;
