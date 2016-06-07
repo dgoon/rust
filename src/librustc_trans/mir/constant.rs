@@ -125,10 +125,10 @@ impl<'tcx> Const<'tcx> {
         let llty = type_of::immediate_type_of(ccx, self.ty);
         let llvalty = val_ty(self.llval);
 
-        let val = if common::type_is_imm_pair(ccx, self.ty) {
+        let val = if llty == llvalty && common::type_is_imm_pair(ccx, self.ty) {
             let (a, b) = self.get_pair();
             OperandValue::Pair(a, b)
-        } else if common::type_is_immediate(ccx, self.ty) && llty == llvalty {
+        } else if llty == llvalty && common::type_is_immediate(ccx, self.ty) {
             // If the types match, we can use the value directly.
             OperandValue::Immediate(self.llval)
         } else {
@@ -715,7 +715,7 @@ impl<'a, 'tcx> MirConstContext<'a, 'tcx> {
                 let tr_lvalue = self.const_lvalue(lvalue, span)?;
 
                 let ty = tr_lvalue.ty;
-                let ref_ty = tcx.mk_ref(tcx.mk_region(ty::ReStatic),
+                let ref_ty = tcx.mk_ref(tcx.mk_region(ty::ReErased),
                     ty::TypeAndMut { ty: ty, mutbl: bk.to_mutbl_lossy() });
 
                 let base = match tr_lvalue.base {
