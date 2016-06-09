@@ -11,10 +11,8 @@
 use rustc::ty::TyCtxt;
 use rustc::mir::repr::*;
 use rustc::mir::transform::{MirPass, MirSource, Pass};
-
+use rustc::mir::traversal;
 use pretty;
-
-use traversal;
 
 pub struct AddCallGuards;
 
@@ -66,15 +64,14 @@ impl<'tcx> MirPass<'tcx> for AddCallGuards {
                         destination: Some((_, ref mut destination)),
                         cleanup: Some(_),
                         ..
-                    }, span, scope
+                    }, source_info
                 }) if pred_count[destination.index()] > 1 => {
                     // It's a critical edge, break it
                     let call_guard = BasicBlockData {
                         statements: vec![],
                         is_cleanup: data.is_cleanup,
                         terminator: Some(Terminator {
-                            span: span,
-                            scope: scope,
+                            source_info: source_info,
                             kind: TerminatorKind::Goto { target: *destination }
                         })
                     };

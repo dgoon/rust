@@ -16,7 +16,7 @@ use rustc::mir::repr as mir;
 use rustc::mir::tcx::LvalueTy;
 use session::config::FullDebugInfo;
 use base;
-use common::{self, Block, BlockAndBuilder, CrateContext, FunctionContext};
+use common::{self, Block, BlockAndBuilder, CrateContext, FunctionContext, C_null};
 use debuginfo::{self, declare_local, DebugLoc, VariableAccess, VariableKind};
 use machine;
 use type_of;
@@ -34,7 +34,7 @@ use rustc_data_structures::bitvec::BitVector;
 pub use self::constant::trans_static_initializer;
 
 use self::lvalue::{LvalueRef, get_dataptr, get_meta};
-use rustc_mir::traversal;
+use rustc::mir::traversal;
 
 use self::operand::{OperandRef, OperandValue};
 
@@ -112,6 +112,12 @@ pub struct MirContext<'bcx, 'tcx:'bcx> {
     scopes: Vec<DIScope>
 }
 
+impl<'blk, 'tcx> MirContext<'blk, 'tcx> {
+    pub fn debug_loc(&self, source_info: mir::SourceInfo) -> DebugLoc {
+        DebugLoc::ScopeAt(self.scopes[source_info.scope.index()], source_info.span)
+    }
+}
+
 enum TempRef<'tcx> {
     Lvalue(LvalueRef<'tcx>),
     Operand(Option<OperandRef<'tcx>>),
@@ -124,11 +130,12 @@ impl<'tcx> TempRef<'tcx> {
             // Zero-size temporaries aren't always initialized, which
             // doesn't matter because they don't contain data, but
             // we need something in the operand.
-            let nil = common::C_nil(ccx);
+            let llty = type_of::type_of(ccx, ty);
             let val = if common::type_is_imm_pair(ccx, ty) {
-                OperandValue::Pair(nil, nil)
+                let fields = llty.field_types();
+                OperandValue::Pair(C_null(fields[0]), C_null(fields[1]))
             } else {
-                OperandValue::Immediate(nil)
+                OperandValue::Immediate(C_null(llty))
             };
             let op = OperandRef {
                 val: val,
@@ -166,12 +173,12 @@ pub fn trans_mir<'blk, 'tcx: 'blk>(fcx: &'blk FunctionContext<'blk, 'tcx>) {
                             .map(|(mty, decl)| {
         let lvalue = LvalueRef::alloca(&bcx, mty, &decl.name.as_str());
 
-        let scope = scopes[decl.scope.index()];
+        let scope = scopes[decl.source_info.scope.index()];
         if !scope.is_null() && bcx.sess().opts.debuginfo == FullDebugInfo {
             bcx.with_block(|bcx| {
                 declare_local(bcx, decl.name, mty, scope,
                               VariableAccess::DirectVariable { alloca: lvalue.llval },
-                              VariableKind::LocalVariable, decl.span);
+                              VariableKind::LocalVariable, decl.source_info.span);
             });
         }
 
@@ -271,16 +278,13 @@ fn arg_value_refs<'bcx, 'tcx>(bcx: &BlockAndBuilder<'bcx, 'tcx>,
     let mut idx = 0;
     let mut llarg_idx = fcx.fn_ty.ret.is_indirect() as usize;
 
-    // Get the argument scope assuming ScopeId(0) has no parent.
-    let arg_scope = mir.scopes.get(0).and_then(|data| {
-        let scope = scopes[0];
-        if data.parent_scope.is_none() && !scope.is_null() &&
-           bcx.sess().opts.debuginfo == FullDebugInfo {
-            Some(scope)
-        } else {
-            None
-        }
-    });
+    // Get the argument scope, if it exists and if we need it.
+    let arg_scope = scopes[mir::ARGUMENT_VISIBILITY_SCOPE.index()];
+    let arg_scope = if !arg_scope.is_null() && bcx.sess().opts.debuginfo == FullDebugInfo {
+        Some(arg_scope)
+    } else {
+        None
+    };
 
     mir.arg_decls.iter().enumerate().map(|(arg_index, arg_decl)| {
         let arg_ty = bcx.monomorphize(&arg_decl.ty);

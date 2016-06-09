@@ -601,12 +601,9 @@ pub fn phase_2_configure_and_expand<'a>(sess: &Session,
     })?;
 
     krate = time(time_passes, "crate injection", || {
-        syntax::std_inject::maybe_inject_crates_ref(krate, sess.opts.alt_std_name.clone())
+        let alt_std_name = sess.opts.alt_std_name.clone();
+        syntax::std_inject::maybe_inject_crates_ref(&sess.parse_sess, krate, alt_std_name)
     });
-
-    let macros = time(time_passes,
-                      "macro loading",
-                      || macro_import::read_macro_defs(sess, &cstore, &krate, crate_name));
 
     let mut addl_plugins = Some(addl_plugins);
     let registrars = time(time_passes, "plugin loading", || {
@@ -696,13 +693,14 @@ pub fn phase_2_configure_and_expand<'a>(sess: &Session,
             recursion_limit: sess.recursion_limit.get(),
             trace_mac: sess.opts.debugging_opts.trace_macros,
         };
+        let mut loader = macro_import::MacroLoader::new(sess, &cstore, crate_name);
         let mut ecx = syntax::ext::base::ExtCtxt::new(&sess.parse_sess,
                                                       krate.config.clone(),
                                                       cfg,
-                                                      &mut feature_gated_cfgs);
+                                                      &mut feature_gated_cfgs,
+                                                      &mut loader);
         syntax_ext::register_builtins(&mut ecx.syntax_env);
         let (ret, macro_names) = syntax::ext::expand::expand_crate(ecx,
-                                                                   macros,
                                                                    syntax_exts,
                                                                    krate);
         if cfg!(windows) {
@@ -731,10 +729,6 @@ pub fn phase_2_configure_and_expand<'a>(sess: &Session,
                                          krate,
                                          sess.diagnostic())
     });
-
-    krate = time(time_passes,
-                 "prelude injection",
-                 || syntax::std_inject::maybe_inject_prelude(&sess.parse_sess, krate));
 
     time(time_passes,
          "checking for inline asm in case the target doesn't support it",
