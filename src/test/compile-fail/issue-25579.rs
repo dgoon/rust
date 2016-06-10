@@ -8,17 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct Foo;
-
-trait MyTrait {
-    fn trait_bar() {}
+enum Sexpression {
+    Num(()),
+    Cons(&'static mut Sexpression)
 }
 
-impl MyTrait for Foo {}
+fn causes_ice(mut l: &mut Sexpression) {
+    loop { match l {
+        &mut Sexpression::Num(ref mut n) => {},
+        &mut Sexpression::Cons(ref mut expr) => { //~ ERROR cannot borrow `l.0`
+            //~| ERROR cannot borrow `l.0`
+            l = &mut **expr; //~ ERROR cannot assign to `l`
+        }
+    }}
+}
 
 fn main() {
-    match 0u32 {
-        <Foo as MyTrait>::trait_bar => {}
-        //~^ ERROR expected associated constant, found method `trait_bar`
-    }
 }
