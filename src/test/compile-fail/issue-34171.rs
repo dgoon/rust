@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(stmt_expr_attributes)]
+#![feature(rustc_attrs)]
 
-#[foo] //~ ERROR The attribute `foo`
-fn main() {
-    #[foo] //~ ERROR The attribute `foo`
-    let x = ();
-    #[foo] //~ ERROR The attribute `foo`
-    x
+macro_rules! null { ($i:tt) => {} }
+macro_rules! apply_null {
+    ($i:item) => { null! { $i } }
+}
+
+#[rustc_error]
+fn main() { //~ ERROR compilation successful
+    apply_null!(#[cfg(all())] fn f() {});
 }
