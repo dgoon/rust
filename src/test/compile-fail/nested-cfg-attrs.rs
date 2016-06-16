@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,16 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that the only error msg we report is the
-// mismatch between the # of params, and not other
-// unrelated errors.
+#[cfg_attr(all(), cfg_attr(all(), cfg(foo)))]
+fn f() {}
 
-fn foo(a: isize, b: isize, c: isize, d:isize) {
-  panic!();
-}
-
-fn main() {
-  foo(1, 2, 3);
-  //~^ ERROR this function takes 4 parameters but 3
-  //~^^ NOTE the following parameter types were expected
-}
+fn main() { f() } //~ ERROR unresolved name `f`
