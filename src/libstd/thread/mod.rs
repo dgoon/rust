@@ -482,9 +482,9 @@ pub struct Thread {
 impl Thread {
     // Used only internally to construct a thread object without spawning
     fn new(name: Option<String>) -> Thread {
-        let cname = name.map(|n| CString::new(n).unwrap_or_else(|_| {
-            panic!("thread name may not contain interior null bytes")
-        }));
+        let cname = name.map(|n| {
+            CString::new(n).expect("thread name may not contain interior null bytes")
+        });
         Thread {
             inner: Arc::new(Inner {
                 name: cname,
@@ -610,6 +610,36 @@ impl<T> JoinInner<T> {
 /// Due to platform restrictions, it is not possible to `Clone` this
 /// handle: the ability to join a child thread is a uniquely-owned
 /// permission.
+///
+/// This `struct` is created by the [`thread::spawn`] function and the
+/// [`thread::Builder::spawn`] method.
+///
+/// # Examples
+///
+/// Creation from [`thread::spawn`]:
+///
+/// ```rust
+/// use std::thread;
+///
+/// let join_handle: thread::JoinHandle<_> = thread::spawn(|| {
+///     // some work here
+/// });
+/// ```
+///
+/// Creation from [`thread::Builder::spawn`]:
+///
+/// ```rust
+/// use std::thread;
+///
+/// let builder = thread::Builder::new();
+///
+/// let join_handle: thread::JoinHandle<_> = builder.spawn(|| {
+///     // some work here
+/// }).unwrap();
+/// ```
+///
+/// [`thread::spawn`]: fn.spawn.html
+/// [`thread::Builder::spawn`]: struct.Builder.html#method.spawn
 #[stable(feature = "rust1", since = "1.0.0")]
 pub struct JoinHandle<T>(JoinInner<T>);
 
