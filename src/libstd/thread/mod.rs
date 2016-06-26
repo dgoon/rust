@@ -220,6 +220,21 @@ impl Builder {
 
     /// Names the thread-to-be. Currently the name is used for identification
     /// only in panic messages.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::thread;
+    ///
+    /// let builder = thread::Builder::new()
+    ///     .name("foo".into());
+    ///
+    /// let handler = builder.spawn(|| {
+    ///     assert_eq!(thread::current().name(), Some("foo"))
+    /// }).unwrap();
+    ///
+    /// handler.join().unwrap();
+    /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn name(mut self, name: String) -> Builder {
         self.name = Some(name);
@@ -423,10 +438,10 @@ pub fn park() {
 /// the specified duration has been reached (may wake spuriously).
 ///
 /// The semantics of this function are equivalent to `park()` except that the
-/// thread will be blocked for roughly no longer than *ms*. This method
+/// thread will be blocked for roughly no longer than `ms`. This method
 /// should not be used for precise timing due to anomalies such as
 /// preemption or platform differences that may not cause the maximum
-/// amount of time waited to be precisely *ms* long.
+/// amount of time waited to be precisely `ms` long.
 ///
 /// See the module doc for more detail.
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -439,10 +454,10 @@ pub fn park_timeout_ms(ms: u32) {
 /// the specified duration has been reached (may wake spuriously).
 ///
 /// The semantics of this function are equivalent to `park()` except that the
-/// thread will be blocked for roughly no longer than *dur*. This method
+/// thread will be blocked for roughly no longer than `dur`. This method
 /// should not be used for precise timing due to anomalies such as
 /// preemption or platform differences that may not cause the maximum
-/// amount of time waited to be precisely *dur* long.
+/// amount of time waited to be precisely `dur` long.
 ///
 /// See the module doc for more detail.
 ///
