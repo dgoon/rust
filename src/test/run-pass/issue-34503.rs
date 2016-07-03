@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -9,10 +9,12 @@
 // except according to those terms.
 
 fn main() {
-    static foo: Fn() -> u32 = || -> u32 {
-        //~^ ERROR: mismatched types
-        //~| ERROR: `std::ops::Fn() -> u32 + 'static: std::marker::Sized` is not satisfied
-
-        0
-    };
+    struct X;
+    trait Foo<T> {
+        fn foo(&self) where (T, Option<T>): Ord {}
+        fn bar(&self, x: &Option<T>) -> bool
+        where Option<T>: Ord { *x < *x }
+    }
+    impl Foo<X> for () {}
+    let _ = &() as &Foo<X>;
 }
