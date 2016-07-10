@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,8 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-mod MyMod {}
-
-fn main() {
-    let myVar = MyMod { T: 0 }; //~ ERROR `MyMod` does not name a struct or a struct variant
+enum S {
+    A,
 }
+
+fn bug(l: S) {
+    match l {
+        S::B{ } => { },
+        //~^ ERROR ambiguous associated type; specify the type using the syntax `<S as Trait>::B`
+    }
+}
+
+fn main () {}
