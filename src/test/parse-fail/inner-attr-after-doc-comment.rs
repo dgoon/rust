@@ -8,12 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-test
+// compile-flags: -Z parse-only
 
-macro_rules! m {
-    () => { include!("file.txt"); }
-}
+#![feature(lang_items)]
+/**
+ * My module
+ */
 
-macro_rules! n {
-    () => { unsafe { asm!(include_str!("file.txt")); } }
-}
+#![recursion_limit="100"]
+//~^ ERROR an inner attribute is not permitted following an outer doc comment
+fn main() {}
