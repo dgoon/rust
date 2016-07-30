@@ -11,6 +11,7 @@
 //! Calculation of a Strict Version Hash for crates.  For a length
 //! comment explaining the general idea, see `librustc/middle/svh.rs`.
 
+use syntax::attr::AttributeMethods;
 use std::hash::{Hash, SipHasher, Hasher};
 use rustc::hir::def_id::{CRATE_DEF_INDEX, DefId};
 use rustc::hir::svh::Svh;
@@ -69,7 +70,7 @@ impl<'a, 'tcx> SvhCalculate for TyCtxt<'a, 'tcx, 'tcx> {
         // to avoid hashing the AttrId
         for attr in &krate.attrs {
             debug!("krate attr {:?}", attr);
-            attr.node.value.hash(&mut state);
+            attr.meta().hash(&mut state);
         }
 
         Svh::new(state.finish())
@@ -384,9 +385,9 @@ mod svh_visitor {
             SawItem.hash(self.st); visit::walk_item(self, i)
         }
 
-        fn visit_mod(&mut self, m: &'a Mod, _s: Span, _n: NodeId) {
+        fn visit_mod(&mut self, m: &'a Mod, _s: Span, n: NodeId) {
             debug!("visit_mod: st={:?}", self.st);
-            SawMod.hash(self.st); visit::walk_mod(self, m)
+            SawMod.hash(self.st); visit::walk_mod(self, m, n)
         }
 
         fn visit_decl(&mut self, d: &'a Decl) {
@@ -405,9 +406,9 @@ mod svh_visitor {
         }
 
         fn visit_fn(&mut self, fk: FnKind<'a>, fd: &'a FnDecl,
-                    b: &'a Block, s: Span, _: NodeId) {
+                    b: &'a Block, s: Span, n: NodeId) {
             debug!("visit_fn: st={:?}", self.st);
-            SawFn.hash(self.st); visit::walk_fn(self, fk, fd, b, s)
+            SawFn.hash(self.st); visit::walk_fn(self, fk, fd, b, s, n)
         }
 
         fn visit_trait_item(&mut self, ti: &'a TraitItem) {
