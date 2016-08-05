@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-pretty : (#23623) problems when  ending with // comments
+type Foo = i32;
 
-// error-pattern:thread 'main' panicked at 'attempt to subtract with overflow'
-// compile-flags: -C debug-assertions
+impl Copy for Foo { } //~ ERROR E0206
+                      //~^ ERROR E0117
+
+#[derive(Copy, Clone)]
+struct Bar;
+
+impl Copy for &'static Bar { } //~ ERROR E0206
 
 fn main() {
-    let _x = 42u8 - (42u8 + 1);
 }

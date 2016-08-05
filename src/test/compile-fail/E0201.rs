@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,11 +8,25 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-pretty : (#23623) problems when  ending with // comments
+struct Foo(u8);
 
-// error-pattern:thread 'main' panicked at 'attempt to subtract with overflow'
-// compile-flags: -C debug-assertions
+impl Foo {
+    fn bar(&self) -> bool { self.0 > 5 }
+    fn bar() {} //~ ERROR E0201
+}
+
+trait Baz {
+    type Quux;
+    fn baz(&self) -> bool;
+}
+
+impl Baz for Foo {
+    type Quux = u32;
+
+    fn baz(&self) -> bool { true }
+    fn baz(&self) -> bool { self.0 > 5 } //~ ERROR E0201
+    type Quux = u32; //~ ERROR E0201
+}
 
 fn main() {
-    let _x = 42u8 - (42u8 + 1);
 }
