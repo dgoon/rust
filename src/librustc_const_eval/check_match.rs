@@ -335,6 +335,7 @@ fn check_arms(cx: &MatchCheckCtxt,
                         hir::MatchSource::Normal => {
                             let mut err = struct_span_err!(cx.tcx.sess, pat.span, E0001,
                                                            "unreachable pattern");
+                            err.span_label(pat.span, &format!("this is an unreachable pattern"));
                             // if we had a catchall pattern, hint at that
                             for row in &seen.0 {
                                 if pat_is_catchall(&cx.tcx.def_map.borrow(), row[0].0) {
@@ -423,10 +424,15 @@ fn check_exhaustive<'a, 'tcx>(cx: &MatchCheckCtxt<'a, 'tcx>,
                             format!("`{}` and {} more", head.join("`, `"), tail.len())
                         }
                     };
-                    span_err!(cx.tcx.sess, sp, E0004,
+
+                    let label_text = match pattern_strings.len(){
+                        1 => format!("pattern {} not covered", joined_patterns),
+                        _ => format!("patterns {} not covered", joined_patterns)
+                    };
+                    struct_span_err!(cx.tcx.sess, sp, E0004,
                         "non-exhaustive patterns: {} not covered",
                         joined_patterns
-                    );
+                    ).span_label(sp, &label_text).emit();
                 },
             }
         }

@@ -310,8 +310,12 @@ impl<'o, 'gcx: 'tcx, 'tcx> AstConv<'gcx, 'tcx>+'o {
             None => match rscope.anon_regions(default_span, 1) {
                 Ok(rs) => rs[0],
                 Err(params) => {
-                    let mut err = struct_span_err!(self.tcx().sess, default_span, E0106,
-                                                   "missing lifetime specifier");
+                    let ampersand_span = Span { hi: default_span.lo, ..default_span};
+
+                    let mut err = struct_span_err!(self.tcx().sess, ampersand_span, E0106,
+                                                 "missing lifetime specifier");
+                    err.span_label(ampersand_span, &format!("expected lifetime parameter"));
+
                     if let Some(params) = params {
                         report_elision_failure(&mut err, params);
                     }
@@ -1075,8 +1079,10 @@ impl<'o, 'gcx: 'tcx, 'tcx> AstConv<'gcx, 'tcx>+'o {
                         Ok((trait_ref, projection_bounds))
                     }
                     _ => {
-                        span_err!(self.tcx().sess, ty.span, E0172,
-                                  "expected a reference to a trait");
+                        struct_span_err!(self.tcx().sess, ty.span, E0172,
+                                  "expected a reference to a trait")
+                            .span_label(ty.span, &format!("expected a trait"))
+                            .emit();
                         Err(ErrorReported)
                     }
                 }
@@ -1086,6 +1092,7 @@ impl<'o, 'gcx: 'tcx, 'tcx> AstConv<'gcx, 'tcx>+'o {
                                                "expected a path on the left-hand side \
                                                 of `+`, not `{}`",
                                                pprust::ty_to_string(ty));
+                err.span_label(ty.span, &format!("expected a path"));
                 let hi = bounds.iter().map(|x| match *x {
                     hir::TraitTyParamBound(ref tr, _) => tr.span.hi,
                     hir::RegionTyParamBound(ref r) => r.span.hi,
@@ -2266,9 +2273,25 @@ fn check_type_argument_count(tcx: TyCtxt, span: Span, supplied: usize,
 }
 
 fn report_lifetime_number_error(tcx: TyCtxt, span: Span, number: usize, expected: usize) {
-    span_err!(tcx.sess, span, E0107,
-              "wrong number of lifetime parameters: expected {}, found {}",
-              expected, number);
+    let label = if number < expected {
+        if expected == 1 {
+            format!("expected {} lifetime parameter", expected)
+        } else {
+            format!("expected {} lifetime parameters", expected)
+        }
+    } else {
+        let additional = number - expected;
+        if additional == 1 {
+            "unexpected lifetime parameter".to_string()
+        } else {
+            format!("{} unexpected lifetime parameters", additional)
+        }
+    };
+    struct_span_err!(tcx.sess, span, E0107,
+                     "wrong number of lifetime parameters: expected {}, found {}",
+                     expected, number)
+        .span_label(span, &label)
+        .emit();
 }
 
 // A helper struct for conveniently grouping a set of bounds which we pass to
