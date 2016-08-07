@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::sync::{self, Arc}; //~ NOTE previous import
-                            //~^ NOTE previous import
-use std::sync::Arc; //~ ERROR a type named
-                    //~| NOTE already imported
-use std::sync; //~ ERROR a module named
-               //~| NOTE already imported
-
 fn main() {
+    let xs : Vec<Option<i32>> = vec!(Some(1), None);
+
+    for Some(x) in xs {} //~ ERROR E0297
 }

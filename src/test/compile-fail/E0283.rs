@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,12 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::sync::{self, Arc}; //~ NOTE previous import
-                            //~^ NOTE previous import
-use std::sync::Arc; //~ ERROR a type named
-                    //~| NOTE already imported
-use std::sync; //~ ERROR a module named
-               //~| NOTE already imported
+trait Generator {
+    fn create() -> u32;
+}
+
+struct Impl;
+
+impl Generator for Impl {
+    fn create() -> u32 { 1 }
+}
+
+struct AnotherImpl;
+
+impl Generator for AnotherImpl {
+    fn create() -> u32 { 2 }
+}
 
 fn main() {
+    let cont: u32 = Generator::create(); //~ ERROR E0283
 }
