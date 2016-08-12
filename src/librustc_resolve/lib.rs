@@ -412,7 +412,10 @@ fn resolve_struct_error<'b, 'a: 'b, 'c>(resolver: &'b Resolver<'a>,
             struct_span_err!(resolver.session, span, E0432, "{}", msg)
         }
         ResolutionError::FailedToResolve(msg) => {
-            struct_span_err!(resolver.session, span, E0433, "failed to resolve. {}", msg)
+            let mut err = struct_span_err!(resolver.session, span, E0433,
+                                           "failed to resolve. {}", msg);
+            err.span_label(span, &msg);
+            err
         }
         ResolutionError::CannotCaptureDynamicEnvironmentInFnItem => {
             struct_span_err!(resolver.session,
@@ -1744,6 +1747,7 @@ impl<'a> Resolver<'a> {
                     let def_id = self.definitions.local_def_id(type_parameter.id);
                     let def = Def::TyParam(space, index as u32, def_id, name);
                     function_type_rib.bindings.insert(ast::Ident::with_empty_ctxt(name), def);
+                    self.record_def(type_parameter.id, PathResolution::new(def));
                 }
                 self.type_ribs.push(function_type_rib);
             }
