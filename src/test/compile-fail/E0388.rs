@@ -8,14 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-enum Foo {}
+static X: i32 = 1;
+const C: i32 = 2;
 
-fn main() {
-    let u = Foo { value: 0 };
-    //~^ ERROR `Foo` does not name a struct or a struct variant [E0071]
-    //~| NOTE not a struct
+const CR: &'static mut i32 = &mut C; //~ ERROR E0017
+                                     //~| ERROR E0017
+static STATIC_REF: &'static mut i32 = &mut X; //~ ERROR E0017
+                                              //~| ERROR E0017
+                                              //~| ERROR E0388
+static CONST_REF: &'static mut i32 = &mut C; //~ ERROR E0017
+                                             //~| ERROR E0017
 
-    let t = u32 { value: 4 };
-    //~^ ERROR `u32` does not name a struct or a struct variant [E0071]
-    //~| NOTE not a struct
-}
+fn main() {}

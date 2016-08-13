@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,19 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct TS ( //~ ERROR empty tuple structs and enum variants are unstable
-    #[cfg(untrue)]
-    i32,
-);
+#![feature(coerce_unsized)]
+use std::ops::CoerceUnsized;
 
-enum E {
-    TV ( //~ ERROR empty tuple structs and enum variants are unstable
-        #[cfg(untrue)]
-        i32,
-    )
+struct Foo<T: ?Sized> {
+    a: i32,
 }
 
-fn main() {
-    let s = TS;
-    let tv = E::TV;
-}
+impl<T, U> CoerceUnsized<Foo<U>> for Foo<T> //~ ERROR E0374
+    where T: CoerceUnsized<U> {}
+
+fn main() {}
