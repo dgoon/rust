@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,24 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-mod m1 {
-    pub struct Pub;
-    struct Priv;
+macro_rules! m { ($t:tt) => { $t } }
 
-    impl Pub {
-        pub fn f() -> Priv {} //~ ERROR private type in public interface
-    }
+fn main() {
+    m!($t); //~ ERROR unknown macro variable
+            //~| ERROR expected expression
 }
-
-mod m2 {
-    #![deny(future_incompatible)]
-
-    pub struct Pub;
-    struct Priv;
-
-    impl Pub {
-        pub fn f() -> Priv {} //~ ERROR private type in public interface
-    }
-}
-
-fn main() {}
