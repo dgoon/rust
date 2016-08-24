@@ -8,17 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait Trait {
-    fn bar<'a,'b:'a>(x: &'a str, y: &'b str);
-}
+// Regression test for #35593. Check that we can reuse this trivially
+// equal example.
 
-struct Foo;
+// revisions:rpass1 rpass2
 
-impl Trait for Foo {
-    fn bar<'a,'b>(x: &'a str, y: &'b str) { //~ ERROR E0195
-                                            //~^ lifetimes do not match trait
-    }
-}
+#![feature(rustc_attrs)]
+#![rustc_partition_reused(module="issue_35593", cfg="rpass2")]
 
 fn main() {
+    println!("hello world");
 }
