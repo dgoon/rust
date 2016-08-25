@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2013-2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,16 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub struct T;
+// compile-flags:-g
 
-#[unsafe_no_drop_flag]
-//~^ ERROR unsafe_no_drop_flag has unstable semantics and may be removed
-pub struct S {
-    pub x: T,
+#![crate_type = "rlib"]
+
+#[macro_export]
+macro_rules! new_scope {
+    () => {
+        let x = 1;
+    }
 }
-
-impl Drop for S {
-    fn drop(&mut self) {}
-}
-
-pub fn main() {}
