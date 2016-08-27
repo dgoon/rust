@@ -201,6 +201,7 @@ use rustc::ty::adjustment::CustomCoerceUnsized;
 use rustc::mir::repr as mir;
 use rustc::mir::visit as mir_visit;
 use rustc::mir::visit::Visitor as MirVisitor;
+use rustc::mir::repr::Location;
 
 use rustc_const_eval as const_eval;
 
@@ -446,7 +447,7 @@ struct MirNeighborCollector<'a, 'tcx: 'a> {
 
 impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
 
-    fn visit_rvalue(&mut self, rvalue: &mir::Rvalue<'tcx>) {
+    fn visit_rvalue(&mut self, rvalue: &mir::Rvalue<'tcx>, location: Location) {
         debug!("visiting rvalue {:?}", *rvalue);
 
         match *rvalue {
@@ -517,12 +518,13 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
             _ => { /* not interesting */ }
         }
 
-        self.super_rvalue(rvalue);
+        self.super_rvalue(rvalue, location);
     }
 
     fn visit_lvalue(&mut self,
                     lvalue: &mir::Lvalue<'tcx>,
-                    context: mir_visit::LvalueContext) {
+                    context: mir_visit::LvalueContext,
+                    location: Location) {
         debug!("visiting lvalue {:?}", *lvalue);
 
         if let mir_visit::LvalueContext::Drop = context {
@@ -537,10 +539,10 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
             self.output.push(TransItem::DropGlue(DropGlueKind::Ty(ty)));
         }
 
-        self.super_lvalue(lvalue, context);
+        self.super_lvalue(lvalue, context, location);
     }
 
-    fn visit_operand(&mut self, operand: &mir::Operand<'tcx>) {
+    fn visit_operand(&mut self, operand: &mir::Operand<'tcx>, location: Location) {
         debug!("visiting operand {:?}", *operand);
 
         let callee = match *operand {
@@ -620,7 +622,7 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
             }
         }
 
-        self.super_operand(operand);
+        self.super_operand(operand, location);
 
         fn can_result_in_trans_item<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                                               def_id: DefId)
@@ -654,7 +656,8 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
     // we would not register drop-glues.
     fn visit_terminator_kind(&mut self,
                              block: mir::BasicBlock,
-                             kind: &mir::TerminatorKind<'tcx>) {
+                             kind: &mir::TerminatorKind<'tcx>,
+                             location: Location) {
         let tcx = self.scx.tcx();
         match *kind {
             mir::TerminatorKind::Call {
@@ -682,7 +685,7 @@ impl<'a, 'tcx> MirVisitor<'tcx> for MirNeighborCollector<'a, 'tcx> {
             _ => { /* Nothing to do. */ }
         }
 
-        self.super_terminator_kind(block, kind);
+        self.super_terminator_kind(block, kind, location);
 
         fn is_drop_in_place_intrinsic<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                                                 def_id: DefId,
@@ -753,7 +756,7 @@ fn find_drop_glue_neighbors<'a, 'tcx>(scx: &SharedCrateContext<'a, 'tcx>,
                                    .drop_trait()
                                    .unwrap();
 
-        let self_type_substs = Substs::new_trait(scx.tcx(), vec![], vec![], ty);
+        let self_type_substs = Substs::new_trait(scx.tcx(), ty, &[]);
 
         let trait_ref = ty::TraitRef {
             def_id: drop_trait_def_id,
@@ -1235,7 +1238,7 @@ fn create_trans_items_for_default_impls<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
                     // The substitutions we have are on the impl, so we grab
                     // the method type from the impl to substitute into.
                     let impl_substs = Substs::for_item(tcx, impl_def_id,
-                                                       |_, _| ty::ReErased,
+                                                       |_, _| tcx.mk_region(ty::ReErased),
                                                        |_, _| tcx.types.err);
                     let mth = meth::get_impl_method(tcx,
                                                     callee_substs,
