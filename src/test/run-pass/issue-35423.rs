@@ -1,4 +1,4 @@
-// Copyright 2012 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// compile-flags: -Z parse-only
-
-// Issue #623 - non-string meta items are not serialized correctly;
-// for now just forbid them
-
-#[foo = 1] //~ ERROR: non-string literals are not allowed in meta-items
-fn main() { }
+fn main () {
+    let x = 4;
+    match x {
+        ref r if *r < 0 => println!("got negative num {} < 0", r),
+        e @ 1 ... 100 => println!("got number within range [1,100] {}", e),
+        _ => println!("no"),
+    }
+}

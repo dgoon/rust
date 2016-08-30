@@ -1618,6 +1618,7 @@ impl<'a> Resolver<'a> {
             ItemKind::Enum(_, ref generics) |
             ItemKind::Ty(_, ref generics) |
             ItemKind::Struct(_, ref generics) |
+            ItemKind::Union(_, ref generics) |
             ItemKind::Fn(_, _, _, _, ref generics, _) => {
                 self.with_type_parameter_rib(HasTypeParameters(generics, ItemRibKind),
                                              |this| visit::walk_item(this, item));
@@ -3354,7 +3355,11 @@ impl<'a> Resolver<'a> {
                 e.span_label(span, &"already imported");
                 e
             },
-            (true, _) | (_, true) => struct_span_err!(self.session, span, E0260, "{}", msg),
+            (true, _) | (_, true) => {
+                let mut e = struct_span_err!(self.session, span, E0260, "{}", msg);
+                e.span_label(span, &format!("`{}` already imported", name));
+                e
+            },
             _ => match (old_binding.is_import(), binding.is_import()) {
                 (false, false) => {
                     let mut e = struct_span_err!(self.session, span, E0428, "{}", msg);
