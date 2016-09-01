@@ -8,27 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(specialization)]
-
-trait SpaceLlama {
-    fn fly(&self);
+extern {
+    static error_message_count: u32;
 }
 
-impl<T> SpaceLlama for T {
-    default fn fly(&self) {}
-}
+pub static BAZ: u32 = *&error_message_count;
+//~^ ERROR cannot refer to other statics by value
 
-impl<T: Clone> SpaceLlama for T {
-//~^ NOTE parent `impl` is here
-    fn fly(&self) {}
-}
-
-impl SpaceLlama for i32 {
-    default fn fly(&self) {}
-    //~^ ERROR E0520
-    //~| NOTE cannot specialize default item `fly`
-    //~| NOTE either the parent `impl` or `fly` in the parent `impl` must be marked `default`
-}
-
-fn main() {
-}
+fn main() {}
