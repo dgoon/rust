@@ -21,6 +21,7 @@ use cabi_aarch64;
 use cabi_powerpc;
 use cabi_powerpc64;
 use cabi_mips;
+use cabi_mips64;
 use cabi_asmjs;
 use machine::{llalign_of_min, llsize_of, llsize_of_real, llsize_of_store};
 use type_::Type;
@@ -269,6 +270,7 @@ impl FnType {
             Vectorcall => llvm::X86_VectorCall,
             C => llvm::CCallConv,
             Win64 => llvm::X86_64_Win64,
+            SysV64 => llvm::X86_64_SysV,
 
             // These API constants ought to be more specific...
             Cdecl => llvm::CCallConv,
@@ -483,7 +485,9 @@ impl FnType {
 
         match &ccx.sess().target.target.arch[..] {
             "x86" => cabi_x86::compute_abi_info(ccx, self),
-            "x86_64" => if ccx.sess().target.target.options.is_like_windows {
+            "x86_64" => if abi == Abi::SysV64 {
+                cabi_x86_64::compute_abi_info(ccx, self);
+            } else if abi == Abi::Win64 || ccx.sess().target.target.options.is_like_windows {
                 cabi_x86_win64::compute_abi_info(ccx, self);
             } else {
                 cabi_x86_64::compute_abi_info(ccx, self);
@@ -498,6 +502,7 @@ impl FnType {
                 cabi_arm::compute_abi_info(ccx, self, flavor);
             },
             "mips" => cabi_mips::compute_abi_info(ccx, self),
+            "mips64" => cabi_mips64::compute_abi_info(ccx, self),
             "powerpc" => cabi_powerpc::compute_abi_info(ccx, self),
             "powerpc64" => cabi_powerpc64::compute_abi_info(ccx, self),
             "asmjs" => cabi_asmjs::compute_abi_info(ccx, self),

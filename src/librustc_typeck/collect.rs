@@ -477,7 +477,6 @@ impl<'tcx> GetTypeParameterBounds<'tcx> for ty::GenericPredicates<'tcx> {
                 ty::Predicate::TypeOutlives(ref data) => {
                     data.skip_binder().0.is_param(def.index)
                 }
-                ty::Predicate::Rfc1592(..) |
                 ty::Predicate::Equate(..) |
                 ty::Predicate::RegionOutlives(..) |
                 ty::Predicate::WellFormed(..) |
@@ -1556,7 +1555,7 @@ fn type_of_def_id<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
             NodeItem(item) => {
                 match item.node {
                     ItemStatic(ref t, _, _) | ItemConst(ref t, _) => {
-                        ccx.icx(&()).to_ty(&ExplicitRscope, &t)
+                        ccx.icx(&()).to_ty(&ElidableRscope::new(ty::ReStatic), &t)
                     }
                     ItemFn(ref decl, unsafety, _, abi, ref generics, _) => {
                         let tofd = AstConv::ty_of_bare_fn(&ccx.icx(generics), unsafety, abi, &decl,
