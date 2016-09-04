@@ -8,15 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct Foo {
-    a: u32
-}
+#![feature(untagged_unions)]
 
-impl Drop for Foo {
-    fn drop(&mut self) {}
-}
-
-const F : Foo = Foo { a : 0 }; //~ ERROR E0493
-
-fn main() {
+pub union U {
+    pub a: u8,
+    pub b: u16,
 }
