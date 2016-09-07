@@ -8,15 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(slice_patterns)]
+#[cfg(rpass1)]
+pub mod sub2;
 
-fn main() {
-    let r = &[1, 2, 3, 4];
-    match r {
-        &[a, b] => {
-            //~^ ERROR E0527
-            //~| NOTE expected 4 elements
-            println!("a={}, b={}", a, b);
-        }
-    }
-}
+pub mod sub1;
+
+#[cfg(rpass2)]
+pub mod sub2;

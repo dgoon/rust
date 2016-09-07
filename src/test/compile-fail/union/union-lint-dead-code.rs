@@ -8,15 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(slice_patterns)]
+#![feature(untagged_unions)]
+#![deny(dead_code)]
+
+union Foo {
+    x: usize,
+    b: bool, //~ ERROR: field is never used
+    _unused: u16,
+}
+
+fn field_read(f: Foo) -> usize {
+    unsafe { f.x }
+}
 
 fn main() {
-    let r = &[1, 2, 3, 4];
-    match r {
-        &[a, b] => {
-            //~^ ERROR E0527
-            //~| NOTE expected 4 elements
-            println!("a={}, b={}", a, b);
-        }
-    }
+    let _ = field_read(Foo { x: 2 });
 }

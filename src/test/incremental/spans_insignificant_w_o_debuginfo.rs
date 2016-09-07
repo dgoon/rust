@@ -8,15 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(slice_patterns)]
+// This test makes sure that just changing a definition's location in the
+// source file does *not* change its incr. comp. hash, if debuginfo is disabled.
 
-fn main() {
-    let r = &[1, 2, 3, 4];
-    match r {
-        &[a, b] => {
-            //~^ ERROR E0527
-            //~| NOTE expected 4 elements
-            println!("a={}, b={}", a, b);
-        }
-    }
-}
+// revisions:rpass1 rpass2
+
+// compile-flags: -Z query-dep-graph
+
+#![feature(rustc_attrs)]
+
+#[cfg(rpass1)]
+pub fn main() {}
+
+#[cfg(rpass2)]
+#[rustc_clean(label="Hir", cfg="rpass2")]
+pub fn main() {}
