@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,10 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// See comments in Cargo.toml for why this exists
+#![feature(slice_patterns, box_patterns)]
 
-// There's a bug right now where if we pass --extern std=... and we're cross
-// compiling then this doesn't work with `#[macro_use] extern crate std;`. Work
-// around this by not having `#[macro_use] extern crate std;`
-#![no_std]
-extern crate std;
+struct A;
+
+fn main() {
+    let a: Box<[A]> = Box::new([A]);
+    match a {
+        box [a] => {}, //~ ERROR cannot move out of type `[A]`
+        _ => {}
+    }
+}
