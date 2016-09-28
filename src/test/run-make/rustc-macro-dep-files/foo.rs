@@ -1,4 +1,4 @@
-// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,23 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![no_std]
+#![crate_type = "rustc-macro"]
+#![feature(rustc_macro)]
+#![feature(rustc_macro_lib)]
 
-extern crate rand;
-extern crate serialize as rustc_serialize;
+extern crate rustc_macro;
 
-#[derive(RustcEncodable)]  //~ ERROR this trait cannot be derived
-struct Bar {
-    x: u32,
-}
+use rustc_macro::TokenStream;
 
-#[derive(RustcDecodable)]  //~ ERROR this trait cannot be derived
-struct Baz {
-    x: u32,
-}
-
-fn main() {
-    Foo { x: 0 };
-    Bar { x: 0 };
-    Baz { x: 0 };
+#[rustc_macro_derive(A)]
+pub fn derive(input: TokenStream) -> TokenStream {
+    let input = input.to_string();
+    assert!(input.contains("struct A;"));
+    "struct B;".parse().unwrap()
 }
