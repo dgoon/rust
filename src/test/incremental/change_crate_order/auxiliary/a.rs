@@ -1,4 +1,4 @@
-// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,15 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct Foo {
-    a: u8,
-    b: u8,
-}
+#![crate_type="rlib"]
 
-fn main() {
-    let x = Foo { a:1, b:2 };
-    let Foo { a: x, a: y, b: 0 } = x;
-    //~^ ERROR field `a` bound multiple times in the pattern
-    //~| NOTE multiple uses of `a` in pattern
-    //~| NOTE first use of `a`
-}
+pub static A : u32 = 32;
+

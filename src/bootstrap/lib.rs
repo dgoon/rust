@@ -557,12 +557,18 @@ impl Build {
                 continue
             }
 
+            if !submodule.path.exists() {
+                t!(fs::create_dir_all(&submodule.path));
+            }
+
             match submodule.state {
                 State::MaybeDirty => {
                     // drop staged changes
-                    self.run(git().arg("-C").arg(submodule.path).args(&["reset", "--hard"]));
+                    self.run(git().current_dir(submodule.path)
+                                  .args(&["reset", "--hard"]));
                     // drops unstaged changes
-                    self.run(git().arg("-C").arg(submodule.path).args(&["clean", "-fdx"]));
+                    self.run(git().current_dir(submodule.path)
+                                  .args(&["clean", "-fdx"]));
                 },
                 State::NotInitialized => {
                     self.run(git_submodule().arg("init").arg(submodule.path));
@@ -571,8 +577,10 @@ impl Build {
                 State::OutOfSync => {
                     // drops submodule commits that weren't reported to the (outer) git repository
                     self.run(git_submodule().arg("update").arg(submodule.path));
-                    self.run(git().arg("-C").arg(submodule.path).args(&["reset", "--hard"]));
-                    self.run(git().arg("-C").arg(submodule.path).args(&["clean", "-fdx"]));
+                    self.run(git().current_dir(submodule.path)
+                                  .args(&["reset", "--hard"]));
+                    self.run(git().current_dir(submodule.path)
+                                  .args(&["clean", "-fdx"]));
                 },
             }
         }
@@ -657,12 +665,6 @@ impl Build {
             cargo.env(format!("CC_{}", target), self.cc(target))
                  .env(format!("AR_{}", target), self.ar(target).unwrap()) // only msvc is None
                  .env(format!("CFLAGS_{}", target), self.cflags(target).join(" "));
-        }
-
-        // If we're building for OSX, inform the compiler and the linker that
-        // we want to build a compiler runnable on 10.7
-        if target.contains("apple-darwin") {
-            cargo.env("MACOSX_DEPLOYMENT_TARGET", "10.7");
         }
 
         // Environment variables *required* needed throughout the build
@@ -933,7 +935,6 @@ impl Build {
         // LLVM/jemalloc/etc are all properly compiled.
         if target.contains("apple-darwin") {
             base.push("-stdlib=libc++".into());
-            base.push("-mmacosx-version-min=10.7".into());
         }
         // This is a hack, because newer binutils broke things on some vms/distros
         // (i.e., linking against unknown relocs disabled by the following flag)
