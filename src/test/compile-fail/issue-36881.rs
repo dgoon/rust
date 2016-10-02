@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,14 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(unboxed_closures)]
-
-trait Trait {}
-
-fn f<F:Trait(isize) -> isize>(x: F) {}
-//~^ ERROR E0244
-//~| NOTE expected no type arguments, found 1
-//~| ERROR E0220
-//~| NOTE associated type `Output` not found
-
-fn main() {}
+fn main() {
+    extern crate rand;
+    use rand::Rng; //~ ERROR unresolved import
+}
