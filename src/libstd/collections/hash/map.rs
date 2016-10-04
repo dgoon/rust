@@ -14,6 +14,7 @@ use self::VacantEntryState::*;
 use borrow::Borrow;
 use cmp::max;
 use fmt::{self, Debug};
+#[allow(deprecated)]
 use hash::{Hash, Hasher, BuildHasher, SipHasher13};
 use iter::{FromIterator, FusedIterator};
 use mem::{self, replace};
@@ -1597,14 +1598,14 @@ impl<'a, K, V> ExactSizeIterator for ValuesMut<'a, K, V> {
 #[unstable(feature = "fused", issue = "35602")]
 impl<'a, K, V> FusedIterator for ValuesMut<'a, K, V> {}
 
-#[stable(feature = "rust1", since = "1.0.0")]
+#[stable(feature = "drain", since = "1.6.0")]
 impl<'a, K, V> Iterator for Drain<'a, K, V> {
     type Item = (K, V);
 
     #[inline] fn next(&mut self) -> Option<(K, V)> { self.inner.next().map(|(_, k, v)| (k, v)) }
     #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.inner.size_hint() }
 }
-#[stable(feature = "rust1", since = "1.0.0")]
+#[stable(feature = "drain", since = "1.6.0")]
 impl<'a, K, V> ExactSizeIterator for Drain<'a, K, V> {
     #[inline] fn len(&self) -> usize { self.inner.len() }
 }
@@ -2018,6 +2019,7 @@ impl RandomState {
 impl BuildHasher for RandomState {
     type Hasher = DefaultHasher;
     #[inline]
+    #[allow(deprecated)]
     fn build_hasher(&self) -> DefaultHasher {
         DefaultHasher(SipHasher13::new_with_keys(self.k0, self.k1))
     }
@@ -2030,10 +2032,32 @@ impl BuildHasher for RandomState {
 ///
 /// [`RandomState`]: struct.RandomState.html
 /// [`Hasher`]: ../../hash/trait.Hasher.html
-#[unstable(feature = "hashmap_default_hasher", issue = "0")]
+#[stable(feature = "hashmap_default_hasher", since = "1.13.0")]
+#[allow(deprecated)]
+#[derive(Debug)]
 pub struct DefaultHasher(SipHasher13);
 
-#[unstable(feature = "hashmap_default_hasher", issue = "0")]
+impl DefaultHasher {
+    /// Creates a new `DefaultHasher`.
+    ///
+    /// This hasher is not guaranteed to be the same as all other
+    /// `DefaultHasher` instances, but is the same as all other `DefaultHasher`
+    /// instances created through `new` or `default`.
+    #[stable(feature = "hashmap_default_hasher", since = "1.13.0")]
+    #[allow(deprecated)]
+    pub fn new() -> DefaultHasher {
+        DefaultHasher(SipHasher13::new_with_keys(0, 0))
+    }
+}
+
+#[stable(feature = "hashmap_default_hasher", since = "1.13.0")]
+impl Default for DefaultHasher {
+    fn default() -> DefaultHasher {
+        DefaultHasher::new()
+    }
+}
+
+#[stable(feature = "hashmap_default_hasher", since = "1.13.0")]
 impl Hasher for DefaultHasher {
     #[inline]
     fn write(&mut self, msg: &[u8]) {
@@ -2046,7 +2070,7 @@ impl Hasher for DefaultHasher {
     }
 }
 
-#[stable(feature = "rust1", since = "1.0.0")]
+#[stable(feature = "hashmap_build_hasher", since = "1.7.0")]
 impl Default for RandomState {
     /// Constructs a new `RandomState`.
     #[inline]
