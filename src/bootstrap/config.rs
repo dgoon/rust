@@ -79,6 +79,9 @@ pub struct Config {
     // Fallback musl-root for all targets
     pub musl_root: Option<PathBuf>,
     pub prefix: Option<String>,
+    pub docdir: Option<String>,
+    pub libdir: Option<String>,
+    pub mandir: Option<String>,
     pub codegen_tests: bool,
     pub nodejs: Option<PathBuf>,
 }
@@ -158,6 +161,7 @@ struct TomlTarget {
     cc: Option<String>,
     cxx: Option<String>,
     android_ndk: Option<String>,
+    musl_root: Option<String>,
 }
 
 impl Config {
@@ -268,6 +272,7 @@ impl Config {
                 }
                 target.cxx = cfg.cxx.clone().map(PathBuf::from);
                 target.cc = cfg.cc.clone().map(PathBuf::from);
+                target.musl_root = cfg.musl_root.clone().map(PathBuf::from);
 
                 config.target_config.insert(triple.clone(), target);
             }
@@ -356,6 +361,15 @@ impl Config {
                 }
                 "CFG_PREFIX" => {
                     self.prefix = Some(value.to_string());
+                }
+                "CFG_DOCDIR" => {
+                    self.docdir = Some(value.to_string());
+                }
+                "CFG_LIBDIR" => {
+                    self.libdir = Some(value.to_string());
+                }
+                "CFG_MANDIR" => {
+                    self.mandir = Some(value.to_string());
                 }
                 "CFG_LLVM_ROOT" if value.len() > 0 => {
                     let target = self.target_config.entry(self.build.clone())

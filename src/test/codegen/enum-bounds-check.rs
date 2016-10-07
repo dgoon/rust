@@ -8,19 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_type="rlib"]
+// compile-flags: -O
 
-extern crate stable_symbol_names1;
+#![crate_type = "lib"]
 
-pub fn user() {
-  stable_symbol_names1::some_test_function(1u32);
-  stable_symbol_names1::some_test_function("def");
-  let x = 2u64;
-  stable_symbol_names1::some_test_function(&x);
+pub enum Foo {
+    A, B
 }
 
-pub fn trait_impl_test_function() {
-  use stable_symbol_names1::*;
-  Bar::foo::<Bar>();
-  bar();
+// CHECK-LABEL: @lookup
+#[no_mangle]
+pub fn lookup(buf: &[u8; 2], f: Foo) -> u8 {
+    // CHECK-NOT: panic_bounds_check
+    buf[f as usize]
 }
