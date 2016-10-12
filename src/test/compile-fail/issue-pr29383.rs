@@ -1,4 +1,4 @@
-// Copyright 2016 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -8,14 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+enum E {
+    A,
+    B,
+}
+
 fn main() {
-    let x = Some("s".to_string());
-    match x {
-        op_string @ Some(s) => {},
-        //~^ ERROR E0007
-        //~| NOTE binds an already bound by-move value by moving it
-        //~| ERROR E0303
-        //~| NOTE not allowed after `@`
-        None => {},
+    match None {
+        None => {}
+        Some(E::A(..)) => {} //~ ERROR expected tuple struct/variant, found unit variant `E::A`
+        Some(E::B(..)) => {} //~ ERROR expected tuple struct/variant, found unit variant `E::B`
     }
 }
